@@ -10,7 +10,6 @@ authors = [
   "Nicholas Ward <npward@berkeley.edu>",
 ]
 description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
-homepage = "https://libzexe.org"
 repository = "https://github.com/scipr/poly-commit"
 documentation = "https://docs.rs/poly-commit/"
 keywords = ["cryptography", "polynomial commitments", "elliptic curves", "pairing"]
