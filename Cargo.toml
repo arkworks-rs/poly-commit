@@ -1,0 +1,31 @@
+[package]
+name = "poly-commit"
+version = "0.1.0"
+authors = [
+  "Alessandro Chiesa <alexch@berkeley.edu>",
+  "Mary Maller <mary.maller.15@ucl.ac.uk>",
+  "Yuncong Hu <huyuncongh@gmail.com>",
+  "Pratyush Mishra <pratyush@berkeley.edu>",
+  "Noah Vesely <noah.vesely.18@ucl.ac.uk>",
+  "Nicholas Ward <npward@berkeley.edu>",
+]
+description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
+homepage = "https://libzexe.org"
+repository = "https://github.com/scipr/poly-commit"
+documentation = "https://docs.rs/poly-commit/"
+keywords = ["cryptography", "polynomial commitments", "elliptic curves", "pairing"]
+categories = ["cryptography"]
+include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[dependencies]
+algebra = { git = "https://github.com/scipr-lab/zexe/", features = [ "parallel" ] }
+ff-fft = { git = "https://github.com/scipr-lab/zexe/" }
+bench-utils = { git = "https://github.com/scipr-lab/zexe/" }
+rand = { version = "0.4" }
+rayon = { version = "1" }
+derivative = { version = "1" }
+
+[features]
+timer = [ "bench-utils/timer" ]
