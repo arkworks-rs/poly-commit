@@ -58,8 +58,8 @@ Unless you explicitly state otherwise, any contribution submitted for inclusion 
 
 ## Reference paper
 
-[_<span style="font-variant:small-caps;">Marlin</span>: Preprocessing zkSNARKs with Universal and Updatable SRS_][marlin]
-Alessandro Chiesa, Yuncong Hu, Mary Maller, [Pratyush Mishra](https://www.github.com/pratyush), Noah Vesely, [Nicholas Ward](https://www.github.com/npwardberkeley)
+[_<span style="font-variant:small-caps;">Marlin</span>: Preprocessing zkSNARKs with Universal and Updatable SRS_][marlin]    
+Alessandro Chiesa, Yuncong Hu, Mary Maller, [Pratyush Mishra](https://www.github.com/pratyush), Noah Vesely, [Nicholas Ward](https://www.github.com/npwardberkeley)    
 *IACR ePrint Report 2019/XXX*
 
 ## Acknowledgements
