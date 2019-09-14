@@ -1,0 +1,14 @@
+language: rust
+
+rust:
+  - stable
+  - nightly
+
+matrix:
+  fast_finish: true
+
+cache: cargo
+
+script:
+  - cargo test --release
+  - cargo check --examples --all
