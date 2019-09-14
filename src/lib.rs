@@ -5,7 +5,6 @@
 #![deny(unused_attributes, unused_imports, unused_mut, missing_docs)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
-
 #![forbid(unsafe_code)]
 
 #[macro_use]
@@ -15,11 +14,10 @@ extern crate derivative;
 #[macro_use]
 extern crate bench_utils;
 
-use rand::Rng;
 use algebra::Field;
-use std::borrow::Cow;
 pub use ff_fft::DensePolynomial as Polynomial;
-
+use rand::Rng;
+use std::borrow::Cow;
 
 /// Defines `SinglePolynomialCommitment` schemes that allow one to commit to
 /// a single polynomial, and then provide an evaluation proof for that polynomial
@@ -94,7 +92,11 @@ impl<'a, F: Field> std::ops::Deref for LabeledPolynomial<'a, F> {
 
 impl<'a, F: Field> LabeledPolynomial<'a, F> {
     /// Instantiate a new polynomial_context.
-    pub fn new_owned(polynomial: Polynomial<F>, degree_bound: Option<usize>, hiding_bound: Option<usize>) -> Self {
+    pub fn new_owned(
+        polynomial: Polynomial<F>,
+        degree_bound: Option<usize>,
+        hiding_bound: Option<usize>,
+    ) -> Self {
         Self {
             polynomial: Cow::Owned(polynomial),
             degree_bound,
@@ -103,7 +105,11 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
     }
 
     /// Instantiate a new polynomial_context.
-    pub fn new(polynomial: &'a Polynomial<F>, degree_bound: Option<usize>, hiding_bound: Option<usize>) -> Self {
+    pub fn new(
+        polynomial: &'a Polynomial<F>,
+        degree_bound: Option<usize>,
+        hiding_bound: Option<usize>,
+    ) -> Self {
         Self {
             polynomial: Cow::Borrowed(polynomial),
             degree_bound,

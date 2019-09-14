@@ -1,15 +1,14 @@
-use derivative::Derivative;
 use crate::multi_pc::{Evaluations, QuerySet};
 use crate::*;
+use derivative::Derivative;
 use std::borrow::Borrow;
 use std::collections::BTreeSet;
-use std::marker::PhantomData;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use algebra::PrimeField;
 use rand::Rng;
-
 
 /// Generic construction of a `MultiPolynomialCommitment` scheme from a
 /// `SinglePolynomialCommitment` scheme whenever the commitment and randomness of the
@@ -38,7 +37,7 @@ pub trait SinglePCExt<F: Field>: SinglePolynomialCommitment<F> {
     Copy(bound = "SinglePC::Commitment: Copy"),
     Debug(bound = "SinglePC::Commitment: Debug"),
     PartialEq(bound = "SinglePC::Commitment: PartialEq"),
-    Eq(bound = "SinglePC::Commitment: Eq"),
+    Eq(bound = "SinglePC::Commitment: Eq")
 )]
 pub struct Commitment<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> {
     comm: SinglePC::Commitment,
@@ -64,16 +63,20 @@ impl<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> PCCommitment
     }
 }
 
-impl<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> algebra::ToBytes for Commitment<F, SinglePC> {
+impl<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> algebra::ToBytes
+    for Commitment<F, SinglePC>
+{
     #[inline]
     fn write<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
-        self.shifted_comm.as_ref().unwrap_or(&SinglePC::Commitment::empty()).write(&mut writer)
+        self.shifted_comm
+            .as_ref()
+            .unwrap_or(&SinglePC::Commitment::empty())
+            .write(&mut writer)
     }
 }
-
 
 /// Randomness used to make `Commitment` hiding. Output by `MultiPCFromSinglePC::commit`.
 #[derive(Derivative)]
@@ -211,7 +214,12 @@ impl<E> Error<E> {
         }
     }
 
-    fn check_degrees(d: usize, bound: Option<usize>, max_degree: usize, i: usize) -> Result<(), Self> {
+    fn check_degrees(
+        d: usize,
+        bound: Option<usize>,
+        max_degree: usize,
+        i: usize,
+    ) -> Result<(), Self> {
         if let Some(bound) = bound {
             if d > max_degree {
                 Err(Error::poly_degree_too_large(d, max_degree, i))
@@ -281,7 +289,10 @@ where
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(degree: usize, rng: &mut R) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
+    fn setup<R: Rng>(
+        degree: usize,
+        rng: &mut R,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         Ok(SinglePC::setup(degree, rng)?)
     }
 
@@ -309,8 +320,11 @@ where
             Error::check_degrees(polynomial.degree(), degree_bound, max_degree, i)?;
 
             let commit_time = timer_start!(|| format!(
-                    "P_{} of degree {}, bound {:?}, and hiding bound {:?}",
-                    i, polynomial.degree(), degree_bound, hiding_bound,
+                "P_{} of degree {}, bound {:?}, and hiding bound {:?}",
+                i,
+                polynomial.degree(),
+                degree_bound,
+                hiding_bound,
             ));
             let (comm, rand) = SinglePC::commit(ck, polynomial, *hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
@@ -319,7 +333,8 @@ where
                     assert!(
                         polynomial.degree() <= s_polynomial.degree()
                             && s_polynomial.degree() <= max_degree
-                            && s_polynomial.degree() == polynomial.degree() + max_degree - degree_bound,
+                            && s_polynomial.degree()
+                                == polynomial.degree() + max_degree - degree_bound,
                         "polynomial.degree(): {}; s_polynomial.degree(): {}; max_degree: {}.",
                         polynomial.degree(),
                         s_polynomial.degree(),
@@ -334,7 +349,6 @@ where
             } else {
                 (None, None)
             };
-
 
             let comm = Commitment { comm, shifted_comm };
             let rand = Randomness { rand, shifted_rand };
@@ -355,22 +369,18 @@ where
         opening_challenge: F,
         r: &[impl Borrow<Self::Randomness>],
     ) -> Result<Self::Proof, Self::Error> {
-        let open_time = timer_start!(
-            || format!(
-                "Opening {} polynomials at query set of size {}", 
-                polynomials.len(),
-                query_set.len(),
-            )
-        );
+        let open_time = timer_start!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            polynomials.len(),
+            query_set.len(),
+        ));
 
         if polynomials.len() != degree_bounds.len() {
-            Err(Error::IncorrectInputLength(
-                format!(
-                    "polynomials.len() [{}] != degree_bounds.len() [{}]",
-                    polynomials.len(),
-                    degree_bounds.len()
-                ),
-            ))?;
+            Err(Error::IncorrectInputLength(format!(
+                "polynomials.len() [{}] != degree_bounds.len() [{}]",
+                polynomials.len(),
+                degree_bounds.len()
+            )))?;
         }
 
         let mut query_to_indices_map = std::collections::BTreeMap::new();
@@ -385,7 +395,8 @@ where
         for (query, indices) in query_to_indices_map.into_iter() {
             let mut p = Polynomial::zero();
             let mut rand = SinglePC::Randomness::empty();
-            let lc_time = timer_start!(|| format!("Randomly combining {} polynomials", indices.len()));
+            let lc_time =
+                timer_start!(|| format!("Randomly combining {} polynomials", indices.len()));
             for (j, i) in indices.into_iter().enumerate() {
                 if i > polynomials.len() {
                     Err(Error::IncorrectQuerySet(
@@ -399,7 +410,10 @@ where
                 // compute challenge^j and challenge^{j+1}.
                 let challenge_j = opening_challenge.pow([2 * j as u64]);
 
-                assert_eq!(degree_bounds[i].is_some(), r[i].borrow().shifted_rand.is_some());
+                assert_eq!(
+                    degree_bounds[i].is_some(),
+                    r[i].borrow().shifted_rand.is_some()
+                );
 
                 p += (challenge_j, polynomial);
                 rand += (challenge_j, &r[i].borrow().rand);
@@ -407,7 +421,8 @@ where
                 if let Some(degree_bound) = degree_bounds[i] {
                     let challenge_j_1 = challenge_j * &opening_challenge;
 
-                    let s_polynomial = Self::shift_polynomial(&polynomial, degree_bound, max_degree);
+                    let s_polynomial =
+                        Self::shift_polynomial(&polynomial, degree_bound, max_degree);
 
                     p += (challenge_j_1, &s_polynomial);
                     rand += (challenge_j_1, &r[i].borrow().shifted_rand.as_ref().unwrap());
@@ -438,13 +453,11 @@ where
         rng: &mut R,
     ) -> Result<bool, Self::Error> {
         if commitments.len() != degree_bounds.len() {
-            Err(Error::IncorrectInputLength(
-                format!(
-                    "commitments.len() [{}] != degree_bounds.len() [{}]",
-                    commitments.len(),
-                    degree_bounds.len()
-                ),
-            ))?;
+            Err(Error::IncorrectInputLength(format!(
+                "commitments.len() [{}] != degree_bounds.len() [{}]",
+                commitments.len(),
+                degree_bounds.len()
+            )))?;
         }
         let mut query_to_indices_map = std::collections::BTreeMap::new();
 
@@ -459,7 +472,8 @@ where
         let mut combined_queries = Vec::new();
         let mut combined_evals = Vec::new();
         for (query, indices) in query_to_indices_map.into_iter() {
-            let lc_time = timer_start!(|| format!("Randomly combining {} commitments", indices.len()));
+            let lc_time =
+                timer_start!(|| format!("Randomly combining {} commitments", indices.len()));
             let mut comms_to_combine = Vec::new();
             let mut values_to_combine = Vec::new();
             let mut randomizers = Vec::new();
@@ -472,7 +486,10 @@ where
                 // compute challenge^{2j} and challenge^{2j + 1}.
                 let challenge_j = opening_challenge.pow([2 * j as u64]);
 
-                assert_eq!(degree_bounds[i].is_some(), commitments[i].shifted_comm.is_some());
+                assert_eq!(
+                    degree_bounds[i].is_some(),
+                    commitments[i].shifted_comm.is_some()
+                );
 
                 let v_i = values
                     .get(&(i, *query))
@@ -491,17 +508,26 @@ where
                     randomizers.push(challenge_j_1);
                 }
             }
-            let v = values_to_combine.into_iter().zip(&randomizers).fold(F::zero(), |x, (v, r)| x + &(v * r));
+            let v = values_to_combine
+                .into_iter()
+                .zip(&randomizers)
+                .fold(F::zero(), |x, (v, r)| x + &(v * r));
             let c = SinglePC::combine_commitments(&comms_to_combine, &randomizers);
 
             timer_end!(lc_time);
             combined_comms.push(c);
             combined_queries.push(*query);
             combined_evals.push(v);
-            
         }
         let proof_time = timer_start!(|| "Checking SinglePC::Proof");
-        let result = SinglePC::batch_check(vk, &combined_comms, &combined_queries, &combined_evals, &proof.proofs, rng)?;
+        let result = SinglePC::batch_check(
+            vk,
+            &combined_comms,
+            &combined_queries,
+            &combined_evals,
+            &proof.proofs,
+            rng,
+        )?;
         timer_end!(proof_time);
         Ok(result)
     }
@@ -513,12 +539,11 @@ where
 //
 // Basically, we define a "dummy rng" that does nothing
 // (corresponding to the case that `rng = None`).
-pub(in super) mod optional_rng {
+pub(super) mod optional_rng {
     use rand::Rng;
-    pub(in super) struct OptionalRng<R>(pub(in super) Option<R>);
+    pub(super) struct OptionalRng<R>(pub(super) Option<R>);
 
-
-    impl <R: Rng> Rng for OptionalRng<R> {
+    impl<R: Rng> Rng for OptionalRng<R> {
         #[inline]
         fn next_u32(&mut self) -> u32 {
             (&mut self.0).as_mut().map_or(0, |r| r.next_u32())
@@ -537,9 +562,9 @@ pub(in super) mod optional_rng {
 }
 
 mod impl_kzg10 {
-    use algebra::{ProjectiveCurve, AffineCurve, PairingEngine};
-    use crate::single_pc::kzg10::*;
     use super::*;
+    use crate::single_pc::kzg10::*;
+    use algebra::{AffineCurve, PairingEngine, ProjectiveCurve};
     impl<E: PairingEngine> SinglePCExt<E::Fr> for KZG10<E> {
         fn combine_commitments(comms: &[Self::Commitment], coeffs: &[E::Fr]) -> Self::Commitment {
             let mut result = E::G1Projective::zero();

@@ -46,7 +46,10 @@ pub trait SinglePolynomialCommitment<F: Field> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(degree: usize, rng: &mut R) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
+    fn setup<R: Rng>(
+        degree: usize,
+        rng: &mut R,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitment to `polynomial`. If `hiding_bound.is_some()`, then the
     /// resulting commitment is hiding up to `hiding_bound.unwrap()` number of queries.
@@ -109,12 +112,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
         point: F,
         rand: &Self::Randomness,
     ) -> Result<Self::Proof, Self::Error> {
-        Self::open(
-            &ck,
-            labeled_polynomial.polynomial(),
-            point,
-            &rand,
-        )
+        Self::open(&ck, labeled_polynomial.polynomial(), point, &rand)
     }
 }
 
@@ -189,7 +187,9 @@ pub mod tests {
                 points.push(point);
                 proofs.push(proof);
             }
-            assert!(SinglePC::batch_check(&vk, &comms, &points, &values, &proofs, rng)?);
+            assert!(SinglePC::batch_check(
+                &vk, &comms, &points, &values, &proofs, rng
+            )?);
         }
         Ok(())
     }

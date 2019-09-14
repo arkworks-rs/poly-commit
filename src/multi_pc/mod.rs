@@ -38,7 +38,10 @@ pub trait MultiPolynomialCommitment<F: Field> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(degree: usize, rng: &mut R) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
+    fn setup<R: Rng>(
+        degree: usize,
+        rng: &mut R,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitments to `polynomials`. If `hiding_bounds[i].is_some()`,
     /// then the `i`-th commitment is hiding up to `hiding_bounds[i]` number of queries.
@@ -82,7 +85,6 @@ pub trait MultiPolynomialCommitment<F: Field> {
         rng: &mut R,
     ) -> Result<bool, Self::Error>;
 
-
     /// Commit to labeled polynomials.
     fn commit_labeled<'a>(
         ck: &Self::CommitterKey,
@@ -97,13 +99,7 @@ pub trait MultiPolynomialCommitment<F: Field> {
             degree_bounds.push(labeled_poly.degree_bound());
             hiding_bounds.push(labeled_poly.hiding_bound());
         }
-        Self::commit(
-            ck,
-            polynomials,
-            &degree_bounds,
-            &hiding_bounds,
-            rng,
-        )
+        Self::commit(ck, polynomials, &degree_bounds, &hiding_bounds, rng)
     }
 
     /// Open labeled polynomials.
@@ -170,13 +166,8 @@ pub mod tests {
             let num_points_in_query_set = 1;
             let hiding_bounds = vec![Some(num_points_in_query_set); 1];
 
-            let (comms, rands) = MultiPC::commit(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &hiding_bounds,
-                Some(rng),
-            )?;
+            let (comms, rands) =
+                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -240,13 +231,8 @@ pub mod tests {
             let num_points_in_query_set = 1;
             let hiding_bounds = vec![Some(num_points_in_query_set); 1];
 
-            let (comms, rands) = MultiPC::commit(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &hiding_bounds,
-                Some(rng),
-            )?;
+            let (comms, rands) =
+                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
             println!("Committed");
 
             // Construct query set
@@ -313,13 +299,8 @@ pub mod tests {
             let num_points_in_query_set = 2;
             let hiding_bounds = vec![Some(num_points_in_query_set); 1];
 
-            let (comms, rands) = MultiPC::commit(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &hiding_bounds,
-                Some(rng),
-            )?;
+            let (comms, rands) =
+                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -383,13 +364,8 @@ pub mod tests {
             let num_points_in_query_set = 1;
             let hiding_bounds = vec![Some(num_points_in_query_set); 2];
 
-            let (comms, rands) = MultiPC::commit(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &hiding_bounds,
-                Some(rng),
-            )?;
+            let (comms, rands) =
+                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -453,13 +429,8 @@ pub mod tests {
             let num_points_in_query_set = rand::distributions::Range::new(1, 5).sample(rng);
             let hiding_bounds = vec![Some(num_points_in_query_set); 10];
 
-            let (comms, rands) = MultiPC::commit(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &hiding_bounds,
-                Some(rng),
-            )?;
+            let (comms, rands) =
+                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -493,10 +464,13 @@ pub mod tests {
                 &values,
                 &proof,
                 opening_challenge,
-                rng
+                rng,
             )?;
             if !result {
-                println!("Failed with 10 polynomials, num_points_in_query_set: {:?}", num_points_in_query_set);
+                println!(
+                    "Failed with 10 polynomials, num_points_in_query_set: {:?}",
+                    num_points_in_query_set
+                );
             }
             assert!(result, "proof was incorrect");
         }

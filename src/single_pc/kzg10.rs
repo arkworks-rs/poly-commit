@@ -9,9 +9,11 @@ use crate::{
     PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Polynomial,
     SinglePolynomialCommitment,
 };
-use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra::{AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve};
 use algebra::bytes::*;
+use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
+use algebra::{
+    AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
+};
 use rand::{Rand, Rng};
 use rayon::prelude::*;
 use std::marker::PhantomData;
@@ -32,7 +34,7 @@ pub struct KZG10<E: PairingEngine> {
     Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
-    Debug(bound = ""),
+    Debug(bound = "")
 )]
 pub struct CommitterKey<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
@@ -51,11 +53,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = ""),
-)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct VerifierKey<E: PairingEngine> {
     /// The generator of G1.
     pub g: E::G1Affine,
@@ -92,7 +90,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 )]
 pub struct Commitment<E: PairingEngine>(
     /// The commitment is a group element.
-    pub E::G1Affine
+    pub E::G1Affine,
 );
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
@@ -198,7 +196,7 @@ pub struct Proof<E: PairingEngine> {
 pub enum Error {
     /// The provided polynomial was meant to be hiding, but `rng` was `None`.
     MissingRng,
-    /// The degree provided in setup was too small; degree 0 and degree 1 polynomials
+    /// The degree provided in setup was too small; degree 0 polynomials
     /// are not supported.
     UnsupportedDegree,
     /// The degree of the polynomial passed to `KZG10::commit` or `KZG10::open`
@@ -215,7 +213,10 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
-            Error::UnsupportedDegree => write!(f, "this scheme does not support committing to degree 0 or degree 1 polynomials"),
+            Error::UnsupportedDegree => write!(
+                f,
+                "this scheme does not support committing to degree 0 polynomials"
+            ),
             Error::PolynomialDegreeTooLarge {
                 poly_degree,
                 max_degree,
@@ -260,7 +261,10 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(degree: usize, rng: &mut R) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
+    fn setup<R: Rng>(
+        degree: usize,
+        rng: &mut R,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         if degree < 1 {
             return Err(Error::UnsupportedDegree);
         }
@@ -343,39 +347,42 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
     ) -> Result<(Self::Commitment, Self::Randomness), Error> {
         Error::check_degree(polynomial.degree(), ck.max_degree())?;
 
-        let commit_time = timer_start!(
-            || format!(
-                "Committing to a polynomial of degree {} with hiding_bound: {:?}", 
-                polynomial.degree(),
-                hiding_bound,
-            )
-        );
+        let commit_time = timer_start!(|| format!(
+            "Committing to a polynomial of degree {} with hiding_bound: {:?}",
+            polynomial.degree(),
+            hiding_bound,
+        ));
 
         let mut skip_zeros = 0;
         while polynomial.coeffs[skip_zeros].is_zero() && skip_zeros < polynomial.coeffs.len() {
             skip_zeros += 1;
         }
-        let from_mont_repr_time = timer_start!(|| "Converting plaintext polynomial from Montgomery repr");
-        let plain_coeffs = polynomial
-            .coeffs[skip_zeros..]
+        let from_mont_repr_time =
+            timer_start!(|| "Converting plaintext polynomial from Montgomery repr");
+        let plain_coeffs = polynomial.coeffs[skip_zeros..]
             .par_iter()
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
         timer_end!(from_mont_repr_time);
 
         let msm_time = timer_start!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = VariableBaseMSM::multi_scalar_mul(&ck.powers_of_g[skip_zeros..], &plain_coeffs);
+        let mut commitment =
+            VariableBaseMSM::multi_scalar_mul(&ck.powers_of_g[skip_zeros..], &plain_coeffs);
         timer_end!(msm_time);
 
         let mut randomness = Randomness::empty();
         if let Some(hiding_degree) = hiding_bound {
             let mut rng = rng.ok_or(Error::MissingRng)?;
-            let sample_random_poly_time = timer_start!(|| format!("Sampling a random polynomial of degree {}", hiding_degree));
+            let sample_random_poly_time = timer_start!(|| format!(
+                "Sampling a random polynomial of degree {}",
+                hiding_degree
+            ));
             randomness = Randomness::rand(hiding_degree, &mut rng);
             timer_end!(sample_random_poly_time);
         }
 
-        let from_mont_repr_time = timer_start!(|| "Converting random polynomial from Montgomery repr");
+        let from_mont_repr_time =
+            timer_start!(|| "Converting random polynomial from Montgomery repr");
         let random_ints = randomness
             .random_polynomial
             .coeffs
@@ -411,8 +418,8 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         timer_end!(eval_time);
 
         let witness_time = timer_start!(|| "Computing witness polynomial");
-        let witness_polynomial =
-            &(p - &Polynomial::from_coefficients_vec(vec![value])) / &Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
+        let witness_polynomial = &(p - &Polynomial::from_coefficients_vec(vec![value]))
+            / &Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
         timer_end!(witness_time);
 
         let convert_time = timer_start!(|| "Converting witness polynomial from Montgomery repr");
@@ -436,7 +443,8 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
             timer_end!(rand_eval_time);
 
             let witness_time = timer_start!(|| "Computing random witness polynomial");
-            let random_witness_polynomial = &(random_p - &Polynomial::from_coefficients_vec(vec![random_value]))
+            let random_witness_polynomial = &(random_p
+                - &Polynomial::from_coefficients_vec(vec![random_value]))
                 / &Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
             timer_end!(witness_time);
 
@@ -446,7 +454,8 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
                 .map(|s| s.into_repr())
                 .collect::<Vec<_>>();
 
-            let witness_comm_time = timer_start!(|| "Computing commitment to random witness polynomial");
+            let witness_comm_time =
+                timer_start!(|| "Computing commitment to random witness polynomial");
             w += &VariableBaseMSM::multi_scalar_mul(&ck.powers_of_gamma_g, &random_witness_coeffs);
             timer_end!(witness_comm_time);
             random_v = random_value;
@@ -490,7 +499,8 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         proofs: &[Self::Proof],
         rng: &mut R,
     ) -> Result<bool, Self::Error> {
-        let check_time = timer_start!(|| format!("Checking {} evaluation proofs", commitments.len()));
+        let check_time =
+            timer_start!(|| format!("Checking {} evaluation proofs", commitments.len()));
         let r = E::Fr::rand(rng);
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
@@ -514,7 +524,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
 
         let result = E::product_of_pairings(&[
             (&total_w.prepare(), &vk.prepared_beta_h),
-            (&total_c.prepare(), &vk.prepared_h)
+            (&total_c.prepare(), &vk.prepared_h),
         ]) == E::Fqk::one();
         timer_end!(check_time, || format!("Result: {}", result));
         Ok(result)
