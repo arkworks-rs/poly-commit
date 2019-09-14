@@ -41,7 +41,7 @@ This library comes with some unit and integration tests. Run these tests with:
 cargo test
 ```
 
-Lastly, this library is instrumented with profiling infrastructure that prints detailed traces of execution time. To enable this, compile with `cargo build --features timer`.
+Lastly, this library is instrumented with profiling infrastructure that prints detailed traces of execution time. To enable this, compile with `cargo build --features print-trace`.
 
 ## License
 

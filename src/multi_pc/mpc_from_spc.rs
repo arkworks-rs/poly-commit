@@ -304,7 +304,7 @@ where
         hiding_bounds: impl IntoIterator<Item = &'a Option<usize>>,
         rng: Option<&mut dyn Rng>,
     ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error> {
-        let commit_time = timer_start!(|| "Committing to polynomials");
+        let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
         let mut randomness = Vec::new();
@@ -319,7 +319,7 @@ where
         {
             Error::check_degrees(polynomial.degree(), degree_bound, max_degree, i)?;
 
-            let commit_time = timer_start!(|| format!(
+            let commit_time = start_timer!(|| format!(
                 "P_{} of degree {}, bound {:?}, and hiding bound {:?}",
                 i,
                 polynomial.degree(),
@@ -354,9 +354,9 @@ where
             let rand = Randomness { rand, shifted_rand };
             commitments.push(comm);
             randomness.push(rand);
-            timer_end!(commit_time);
+            end_timer!(commit_time);
         }
-        timer_end!(commit_time);
+        end_timer!(commit_time);
         Ok((commitments, randomness))
     }
 
@@ -369,7 +369,7 @@ where
         opening_challenge: F,
         r: &[impl Borrow<Self::Randomness>],
     ) -> Result<Self::Proof, Self::Error> {
-        let open_time = timer_start!(|| format!(
+        let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
             polynomials.len(),
             query_set.len(),
@@ -396,7 +396,7 @@ where
             let mut p = Polynomial::zero();
             let mut rand = SinglePC::Randomness::empty();
             let lc_time =
-                timer_start!(|| format!("Randomly combining {} polynomials", indices.len()));
+                start_timer!(|| format!("Randomly combining {} polynomials", indices.len()));
             for (j, i) in indices.into_iter().enumerate() {
                 if i > polynomials.len() {
                     Err(Error::IncorrectQuerySet(
@@ -428,14 +428,14 @@ where
                     rand += (challenge_j_1, &r[i].borrow().shifted_rand.as_ref().unwrap());
                 }
             }
-            timer_end!(lc_time);
-            let proof_time = timer_start!(|| "Creating SinglePC::Proof");
+            end_timer!(lc_time);
+            let proof_time = start_timer!(|| "Creating SinglePC::Proof");
             let proof = SinglePC::open(ck, &p, *query, &rand)?;
-            timer_end!(proof_time);
+            end_timer!(proof_time);
 
             proofs.push(proof);
         }
-        timer_end!(open_time);
+        end_timer!(open_time);
 
         Ok(Proof { proofs })
     }
@@ -473,7 +473,7 @@ where
         let mut combined_evals = Vec::new();
         for (query, indices) in query_to_indices_map.into_iter() {
             let lc_time =
-                timer_start!(|| format!("Randomly combining {} commitments", indices.len()));
+                start_timer!(|| format!("Randomly combining {} commitments", indices.len()));
             let mut comms_to_combine = Vec::new();
             let mut values_to_combine = Vec::new();
             let mut randomizers = Vec::new();
@@ -514,12 +514,12 @@ where
                 .fold(F::zero(), |x, (v, r)| x + &(v * r));
             let c = SinglePC::combine_commitments(&comms_to_combine, &randomizers);
 
-            timer_end!(lc_time);
+            end_timer!(lc_time);
             combined_comms.push(c);
             combined_queries.push(*query);
             combined_evals.push(v);
         }
-        let proof_time = timer_start!(|| "Checking SinglePC::Proof");
+        let proof_time = start_timer!(|| "Checking SinglePC::Proof");
         let result = SinglePC::batch_check(
             vk,
             &combined_comms,
@@ -528,7 +528,7 @@ where
             &proof.proofs,
             rng,
         )?;
-        timer_end!(proof_time);
+        end_timer!(proof_time);
         Ok(result)
     }
 }

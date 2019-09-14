@@ -27,4 +27,4 @@ rayon = { version = "1" }
 derivative = { version = "1" }
 
 [features]
-timer = [ "bench-utils/timer" ]
+print-trace = [ "bench-utils/print-trace" ]
