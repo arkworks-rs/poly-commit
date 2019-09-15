@@ -152,12 +152,6 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn empty_no_degree_bound() -> Self {
-        Self {
-            random_polynomial: Polynomial::zero(),
-        }
-    }
-
     fn rand<R: Rng>(d: usize, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
         randomness.random_polynomial = Polynomial::rand(d, rng);

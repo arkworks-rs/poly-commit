@@ -104,13 +104,6 @@ impl<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> PCRandomness
         }
     }
 
-    fn empty_no_degree_bound() -> Self {
-        Self {
-            rand: SinglePC::Randomness::empty(),
-            shifted_rand: None,
-        }
-    }
-
     fn rand<R: Rng>(hiding_bound: usize, rng: &mut R) -> Self {
         Self {
             rand: SinglePC::Randomness::rand(hiding_bound, rng),

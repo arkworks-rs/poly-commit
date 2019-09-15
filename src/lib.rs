@@ -65,9 +65,6 @@ pub trait PCRandomness: Clone {
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 
-    /// Outputs empty randomness that does not hide the commitment, with no degree bound.
-    fn empty_no_degree_bound() -> Self;
-
     /// Samples randomness for commitments;
     /// `num_queries` specifies the number of queries that the commitment will be opened at.
     fn rand<R: Rng>(num_queries: usize, rng: &mut R) -> Self;
