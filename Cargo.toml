@@ -26,5 +26,17 @@ rand = { version = "0.4" }
 rayon = { version = "1" }
 derivative = { version = "1" }
 
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug = true
+
+[profile.test]
+opt-level = 3
+debug-assertions = true
+incremental = true
+debug = true
+
 [features]
 print-trace = [ "bench-utils/print-trace" ]

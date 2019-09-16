@@ -126,19 +126,17 @@ pub struct Proof<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> {
     proofs: Vec<SinglePC::Proof>,
 }
 
-impl<F: PrimeField, SinglePC> MultiPCFromSinglePC<F, SinglePC> {
-    fn shift_polynomial(
-        p: &Polynomial<F>,
-        degree_bound: usize,
-        max_degree: usize,
-    ) -> Polynomial<F> {
-        if p.is_zero() {
-            Polynomial::zero()
-        } else {
-            let mut shifted_polynomial_coeffs = vec![F::zero(); max_degree - degree_bound];
-            shifted_polynomial_coeffs.extend_from_slice(&p.coeffs);
-            Polynomial::from_coefficients_vec(shifted_polynomial_coeffs)
-        }
+pub(crate) fn shift_polynomial<F: Field>(
+    p: &Polynomial<F>,
+    degree_bound: usize,
+    max_degree: usize,
+) -> Polynomial<F> {
+    if p.is_zero() {
+        Polynomial::zero()
+    } else {
+        let mut shifted_polynomial_coeffs = vec![F::zero(); max_degree - degree_bound];
+        shifted_polynomial_coeffs.extend_from_slice(&p.coeffs);
+        Polynomial::from_coefficients_vec(shifted_polynomial_coeffs)
     }
 }
 
@@ -322,7 +320,7 @@ where
             let (comm, rand) = SinglePC::commit(ck, polynomial, *hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
                 if degree_bound < max_degree {
-                    let s_polynomial = Self::shift_polynomial(polynomial, degree_bound, max_degree);
+                    let s_polynomial = shift_polynomial(polynomial, degree_bound, max_degree);
                     assert!(
                         polynomial.degree() <= s_polynomial.degree()
                             && s_polynomial.degree() <= max_degree
@@ -414,8 +412,7 @@ where
                 if let Some(degree_bound) = degree_bounds[i] {
                     let challenge_j_1 = challenge_j * &opening_challenge;
 
-                    let s_polynomial =
-                        Self::shift_polynomial(&polynomial, degree_bound, max_degree);
+                    let s_polynomial = shift_polynomial(&polynomial, degree_bound, max_degree);
 
                     p += (challenge_j_1, &s_polynomial);
                     rand += (challenge_j_1, &r[i].borrow().shifted_rand.as_ref().unwrap());
