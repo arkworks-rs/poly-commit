@@ -1,6 +1,6 @@
 use crate::*;
 use algebra::Field;
-use rand::Rng;
+use rand::RngCore;
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to a single polynomial and later provide a succinct proof
@@ -46,7 +46,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(
+    fn setup<R: RngCore>(
         degree: usize,
         rng: &mut R,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
@@ -59,7 +59,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
         ck: &Self::CommitterKey,
         polynomial: &Polynomial<F>,
         hiding_bound: Option<usize>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Self::Commitment, Self::Randomness), Self::Error>;
 
     /// On input a polynomial `p` and a point `point` in the field `F`,
@@ -82,7 +82,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
     ) -> Result<bool, Self::Error>;
 
     /// Check a batch of proofs
-    fn batch_check<R: Rng>(
+    fn batch_check<R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: &[Self::Commitment],
         points: &[F],
@@ -95,7 +95,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
     fn commit_labeled(
         ck: &Self::CommitterKey,
         labeled_polynomial: &LabeledPolynomial<F>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Self::Commitment, Self::Randomness), Self::Error> {
         Self::commit(
             ck,
@@ -126,7 +126,8 @@ pub mod kzg10;
 pub mod tests {
     use crate::*;
     use algebra::Field;
-    use rand::{thread_rng, Rand};
+    use algebra::UniformRand;
+    use rand::thread_rng;
 
     pub fn end_to_end_test<F, SinglePC>() -> Result<(), SinglePC::Error>
     where

@@ -1,5 +1,5 @@
 use algebra::Field;
-use rand::Rng;
+use rand::RngCore;
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,7 +38,7 @@ pub trait MultiPolynomialCommitment<F: Field> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(
+    fn setup<R: RngCore>(
         degree: usize,
         rng: &mut R,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
@@ -58,7 +58,7 @@ pub trait MultiPolynomialCommitment<F: Field> {
         polynomials: impl IntoIterator<Item = &'a Polynomial<F>>,
         degree_bounds: impl IntoIterator<Item = &'a Option<usize>>,
         hiding_bounds: impl IntoIterator<Item = &'a Option<usize>>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error>;
 
     /// On input a list of polynomials and a query set, `open` outputs a proof of evaluation
@@ -74,7 +74,7 @@ pub trait MultiPolynomialCommitment<F: Field> {
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `comm`.
-    fn check<R: Rng>(
+    fn check<R: RngCore>(
         vk: &Self::VerifierKey,
         comm: &[Self::Commitment],
         degree_bounds: &[Option<usize>],
@@ -89,7 +89,7 @@ pub trait MultiPolynomialCommitment<F: Field> {
     fn commit_labeled<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl Iterator<Item = &'a LabeledPolynomial<'a, F>>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error> {
         let mut polynomials = Vec::new();
         let mut degree_bounds = Vec::new();
@@ -143,7 +143,8 @@ pub mod mpc_from_spc;
 pub mod tests {
     use crate::multi_pc::*;
     use algebra::Field;
-    use rand::{distributions::Sample, thread_rng, Rand};
+    use algebra::UniformRand;
+    use rand::{distributions::Distribution, thread_rng};
 
     pub fn single_poly_test<F, MultiPC>() -> Result<(), MultiPC::Error>
     where
@@ -151,7 +152,7 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Range::new(1, 64).sample(rng);;
+        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
@@ -213,17 +214,17 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Range::new(1, 64).sample(rng);;
+        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             let mut degree_bounds = Vec::new();
             // Generate polynomials
             for _ in 0..1 {
-                let degree = rand::distributions::Range::new(1, max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 polynomials.push(Polynomial::rand(degree, rng));
 
-                let mut range = rand::distributions::Range::new(degree, max_degree);
+                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 degree_bounds.push(degree_bound);
             }
@@ -281,17 +282,17 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Range::new(1, 64).sample(rng);;
+        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             let mut degree_bounds = Vec::new();
             // Generate polynomials
             for _ in 0..1 {
-                let degree = rand::distributions::Range::new(1, max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 polynomials.push(Polynomial::rand(degree, rng));
 
-                let mut range = rand::distributions::Range::new(degree, max_degree);
+                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 degree_bounds.push(degree_bound);
             }
@@ -353,10 +354,10 @@ pub mod tests {
             let mut degree_bounds = Vec::new();
             // Generate polynomials
             for _ in 0..2 {
-                let degree = rand::distributions::Range::new(1, max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 polynomials.push(Polynomial::rand(degree, rng));
 
-                let mut range = rand::distributions::Range::new(degree, max_degree);
+                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 degree_bounds.push(degree_bound);
             }
@@ -411,22 +412,22 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Range::new(2, 64).sample(rng);;
+        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..10 {
             let mut polynomials = Vec::new();
             let mut degree_bounds = Vec::new();
             // Generate polynomials
             for _ in 0..10 {
-                let degree = rand::distributions::Range::new(1, max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 polynomials.push(Polynomial::rand(degree, rng));
 
-                let mut range = rand::distributions::Range::new(degree, max_degree);
+                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 degree_bounds.push(degree_bound);
             }
 
-            let num_points_in_query_set = rand::distributions::Range::new(1, 5).sample(rng);
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..5).sample(rng);
             let hiding_bounds = vec![Some(num_points_in_query_set); 10];
 
             let (comms, rands) =

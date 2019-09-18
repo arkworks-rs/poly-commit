@@ -8,7 +8,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use algebra::PrimeField;
-use rand::Rng;
+use rand::RngCore;
 
 /// Generic construction of a `MultiPolynomialCommitment` scheme from a
 /// `SinglePolynomialCommitment` scheme whenever the commitment and randomness of the
@@ -104,7 +104,7 @@ impl<F: PrimeField, SinglePC: SinglePolynomialCommitment<F>> PCRandomness
         }
     }
 
-    fn rand<R: Rng>(hiding_bound: usize, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, rng: &mut R) -> Self {
         Self {
             rand: SinglePC::Randomness::rand(hiding_bound, rng),
             shifted_rand: Some(SinglePC::Randomness::rand(hiding_bound, rng)),
@@ -280,7 +280,7 @@ where
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(
+    fn setup<R: RngCore>(
         degree: usize,
         rng: &mut R,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
@@ -293,7 +293,7 @@ where
         polynomials: impl IntoIterator<Item = &'a Polynomial<F>>,
         degree_bounds: impl IntoIterator<Item = &'a Option<usize>>,
         hiding_bounds: impl IntoIterator<Item = &'a Option<usize>>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error> {
         let commit_time = start_timer!(|| "Committing to polynomials");
 
@@ -432,7 +432,7 @@ where
 
     /// Verifies that `value` is truly the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<R: Rng>(
+    fn check<R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: &[Self::Commitment],
         degree_bounds: &[Option<usize>],
@@ -467,15 +467,13 @@ where
             let mut comms_to_combine = Vec::new();
             let mut values_to_combine = Vec::new();
             let mut randomizers = Vec::new();
-            for (j, i) in indices.into_iter().enumerate() {
+            let mut challenge_j = F::one();
+            for i in indices.into_iter() {
                 if i > commitments.len() {
                     Err(Error::IncorrectQuerySet(
                         "query set has index greater than commitments.len()",
                     ))?;
                 }
-                // compute challenge^{2j} and challenge^{2j + 1}.
-                let challenge_j = opening_challenge.pow([2 * j as u64]);
-
                 assert_eq!(
                     degree_bounds[i].is_some(),
                     commitments[i].shifted_comm.is_some()
@@ -497,6 +495,7 @@ where
                     values_to_combine.push(shift * v_i);
                     randomizers.push(challenge_j_1);
                 }
+                challenge_j *= &opening_challenge.square();
             }
             let v = values_to_combine
                 .into_iter()
@@ -530,10 +529,10 @@ where
 // Basically, we define a "dummy rng" that does nothing
 // (corresponding to the case that `rng = None`).
 pub(super) mod optional_rng {
-    use rand::Rng;
+    use rand::RngCore;
     pub(super) struct OptionalRng<R>(pub(super) Option<R>);
 
-    impl<R: Rng> Rng for OptionalRng<R> {
+    impl<R: RngCore> RngCore for OptionalRng<R> {
         #[inline]
         fn next_u32(&mut self) -> u32 {
             (&mut self.0).as_mut().map_or(0, |r| r.next_u32())
@@ -547,6 +546,11 @@ pub(super) mod optional_rng {
         #[inline]
         fn fill_bytes(&mut self, dest: &mut [u8]) {
             (&mut self.0).as_mut().map_or((), |r| r.fill_bytes(dest))
+        }
+
+        #[inline]
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+            Ok(self.fill_bytes(dest))
         }
     }
 }

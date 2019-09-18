@@ -13,8 +13,9 @@ use algebra::bytes::*;
 use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra::{
     AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
+    UniformRand,
 };
-use rand::{Rand, Rng};
+use rand::RngCore;
 use rayon::prelude::*;
 use std::marker::PhantomData;
 use std::ops::AddAssign;
@@ -152,9 +153,9 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn rand<R: Rng>(d: usize, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(d: usize, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
-        randomness.random_polynomial = Polynomial::rand(d, rng);
+        randomness.random_polynomial = Polynomial::rand(d + 1, rng);
         randomness
     }
 }
@@ -255,7 +256,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: Rng>(
+    fn setup<R: RngCore>(
         degree: usize,
         rng: &mut R,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
@@ -337,7 +338,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         ck: &Self::CommitterKey,
         polynomial: &Polynomial<E::Fr>,
         hiding_bound: Option<usize>,
-        rng: Option<&mut dyn Rng>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<(Self::Commitment, Self::Randomness), Error> {
         Error::check_degree(polynomial.degree(), ck.max_degree())?;
 
@@ -485,7 +486,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         Ok(lhs == rhs)
     }
 
-    fn batch_check<R: Rng>(
+    fn batch_check<R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: &[Self::Commitment],
         points: &[E::Fr],
@@ -495,31 +496,48 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
     ) -> Result<bool, Self::Error> {
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
-        let r = E::Fr::rand(rng);
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
 
         let mut total_c = <E::G1Projective as ProjectiveCurve>::zero();
         let mut total_w = <E::G1Projective as ProjectiveCurve>::zero();
+
+        let combination_time = start_timer!(|| "Combining commitments and proofs");
         let mut randomizer = E::Fr::one();
+        // Instead of multiplying g and gamma_g in each turn, we simply accumulate
+        // their coefficients and perform a final multiplication at the end.
+        let mut g_multiplier = E::Fr::zero();
+        let mut gamma_g_multiplier = E::Fr::zero();
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
-            randomizer *= &r;
             let mut c = c.0.into_projective();
             let w = proof.w.into_projective();
-            c += &(-g.mul(&v) - &gamma_g.mul(&proof.random_v) + &w.mul(z));
+            c += &w.mul(z);
+            g_multiplier += &(randomizer * &v);
+            gamma_g_multiplier += &(randomizer * &proof.random_v);
             total_c += &c.mul(&randomizer);
             total_w += &w.mul(&randomizer);
+            // We don't need to sample randomizers from the full field,
+            // only from 128-bit strings.
+            randomizer = u128::rand(rng).into();
         }
+        total_c -= &g.mul(&g_multiplier);
+        total_c -= &gamma_g.mul(&gamma_g_multiplier);
+        end_timer!(combination_time);
+
+        let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
         let mut to_affine = [-total_w, total_c];
         E::G1Projective::batch_normalization(&mut to_affine);
         let [total_w, total_c] = to_affine;
         let total_w = total_w.into_affine();
         let total_c = total_c.into_affine();
+        end_timer!(to_affine_time);
 
+        let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&[
             (&total_w.prepare(), &vk.prepared_beta_h),
             (&total_c.prepare(), &vk.prepared_h),
         ]) == E::Fqk::one();
+        end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
     }
