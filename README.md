@@ -52,13 +52,13 @@ This library is licensed under either of the following licenses, at your discret
 
 Unless you explicitly state otherwise, any contribution that you submit to this library shall be dual licensed as above (as defined in the Apache v2 License), without any additional terms or conditions.
 
-[marlin]: https://ia.cr/2019/xxx
+[marlin]: https://ia.cr/2019/1047
 
 ## Reference paper
 
 [Marlin: Preprocessing zkSNARKs with Universal and Updatable SRS][marlin]     
 Alessandro Chiesa, Yuncong Hu, Mary Maller, [Pratyush Mishra](https://www.github.com/pratyush), Noah Vesely, [Nicholas Ward](https://www.github.com/npwardberkeley)     
-IACR ePrint Report 2019/XXX
+IACR ePrint Report 2019/1047
 
 ## Acknowledgements
 
