@@ -152,7 +152,7 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
+        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
@@ -214,7 +214,7 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
+        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
@@ -282,7 +282,7 @@ pub mod tests {
         MultiPC: MultiPolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Uniform::from(1..64).sample(rng);
+        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
