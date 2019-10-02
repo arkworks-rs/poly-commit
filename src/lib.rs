@@ -161,11 +161,7 @@ pub struct LabeledCommitment<C: PCCommitment> {
 
 impl<C: PCCommitment> LabeledCommitment<C> {
     /// Instantiate a new polynomial_context.
-    pub fn new(
-        label: String,
-        commitment: C,
-        degree_bound: Option<usize>,
-    ) -> Self {
+    pub fn new(label: String, commitment: C, degree_bound: Option<usize>) -> Self {
         Self {
             label,
             commitment,

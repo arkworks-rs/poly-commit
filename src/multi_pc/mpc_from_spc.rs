@@ -1,7 +1,7 @@
 use crate::multi_pc::{Evaluations, QuerySet};
 use crate::*;
 use derivative::Derivative;
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -291,7 +291,13 @@ where
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Vec<LabeledCommitment<Self::Commitment>>, Vec<Self::Randomness>), Self::Error> {
+    ) -> Result<
+        (
+            Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::Randomness>,
+        ),
+        Self::Error,
+    > {
         let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
@@ -305,7 +311,12 @@ where
             let hiding_bound = polynomial.hiding_bound();
             let polynomial = polynomial.polynomial();
 
-            Error::check_degrees(polynomial.degree(), degree_bound, max_degree, label.to_string())?;
+            Error::check_degrees(
+                polynomial.degree(),
+                degree_bound,
+                max_degree,
+                label.to_string(),
+            )?;
 
             let commit_time = start_timer!(|| format!(
                 "{} of degree {}, bound {:?}, and hiding bound {:?}",
@@ -356,8 +367,6 @@ where
         opening_challenge: F,
         rands: &[Self::Randomness],
     ) -> Result<Self::Proof, Self::Error> {
-
-
         let (polynomials, rands): (BTreeMap<_, _>, BTreeMap<_, _>) = labeled_polynomials
             .into_iter()
             .zip(rands)
@@ -386,23 +395,25 @@ where
                 start_timer!(|| format!("Randomly combining {} polynomials", labels.len()));
             for (j, label) in labels.into_iter().enumerate() {
                 let polynomial = polynomials.get(label).ok_or(Error::IncorrectQuerySet(
-                        "query set references polynomial with incorrect label",
-                    ))?;
+                    "query set references polynomial with incorrect label",
+                ))?;
 
                 let rand = rands.get(label).ok_or(Error::IncorrectQuerySet(
-                        "query set references randomness with incorrect label",
-                    ))?;
+                    "query set references randomness with incorrect label",
+                ))?;
                 let degree_bound = polynomial.degree_bound();
 
-                Error::check_degrees(polynomial.degree(), degree_bound, max_degree, label.to_string())?;
+                Error::check_degrees(
+                    polynomial.degree(),
+                    degree_bound,
+                    max_degree,
+                    label.to_string(),
+                )?;
 
                 // compute challenge^j and challenge^{j+1}.
                 let challenge_j = opening_challenge.pow([2 * j as u64]);
 
-                assert_eq!(
-                    degree_bound.is_some(),
-                    rand.shifted_rand.is_some()
-                );
+                assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
                 p += (challenge_j, polynomial.polynomial());
                 r += (challenge_j, &rand.rand);
@@ -461,14 +472,11 @@ where
             let mut challenge_j = F::one();
             for label in labels.into_iter() {
                 let commitment = commitments.get(label).ok_or(Error::IncorrectQuerySet(
-                        "query set references commitment with incorrect label",
-                    ))?;
+                    "query set references commitment with incorrect label",
+                ))?;
                 let degree_bound = commitment.degree_bound();
                 let commitment = commitment.commitment();
-                assert_eq!(
-                    degree_bound.is_some(),
-                    commitment.shifted_comm.is_some()
-                );
+                assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
 
                 let v_i = values
                     .get(&(label.clone(), *query))
