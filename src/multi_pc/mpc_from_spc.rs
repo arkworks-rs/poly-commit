@@ -1,8 +1,7 @@
 use crate::multi_pc::{Evaluations, QuerySet};
 use crate::*;
 use derivative::Derivative;
-use std::borrow::Borrow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BTreeMap};
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -151,7 +150,7 @@ pub enum Error<E> {
         /// Maximum supported degree.
         max_degree: usize,
         /// Index of the offending polynomial.
-        index: usize,
+        label: String,
     },
     /// The degree bound for the `index`-th polynomial passed to `commit`, `open`
     /// or `check` was incorrect, that is, `degree_bound >= poly_degree` or
@@ -164,7 +163,7 @@ pub enum Error<E> {
         /// Maximum supported degree.
         max_degree: usize,
         /// Index of the offending polynomial.
-        index: usize,
+        label: String,
     },
     /// The inputs to `commit`, `open` or `verify` had incorrect lengths.
     IncorrectInputLength(String),
@@ -183,11 +182,11 @@ impl<E> From<E> for Error<E> {
 }
 
 impl<E> Error<E> {
-    fn poly_degree_too_large(poly_degree: usize, max_degree: usize, index: usize) -> Self {
+    fn poly_degree_too_large(poly_degree: usize, max_degree: usize, label: String) -> Self {
         Error::PolynomialDegreeTooLarge {
             poly_degree,
             max_degree,
-            index,
+            label,
         }
     }
 
@@ -195,13 +194,13 @@ impl<E> Error<E> {
         poly_degree: usize,
         degree_bound: usize,
         max_degree: usize,
-        index: usize,
+        label: String,
     ) -> Self {
         Error::IncorrectDegreeBound {
             poly_degree,
             degree_bound,
             max_degree,
-            index,
+            label,
         }
     }
 
@@ -209,13 +208,13 @@ impl<E> Error<E> {
         d: usize,
         bound: Option<usize>,
         max_degree: usize,
-        i: usize,
+        label: String,
     ) -> Result<(), Self> {
         if let Some(bound) = bound {
             if d > max_degree {
-                Err(Error::poly_degree_too_large(d, max_degree, i))
+                Err(Error::poly_degree_too_large(d, max_degree, label))
             } else if bound < d || bound > max_degree {
-                Err(Error::incorrect_bound(d, bound, max_degree, i))
+                Err(Error::incorrect_bound(d, bound, max_degree, label))
             } else {
                 Ok(())
             }
@@ -231,24 +230,24 @@ impl<E: std::fmt::Display> std::fmt::Display for Error<E> {
             Error::PolynomialDegreeTooLarge {
                 poly_degree,
                 max_degree,
-                index,
+                label,
             } => write!(
                 f,
-                "the degree of the {}-th polynomial ({:?}) is greater than\
+                "the degree of the polynomial {} ({:?}) is greater than\
                  the maximum supported degree ({:?})",
-                index, poly_degree, max_degree
+                label, poly_degree, max_degree
             ),
             Error::IncorrectDegreeBound {
                 poly_degree,
                 degree_bound,
                 max_degree,
-                index,
+                label,
             } => write!(
                 f,
-                "the degree bound ({:?}) for the {}-th polynomial \
+                "the degree bound ({:?}) for the polynomial {} \
                  (having degree {:?}) is greater than the maximum \
                  supported degree ({:?})",
-                degree_bound, index, poly_degree, max_degree
+                degree_bound, label, poly_degree, max_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
             Error::IncorrectQuerySet(err) => write!(f, "{}", err),
@@ -290,11 +289,9 @@ where
     /// Outputs a commitment to `polynomial`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a Polynomial<F>>,
-        degree_bounds: impl IntoIterator<Item = &'a Option<usize>>,
-        hiding_bounds: impl IntoIterator<Item = &'a Option<usize>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error> {
+    ) -> Result<(Vec<LabeledCommitment<Self::Commitment>>, Vec<Self::Randomness>), Self::Error> {
         let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
@@ -302,22 +299,22 @@ where
         let max_degree = ck.max_degree();
 
         let rng = &mut optional_rng::OptionalRng(rng);
-        for (i, ((polynomial, &degree_bound), hiding_bound)) in polynomials
-            .into_iter()
-            .zip(degree_bounds)
-            .zip(hiding_bounds)
-            .enumerate()
-        {
-            Error::check_degrees(polynomial.degree(), degree_bound, max_degree, i)?;
+        for polynomial in polynomials {
+            let label = polynomial.label();
+            let degree_bound = polynomial.degree_bound();
+            let hiding_bound = polynomial.hiding_bound();
+            let polynomial = polynomial.polynomial();
+
+            Error::check_degrees(polynomial.degree(), degree_bound, max_degree, label.to_string())?;
 
             let commit_time = start_timer!(|| format!(
-                "P_{} of degree {}, bound {:?}, and hiding bound {:?}",
-                i,
+                "{} of degree {}, bound {:?}, and hiding bound {:?}",
+                _label,
                 polynomial.degree(),
                 degree_bound,
                 hiding_bound,
             ));
-            let (comm, rand) = SinglePC::commit(ck, polynomial, *hiding_bound, Some(rng))?;
+            let (comm, rand) = SinglePC::commit(ck, polynomial, hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
                 if degree_bound < max_degree {
                     let s_polynomial = shift_polynomial(polynomial, degree_bound, max_degree);
@@ -332,7 +329,7 @@ where
                         max_degree
                     );
                     let (shifted_comm, shifted_rand) =
-                        SinglePC::commit(ck, &s_polynomial, *hiding_bound, Some(rng))?;
+                        SinglePC::commit(ck, &s_polynomial, hiding_bound, Some(rng))?;
                     (Some(shifted_comm), Some(shifted_rand))
                 } else {
                     (None, None)
@@ -343,7 +340,7 @@ where
 
             let comm = Commitment { comm, shifted_comm };
             let rand = Randomness { rand, shifted_rand };
-            commitments.push(comm);
+            commitments.push(LabeledCommitment::new(label.clone(), comm, degree_bound));
             randomness.push(rand);
             end_timer!(commit_time);
         }
@@ -352,13 +349,12 @@ where
     }
 
     /// On input a polynomial `p` and a point `point`, outputs `p(point)` and a proof for the same.
-    fn open(
+    fn open<'a>(
         ck: &Self::CommitterKey,
-        polynomials: &[impl Borrow<Polynomial<F>>],
-        degree_bounds: &[Option<usize>],
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         query_set: &QuerySet<F>,
         opening_challenge: F,
-        r: &[impl Borrow<Self::Randomness>],
+        rands: &[Self::Randomness],
     ) -> Result<Self::Proof, Self::Error> {
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
@@ -366,61 +362,61 @@ where
             query_set.len(),
         ));
 
-        if polynomials.len() != degree_bounds.len() {
-            Err(Error::IncorrectInputLength(format!(
-                "polynomials.len() [{}] != degree_bounds.len() [{}]",
-                polynomials.len(),
-                degree_bounds.len()
-            )))?;
-        }
+        let (polynomials, rands): (BTreeMap<_, _>, BTreeMap<_, _>) = labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .map(|(poly, r)| ((poly.label(), poly), (poly.label(), r)))
+            .unzip();
 
-        let mut query_to_indices_map = std::collections::BTreeMap::new();
+        let mut query_to_labels_map = BTreeMap::new();
 
-        for (i, point) in query_set.iter() {
-            let indices = query_to_indices_map.entry(point).or_insert(BTreeSet::new());
-            indices.insert(*i);
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
         }
 
         let mut proofs = Vec::new();
         let max_degree = ck.max_degree();
-        for (query, indices) in query_to_indices_map.into_iter() {
+        for (query, labels) in query_to_labels_map.into_iter() {
             let mut p = Polynomial::zero();
-            let mut rand = SinglePC::Randomness::empty();
+            let mut r = SinglePC::Randomness::empty();
             let lc_time =
-                start_timer!(|| format!("Randomly combining {} polynomials", indices.len()));
-            for (j, i) in indices.into_iter().enumerate() {
-                if i > polynomials.len() {
-                    Err(Error::IncorrectQuerySet(
-                        "query set has index greater than polynomials.len()",
+                start_timer!(|| format!("Randomly combining {} polynomials", labels.len()));
+            for (j, label) in labels.into_iter().enumerate() {
+                let polynomial = polynomials.get(label).ok_or(Error::IncorrectQuerySet(
+                        "query set references polynomial with incorrect label",
                     ))?;
-                }
-                let polynomial = polynomials[i].borrow();
 
-                Error::check_degrees(polynomial.degree(), degree_bounds[i], max_degree, i)?;
+                let rand = rands.get(label).ok_or(Error::IncorrectQuerySet(
+                        "query set references randomness with incorrect label",
+                    ))?;
+                let degree_bound = polynomial.degree_bound();
+
+                Error::check_degrees(polynomial.degree(), degree_bound, max_degree, label.to_string())?;
 
                 // compute challenge^j and challenge^{j+1}.
                 let challenge_j = opening_challenge.pow([2 * j as u64]);
 
                 assert_eq!(
-                    degree_bounds[i].is_some(),
-                    r[i].borrow().shifted_rand.is_some()
+                    degree_bound.is_some(),
+                    rand.shifted_rand.is_some()
                 );
 
-                p += (challenge_j, polynomial);
-                rand += (challenge_j, &r[i].borrow().rand);
+                p += (challenge_j, polynomial.polynomial());
+                r += (challenge_j, &rand.rand);
 
-                if let Some(degree_bound) = degree_bounds[i] {
+                if let Some(degree_bound) = degree_bound {
                     let challenge_j_1 = challenge_j * &opening_challenge;
 
                     let s_polynomial = shift_polynomial(&polynomial, degree_bound, max_degree);
 
                     p += (challenge_j_1, &s_polynomial);
-                    rand += (challenge_j_1, &r[i].borrow().shifted_rand.as_ref().unwrap());
+                    r += (challenge_j_1, &rand.shifted_rand.as_ref().unwrap());
                 }
             }
             end_timer!(lc_time);
             let proof_time = start_timer!(|| "Creating SinglePC::Proof");
-            let proof = SinglePC::open(ck, &p, *query, &rand)?;
+            let proof = SinglePC::open(ck, &p, *query, &r)?;
             end_timer!(proof_time);
 
             proofs.push(proof);
@@ -434,64 +430,57 @@ where
     /// committed inside `comm`.
     fn check<R: RngCore>(
         vk: &Self::VerifierKey,
-        commitments: &[Self::Commitment],
-        degree_bounds: &[Option<usize>],
+        commitments: &[LabeledCommitment<Self::Commitment>],
         query_set: &QuerySet<F>,
         values: &Evaluations<F>,
         proof: &Self::Proof,
         opening_challenge: F,
         rng: &mut R,
     ) -> Result<bool, Self::Error> {
-        if commitments.len() != degree_bounds.len() {
-            Err(Error::IncorrectInputLength(format!(
-                "commitments.len() [{}] != degree_bounds.len() [{}]",
-                commitments.len(),
-                degree_bounds.len()
-            )))?;
-        }
-        let mut query_to_indices_map = std::collections::BTreeMap::new();
+        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
+        let mut query_to_labels_map = BTreeMap::new();
 
-        for (i, point) in query_set.iter() {
-            let indices = query_to_indices_map.entry(point).or_insert(BTreeSet::new());
-            indices.insert(*i);
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
         }
-        assert_eq!(proof.proofs.len(), query_to_indices_map.len());
+        assert_eq!(proof.proofs.len(), query_to_labels_map.len());
 
         let max_degree = vk.max_degree();
         let mut combined_comms = Vec::new();
         let mut combined_queries = Vec::new();
         let mut combined_evals = Vec::new();
-        for (query, indices) in query_to_indices_map.into_iter() {
+        for (query, labels) in query_to_labels_map.into_iter() {
             let lc_time =
                 start_timer!(|| format!("Randomly combining {} commitments", indices.len()));
             let mut comms_to_combine = Vec::new();
             let mut values_to_combine = Vec::new();
             let mut randomizers = Vec::new();
             let mut challenge_j = F::one();
-            for i in indices.into_iter() {
-                if i > commitments.len() {
-                    Err(Error::IncorrectQuerySet(
-                        "query set has index greater than commitments.len()",
+            for label in labels.into_iter() {
+                let commitment = commitments.get(label).ok_or(Error::IncorrectQuerySet(
+                        "query set references commitment with incorrect label",
                     ))?;
-                }
+                let degree_bound = commitment.degree_bound();
+                let commitment = commitment.commitment();
                 assert_eq!(
-                    degree_bounds[i].is_some(),
-                    commitments[i].shifted_comm.is_some()
+                    degree_bound.is_some(),
+                    commitment.shifted_comm.is_some()
                 );
 
                 let v_i = values
-                    .get(&(i, *query))
+                    .get(&(label.clone(), *query))
                     .ok_or(Error::IncorrectEvaluation("value does not exist"))?;
 
-                comms_to_combine.push(commitments[i].comm.clone());
+                comms_to_combine.push(commitment.comm.clone());
                 values_to_combine.push(*v_i);
                 randomizers.push(challenge_j);
 
-                if let Some(degree_bound) = degree_bounds[i] {
+                if let Some(degree_bound) = degree_bound {
                     let challenge_j_1 = challenge_j * &opening_challenge;
                     let shift = query.pow([(max_degree - degree_bound) as u64]);
 
-                    comms_to_combine.push(commitments[i].shifted_comm.as_ref().unwrap().clone());
+                    comms_to_combine.push(commitment.shifted_comm.as_ref().unwrap().clone());
                     values_to_combine.push(shift * v_i);
                     randomizers.push(challenge_j_1);
                 }

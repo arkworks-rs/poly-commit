@@ -90,30 +90,6 @@ pub trait SinglePolynomialCommitment<F: Field> {
         proofs: &[Self::Proof],
         rng: &mut R,
     ) -> Result<bool, Self::Error>;
-
-    /// Commit to a labeled polynomial.
-    fn commit_labeled(
-        ck: &Self::CommitterKey,
-        labeled_polynomial: &LabeledPolynomial<F>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Self::Commitment, Self::Randomness), Self::Error> {
-        Self::commit(
-            ck,
-            labeled_polynomial.polynomial(),
-            labeled_polynomial.hiding_bound(),
-            rng,
-        )
-    }
-
-    /// Open a labeled polynomial.
-    fn open_labeled<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomial: &LabeledPolynomial<F>,
-        point: F,
-        rand: &Self::Randomness,
-    ) -> Result<Self::Proof, Self::Error> {
-        Self::open(&ck, labeled_polynomial.polynomial(), point, &rand)
-    }
 }
 
 /// Implements the [KZG10](kzg10) construction that satisfies the `SinglePolynomialCommitment`

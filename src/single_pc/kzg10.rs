@@ -343,7 +343,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         Error::check_degree(polynomial.degree(), ck.max_degree())?;
 
         let commit_time = start_timer!(|| format!(
-            "Committing to a polynomial of degree {} with hiding_bound: {:?}",
+            "Committing to polynomial of degree {} with hiding_bound: {:?}",
             polynomial.degree(),
             hiding_bound,
         ));

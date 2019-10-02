@@ -70,10 +70,12 @@ pub trait PCRandomness: Clone {
     fn rand<R: Rng>(num_queries: usize, rng: &mut R) -> Self;
 }
 
-/// A polynomial along with other information necessary for the HIOP protocol
-/// and for the polynomial commitment scheme.
+/// A polynomial along with information about its degree bound (if any), and the
+/// maximum number of queries that will be made to it. This latter number determines
+/// the amount of protection that will be provided to a commitment for this polynomial.
 #[derive(Clone)]
 pub struct LabeledPolynomial<'a, F: Field> {
+    label: String,
     polynomial: Cow<'a, Polynomial<F>>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
@@ -88,30 +90,39 @@ impl<'a, F: Field> std::ops::Deref for LabeledPolynomial<'a, F> {
 }
 
 impl<'a, F: Field> LabeledPolynomial<'a, F> {
-    /// Instantiate a new polynomial_context.
+    /// Construct a new labeled polynomial by consuming `polynomial`.
     pub fn new_owned(
+        label: String,
         polynomial: Polynomial<F>,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
     ) -> Self {
         Self {
+            label,
             polynomial: Cow::Owned(polynomial),
             degree_bound,
             hiding_bound,
         }
     }
 
-    /// Instantiate a new polynomial_context.
+    /// Construct a new labeled polynomial.
     pub fn new(
+        label: String,
         polynomial: &'a Polynomial<F>,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
     ) -> Self {
         Self {
+            label,
             polynomial: Cow::Borrowed(polynomial),
             degree_bound,
             hiding_bound,
         }
+    }
+
+    /// Return the label for `self`.
+    pub fn label(&self) -> &String {
+        &self.label
     }
 
     /// Retrieve the polynomial from `self`.
@@ -137,5 +148,43 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
     /// Retrieve the hiding bound for the polynomial in `self`.
     pub fn hiding_bound(&self) -> Option<usize> {
         self.hiding_bound
+    }
+}
+
+/// A commitment along with information about its degree bound (if any).
+#[derive(Clone)]
+pub struct LabeledCommitment<C: PCCommitment> {
+    label: String,
+    commitment: C,
+    degree_bound: Option<usize>,
+}
+
+impl<C: PCCommitment> LabeledCommitment<C> {
+    /// Instantiate a new polynomial_context.
+    pub fn new(
+        label: String,
+        commitment: C,
+        degree_bound: Option<usize>,
+    ) -> Self {
+        Self {
+            label,
+            commitment,
+            degree_bound,
+        }
+    }
+
+    /// Return the label for `self`.
+    pub fn label(&self) -> &String {
+        &self.label
+    }
+
+    /// Retrieve the polynomial from `self`.
+    pub fn commitment(&self) -> &C {
+        &self.commitment
+    }
+
+    /// Retrieve the degree bound in `self`.
+    pub fn degree_bound(&self) -> Option<usize> {
+        self.degree_bound
     }
 }
