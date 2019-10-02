@@ -309,7 +309,7 @@ where
 
             let commit_time = start_timer!(|| format!(
                 "{} of degree {}, bound {:?}, and hiding bound {:?}",
-                _label,
+                label,
                 polynomial.degree(),
                 degree_bound,
                 hiding_bound,
@@ -356,17 +356,19 @@ where
         opening_challenge: F,
         rands: &[Self::Randomness],
     ) -> Result<Self::Proof, Self::Error> {
-        let open_time = start_timer!(|| format!(
-            "Opening {} polynomials at query set of size {}",
-            polynomials.len(),
-            query_set.len(),
-        ));
+
 
         let (polynomials, rands): (BTreeMap<_, _>, BTreeMap<_, _>) = labeled_polynomials
             .into_iter()
             .zip(rands)
             .map(|(poly, r)| ((poly.label(), poly), (poly.label(), r)))
             .unzip();
+
+        let open_time = start_timer!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            polynomials.len(),
+            query_set.len(),
+        ));
 
         let mut query_to_labels_map = BTreeMap::new();
 
@@ -452,7 +454,7 @@ where
         let mut combined_evals = Vec::new();
         for (query, labels) in query_to_labels_map.into_iter() {
             let lc_time =
-                start_timer!(|| format!("Randomly combining {} commitments", indices.len()));
+                start_timer!(|| format!("Randomly combining {} commitments", labels.len()));
             let mut comms_to_combine = Vec::new();
             let mut values_to_combine = Vec::new();
             let mut randomizers = Vec::new();
