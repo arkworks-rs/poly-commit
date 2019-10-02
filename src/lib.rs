@@ -184,3 +184,10 @@ impl<C: PCCommitment> LabeledCommitment<C> {
         self.degree_bound
     }
 }
+
+impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
+    #[inline]
+    fn write<W: std::io::Write>(&self, writer: W) -> std::io::Result<()> {
+        self.commitment.write(writer)
+    }
+}
