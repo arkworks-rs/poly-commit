@@ -375,7 +375,7 @@ where
 
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
-            polynomials.len(),
+            polynomials_with_rands.len(),
             query_set.len(),
         ));
 
