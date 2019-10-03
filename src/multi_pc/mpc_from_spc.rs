@@ -319,7 +319,7 @@ where
             )?;
 
             let commit_time = start_timer!(|| format!(
-                "{} of degree {}, bound {:?}, and hiding bound {:?}",
+                "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
                 label,
                 polynomial.degree(),
                 degree_bound,
