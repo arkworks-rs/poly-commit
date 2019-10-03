@@ -121,7 +121,7 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
     }
 
     /// Return the label for `self`.
-    pub fn label(&self) -> &String {
+    pub fn label(&self) -> &str {
         &self.label
     }
 
@@ -170,7 +170,7 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 
     /// Return the label for `self`.
-    pub fn label(&self) -> &String {
+    pub fn label(&self) -> &str {
         &self.label
     }
 

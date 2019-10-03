@@ -134,6 +134,32 @@ pub mod tests {
         Ok(())
     }
 
+    pub fn linear_polynomial_test<F, SinglePC>() -> Result<(), SinglePC::Error>
+    where
+        F: Field,
+        SinglePC: SinglePolynomialCommitment<F>,
+    {
+        let rng = &mut thread_rng();
+        for _ in 0..100 {
+            let degree = 2;
+            let (ck, vk) = SinglePC::setup(degree, rng)?;
+            let p = Polynomial::rand(1, rng);;
+            let hiding_bound = Some(1);
+            let (comm, rand) = SinglePC::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = F::rand(rng);
+            let value = p.evaluate(point);
+            let proof = SinglePC::open(&ck, &p, point, &rand)?;
+            assert!(
+                SinglePC::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
     pub fn batch_check_test<F, SinglePC>() -> Result<(), SinglePC::Error>
     where
         F: Field,

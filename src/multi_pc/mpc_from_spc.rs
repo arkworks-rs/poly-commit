@@ -351,7 +351,7 @@ where
 
             let comm = Commitment { comm, shifted_comm };
             let rand = Randomness { rand, shifted_rand };
-            commitments.push(LabeledCommitment::new(label.clone(), comm, degree_bound));
+            commitments.push(LabeledCommitment::new(label.to_string(), comm, degree_bound));
             randomness.push(rand);
             end_timer!(commit_time);
         }
@@ -367,11 +367,11 @@ where
         opening_challenge: F,
         rands: &[Self::Randomness],
     ) -> Result<Self::Proof, Self::Error> {
-        let (polynomials, rands): (BTreeMap<_, _>, BTreeMap<_, _>) = labeled_polynomials
+        let polynomials_with_rands: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
             .zip(rands)
-            .map(|(poly, r)| ((poly.label(), poly), (poly.label(), r)))
-            .unzip();
+            .map(|(poly, r)| (poly.label(), (poly, r)))
+            .collect();
 
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
@@ -394,13 +394,10 @@ where
             let lc_time =
                 start_timer!(|| format!("Randomly combining {} polynomials", labels.len()));
             for (j, label) in labels.into_iter().enumerate() {
-                let polynomial = polynomials.get(label).ok_or(Error::IncorrectQuerySet(
+                let (polynomial, rand) = polynomials_with_rands.get(label).ok_or(Error::IncorrectQuerySet(
                     "query set references polynomial with incorrect label",
                 ))?;
 
-                let rand = rands.get(label).ok_or(Error::IncorrectQuerySet(
-                    "query set references randomness with incorrect label",
-                ))?;
                 let degree_bound = polynomial.degree_bound();
 
                 Error::check_degrees(

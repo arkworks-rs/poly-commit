@@ -8,13 +8,13 @@ use crate::*;
 /// `p` that have previously been committed. Each element of a `QuerySet` is a `(label, query)`
 /// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
 /// that `p[label]` is to be queried at.
-pub type QuerySet<F> = BTreeSet<(String, F)>;
+pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials `p` at a `QuerySet`
 /// `Q`. It maps each element of `Q` to the resulting evaluation. That is,
 /// if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
-pub type Evaluations<F> = BTreeMap<(String, F), F>;
+pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
@@ -136,9 +136,9 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((String::from("Test"), point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((String::from("Test"), point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
@@ -197,9 +197,9 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((String::from("Test"), point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((String::from("Test"), point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
@@ -259,9 +259,9 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((String::from("Test"), point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((String::from("Test"), point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
@@ -293,10 +293,14 @@ pub mod tests {
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
+            let mut labels = Vec::new();
             let num_points_in_query_set = 1;
             // Generate polynomials
             for i in 0..2 {
+
                 let label = format!("Test{}", i);
+                labels.push(label.clone());
+
                 let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let poly = Polynomial::rand(degree, rng);
@@ -317,11 +321,10 @@ pub mod tests {
             let mut values = Evaluations::new();
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
-                for i in 0..2 {
-                    let label = format!("Test{}", i);
-                    query_set.insert((label.clone(), point));
+                for (i, label) in labels.iter().enumerate() {
+                    query_set.insert((label, point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((label, point), value);
+                    values.insert((&label, point), value);
                 }
             }
 
@@ -351,16 +354,18 @@ pub mod tests {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
-        for _ in 0..10 {
+        for _ in 0..50 {
             let mut polynomials = Vec::new();
+            let mut labels = Vec::new();
 
             // Generate polynomials
-            let num_points_in_query_set = rand::distributions::Uniform::from(1..5).sample(rng);
+            let num_points_in_query_set = std::cmp::min(max_degree, rand::distributions::Uniform::from(1..6).sample(rng));
             for i in 0..10 {
                 let label = format!("Test{}", i);
+                labels.push(label.clone());
                 let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
-                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let poly = Polynomial::rand(degree, rng);
+                let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 let hiding_bound = Some(num_points_in_query_set);
                 polynomials.push(LabeledPolynomial::new_owned(
@@ -376,18 +381,20 @@ pub mod tests {
             // Construct query set
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
+            // let mut point = F::one();
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
-                for i in 0..10 {
+                for (i, label) in labels.iter().enumerate() {
                     let should_be_queried = bool::rand(rng);
                     if should_be_queried {
-                        let label = format!("Test{}", i);
-                        query_set.insert((label.clone(), point));
+                        query_set.insert((label, point));
                         let value = polynomials[i].evaluate(point);
                         values.insert((label, point), value);
                     }
                 }
             }
+
+            println!();
 
             let opening_challenge = F::rand(rng);
             let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
@@ -405,8 +412,14 @@ pub mod tests {
                     "Failed with 10 polynomials, num_points_in_query_set: {:?}",
                     num_points_in_query_set
                 );
+                println!("Degree of polynomials:",);
+                for poly in polynomials {
+                    println!("Degree: {:?}", poly.degree());
+
+                }
+
             }
-            assert!(result, "proof was incorrect");
+            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
         Ok(())
     }

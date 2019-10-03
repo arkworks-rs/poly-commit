@@ -372,7 +372,15 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
                 "Sampling a random polynomial of degree {}",
                 hiding_degree
             ));
+
             randomness = Randomness::rand(hiding_degree, &mut rng);
+            if randomness.random_polynomial.degree() > ck.max_degree() {
+                eprintln!("The hiding bound is too large for the commitment key.");
+                Err(Error::PolynomialDegreeTooLarge { 
+                    poly_degree: randomness.random_polynomial.degree(),
+                    max_degree: ck.max_degree(), 
+                })?;
+            }
             end_timer!(sample_random_poly_time);
         }
 
@@ -596,6 +604,15 @@ mod tests {
         end_to_end_test::<_, KZG_SW6>().expect("test failed for SW6");
     }
 
+    #[test]
+    fn linear_polynomial_test() {
+        use crate::single_pc::tests::*;
+
+        linear_polynomial_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
+        linear_polynomial_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
+        linear_polynomial_test::<_, KZG_MNT6>().expect("test failed for MNT6");
+        linear_polynomial_test::<_, KZG_SW6>().expect("test failed for SW6");
+    }
     #[test]
     fn batch_check_test() {
         use crate::single_pc::tests::*;
