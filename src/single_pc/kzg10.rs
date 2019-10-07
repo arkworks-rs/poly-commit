@@ -136,26 +136,26 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
 )]
 pub struct Randomness<E: PairingEngine> {
     /// For KZG10, the commitment randomness is a random polynomial.
-    random_polynomial: Polynomial<E::Fr>,
+    blinding_polynomial: Polynomial<E::Fr>,
 }
 
 impl<E: PairingEngine> Randomness<E> {
     #[inline]
     fn is_hiding(&self) -> bool {
-        !self.random_polynomial.is_zero()
+        !self.blinding_polynomial.is_zero()
     }
 }
 
 impl<E: PairingEngine> PCRandomness for Randomness<E> {
     fn empty() -> Self {
         Self {
-            random_polynomial: Polynomial::zero(),
+            blinding_polynomial: Polynomial::zero(),
         }
     }
 
     fn rand<R: RngCore>(d: usize, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
-        randomness.random_polynomial = Polynomial::rand(d + 1, rng);
+        randomness.blinding_polynomial = Polynomial::rand(d + 1, rng);
         randomness
     }
 }
@@ -163,7 +163,7 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
-        self.random_polynomial += (f, &other.random_polynomial);
+        self.blinding_polynomial += (f, &other.blinding_polynomial);
     }
 }
 
@@ -343,7 +343,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         Error::check_degree(polynomial.degree(), ck.max_degree())?;
 
         let commit_time = start_timer!(|| format!(
-            "Committing to a polynomial of degree {} with hiding_bound: {:?}",
+            "Committing to polynomial of degree {} with hiding_bound: {:?}",
             polynomial.degree(),
             hiding_bound,
         ));
@@ -372,14 +372,22 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
                 "Sampling a random polynomial of degree {}",
                 hiding_degree
             ));
+
             randomness = Randomness::rand(hiding_degree, &mut rng);
+            if randomness.blinding_polynomial.degree() > ck.max_degree() {
+                eprintln!("The hiding bound is too large for the commitment key.");
+                Err(Error::PolynomialDegreeTooLarge { 
+                    poly_degree: randomness.blinding_polynomial.degree(),
+                    max_degree: ck.max_degree(), 
+                })?;
+            }
             end_timer!(sample_random_poly_time);
         }
 
         let from_mont_repr_time =
             start_timer!(|| "Converting random polynomial from Montgomery repr");
         let random_ints = randomness
-            .random_polynomial
+            .blinding_polynomial
             .coeffs
             .par_iter()
             .map(|s: &E::Fr| s.into_repr())
@@ -431,7 +439,7 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
 
         let mut random_v = E::Fr::zero();
         if randomness.is_hiding() {
-            let random_p = &randomness.random_polynomial;
+            let random_p = &randomness.blinding_polynomial;
 
             let rand_eval_time = start_timer!(|| "Evaluating random polynomial");
             let random_value = random_p.evaluate(point);
@@ -596,6 +604,15 @@ mod tests {
         end_to_end_test::<_, KZG_SW6>().expect("test failed for SW6");
     }
 
+    #[test]
+    fn linear_polynomial_test() {
+        use crate::single_pc::tests::*;
+
+        linear_polynomial_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
+        linear_polynomial_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
+        linear_polynomial_test::<_, KZG_MNT6>().expect("test failed for MNT6");
+        linear_polynomial_test::<_, KZG_SW6>().expect("test failed for SW6");
+    }
     #[test]
     fn batch_check_test() {
         use crate::single_pc::tests::*;

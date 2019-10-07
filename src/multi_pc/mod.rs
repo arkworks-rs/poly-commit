@@ -1,21 +1,20 @@
 use algebra::Field;
 use rand::RngCore;
-use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::*;
 
-/// `QuerySet` is the set of queries that are to be made to a list of polynomials
-/// `p` that have previously been committed. Each element of a `QuerySet` is a `(index, query)`
-/// pair, where `index` is the index into `p`, and `query` is the field element
-/// that `p[index]` is to be queried at.
-pub type QuerySet<F> = BTreeSet<(usize, F)>;
+/// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials
+/// `p` that have previously been committed. Each element of a `QuerySet` is a `(label, query)`
+/// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
+/// that `p[label]` is to be queried at.
+pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
 
-/// `Evaluations` is the result of querying a list of polynomials `p` at a `QuerySet`
+/// `Evaluations` is the result of querying a set of labeled polynomials `p` at a `QuerySet`
 /// `Q`. It maps each element of `Q` to the resulting evaluation. That is,
-/// if `(index, query)` is an element of `Q`, then `evaluation.get((index, query))`
-/// should equal `p[index].evaluate(query)`.
-pub type Evaluations<F> = BTreeMap<(usize, F), F>;
+/// if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
+/// should equal `p[label].evaluate(query)`.
+pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
@@ -43,91 +42,48 @@ pub trait MultiPolynomialCommitment<F: Field> {
         rng: &mut R,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
-    /// Outputs a commitments to `polynomials`. If `hiding_bounds[i].is_some()`,
-    /// then the `i`-th commitment is hiding up to `hiding_bounds[i]` number of queries.
-    /// `rng` should not be `None` if `hiding_bounds[i].is_some()`
-    /// is true.
+    /// Outputs a commitments to `polynomials`. If `polynomials[i].is_hiding()`,
+    /// then the `i`-th commitment is hiding up to `polynomials.hiding_bound()` queries.
+    /// `rng` should not be `None` if `polynomials[i].is_hiding() == true` for any `i`.
     ///
-    /// If `hiding_bounds[i].is_none()`, then the `i`-th randomness is
-    /// `Self::Randomness::empty()`.
-    // TODO: technically each iterator below can have different lifetimes, but
-    // that becomes quite noisy. Also, lifetime elision in argument position
-    // should fix this (https://github.com/rust-lang/rust/issues/49287)
+    /// If for some `i`, `polynomials[i].is_hiding() == false`, then the
+    /// corresponding randomness is `Self::Randomness::empty()`.
+    ///
+    /// If for some `i`, `polynomials[i].degree_bound().is_some()`, then that
+    /// polynomial will have the corresponding degree bound enforced.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a Polynomial<F>>,
-        degree_bounds: impl IntoIterator<Item = &'a Option<usize>>,
-        hiding_bounds: impl IntoIterator<Item = &'a Option<usize>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error>;
+    ) -> Result<
+        (
+            Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::Randomness>,
+        ),
+        Self::Error,
+    >;
 
-    /// On input a list of polynomials and a query set, `open` outputs a proof of evaluation
+    /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
     /// of the polynomials at the points in the query set.
-    fn open(
+    fn open<'a>(
         ck: &Self::CommitterKey,
-        polynomials: &[impl Borrow<Polynomial<F>>],
-        degree_bounds: &[Option<usize>],
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         query_set: &QuerySet<F>,
         opening_challenge: F,
-        r: &[impl Borrow<Self::Randomness>],
+        rands: &[Self::Randomness],
     ) -> Result<Self::Proof, Self::Error>;
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `comm`.
     fn check<R: RngCore>(
         vk: &Self::VerifierKey,
-        comm: &[Self::Commitment],
-        degree_bounds: &[Option<usize>],
+        labeled_commitments: &[LabeledCommitment<Self::Commitment>],
         query_set: &QuerySet<F>,
         values: &Evaluations<F>,
         proof: &Self::Proof,
         opening_challenge: F,
         rng: &mut R,
     ) -> Result<bool, Self::Error>;
-
-    /// Commit to labeled polynomials.
-    fn commit_labeled<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl Iterator<Item = &'a LabeledPolynomial<'a, F>>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Vec<Self::Commitment>, Vec<Self::Randomness>), Self::Error> {
-        let mut polynomials = Vec::new();
-        let mut degree_bounds = Vec::new();
-        let mut hiding_bounds = Vec::new();
-        for labeled_poly in labeled_polynomials {
-            polynomials.push(labeled_poly.polynomial());
-            degree_bounds.push(labeled_poly.degree_bound());
-            hiding_bounds.push(labeled_poly.hiding_bound());
-        }
-        Self::commit(ck, polynomials, &degree_bounds, &hiding_bounds, rng)
-    }
-
-    /// Open labeled polynomials.
-    fn open_labeled<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl Iterator<Item = &'a LabeledPolynomial<'a, F>>,
-        query_set: &QuerySet<F>,
-        opening_challenge: F,
-        rands: &[Self::Randomness],
-    ) -> Result<Self::Proof, Self::Error> {
-        let mut polynomials = Vec::new();
-        let mut degree_bounds = Vec::new();
-        let mut hiding_bounds = Vec::new();
-        for labeled_poly in labeled_polynomials {
-            polynomials.push(labeled_poly.polynomial());
-            degree_bounds.push(labeled_poly.degree_bound());
-            hiding_bounds.push(labeled_poly.hiding_bound());
-        }
-
-        Self::open(
-            &ck,
-            &polynomials,
-            &degree_bounds,
-            &query_set,
-            opening_challenge,
-            &rands,
-        )
-    }
 }
 
 /// Generic construction of a `MultiPolynomialCommitment` scheme from a
@@ -156,19 +112,23 @@ pub mod tests {
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
             // Generate polynomials
+            let num_points_in_query_set = 1;
             for _ in 0..1 {
                 let degree = max_degree;
-                polynomials.push(Polynomial::rand(degree, rng));
-                degree_bounds.push(None);
+                let polynomial = Polynomial::rand(degree, rng);
+                let degree_bound = None;
+                let hiding_bound = Some(num_points_in_query_set);
+                let l_poly = LabeledPolynomial::new_owned(
+                    String::from("Test"),
+                    polynomial,
+                    degree_bound,
+                    hiding_bound,
+                );
+                polynomials.push(l_poly);
             }
 
-            let num_points_in_query_set = 1;
-            let hiding_bounds = vec![Some(num_points_in_query_set); 1];
-
-            let (comms, rands) =
-                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
+            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -176,26 +136,18 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((i, point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((i, point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &query_set,
-                opening_challenge,
-                &rands,
-            )?;
+            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
                 MultiPC::check(
                     &vk,
                     &comms,
-                    &degree_bounds,
                     &query_set,
                     &values,
                     &proof,
@@ -218,22 +170,25 @@ pub mod tests {
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
             // Generate polynomials
+            let num_points_in_query_set = 1;
             for _ in 0..1 {
                 let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
-                polynomials.push(Polynomial::rand(degree, rng));
+                let poly = Polynomial::rand(degree, rng);
 
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
-                degree_bounds.push(degree_bound);
+                let hiding_bound = Some(num_points_in_query_set);
+                let l_poly = LabeledPolynomial::new_owned(
+                    String::from("Test"),
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                );
+                polynomials.push(l_poly);
             }
 
-            let num_points_in_query_set = 1;
-            let hiding_bounds = vec![Some(num_points_in_query_set); 1];
-
-            let (comms, rands) =
-                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
+            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
             println!("Committed");
 
             // Construct query set
@@ -242,28 +197,20 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((i, point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((i, point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
             println!("Generated query set");
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &query_set,
-                opening_challenge,
-                &rands,
-            )?;
+            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             println!("Opened");
             assert!(
                 MultiPC::check(
                     &vk,
                     &comms,
-                    &degree_bounds,
                     &query_set,
                     &values,
                     &proof,
@@ -286,22 +233,25 @@ pub mod tests {
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
             // Generate polynomials
+            let num_points_in_query_set = 2;
             for _ in 0..1 {
                 let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
-                polynomials.push(Polynomial::rand(degree, rng));
+                let poly = Polynomial::rand(degree, rng);
 
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
-                degree_bounds.push(degree_bound);
+                let hiding_bound = Some(num_points_in_query_set);
+                let l_poly = LabeledPolynomial::new_owned(
+                    String::from("Test"),
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                );
+                polynomials.push(l_poly);
             }
 
-            let num_points_in_query_set = 2;
-            let hiding_bounds = vec![Some(num_points_in_query_set); 1];
-
-            let (comms, rands) =
-                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
+            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -309,26 +259,18 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for i in 0..1 {
-                    query_set.insert((i, point));
+                    query_set.insert(("Test", point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((i, point), value);
+                    values.insert(("Test", point), value);
                 }
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &query_set,
-                opening_challenge,
-                &rands,
-            )?;
+            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
                 MultiPC::check(
                     &vk,
                     &comms,
-                    &degree_bounds,
                     &query_set,
                     &values,
                     &proof,
@@ -351,49 +293,47 @@ pub mod tests {
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
+            let mut labels = Vec::new();
+            let num_points_in_query_set = 1;
             // Generate polynomials
-            for _ in 0..2 {
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
-                polynomials.push(Polynomial::rand(degree, rng));
+            for i in 0..2 {
 
+                let label = format!("Test{}", i);
+                labels.push(label.clone());
+
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
+                let poly = Polynomial::rand(degree, rng);
                 let degree_bound = Some(range.sample(rng));
-                degree_bounds.push(degree_bound);
+                let hiding_bound = Some(num_points_in_query_set);
+                polynomials.push(LabeledPolynomial::new_owned(
+                    label,
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                ))
             }
 
-            let num_points_in_query_set = 1;
-            let hiding_bounds = vec![Some(num_points_in_query_set); 2];
-
-            let (comms, rands) =
-                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
+            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
-                for i in 0..2 {
-                    query_set.insert((i, point));
+                for (i, label) in labels.iter().enumerate() {
+                    query_set.insert((label, point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((i, point), value);
+                    values.insert((&label, point), value);
                 }
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &query_set,
-                opening_challenge,
-                &rands,
-            )?;
+            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
                 MultiPC::check(
                     &vk,
                     &comms,
-                    &degree_bounds,
                     &query_set,
                     &values,
                     &proof,
@@ -414,53 +354,53 @@ pub mod tests {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
         let (ck, vk) = MultiPC::setup(max_degree, rng)?;
-        for _ in 0..10 {
+        for _ in 0..50 {
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
-            // Generate polynomials
-            for _ in 0..10 {
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
-                polynomials.push(Polynomial::rand(degree, rng));
+            let mut labels = Vec::new();
 
+            // Generate polynomials
+            let num_points_in_query_set = std::cmp::min(max_degree, rand::distributions::Uniform::from(1..6).sample(rng));
+            for i in 0..10 {
+                let label = format!("Test{}", i);
+                labels.push(label.clone());
+                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
+                let poly = Polynomial::rand(degree, rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
-                degree_bounds.push(degree_bound);
+                let hiding_bound = Some(num_points_in_query_set);
+                polynomials.push(LabeledPolynomial::new_owned(
+                    label,
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                ))
             }
 
-            let num_points_in_query_set = rand::distributions::Uniform::from(1..5).sample(rng);
-            let hiding_bounds = vec![Some(num_points_in_query_set); 10];
-
-            let (comms, rands) =
-                MultiPC::commit(&ck, &polynomials, &degree_bounds, &hiding_bounds, Some(rng))?;
+            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
+            // let mut point = F::one();
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
-                for i in 0..10 {
+                for (i, label) in labels.iter().enumerate() {
                     let should_be_queried = bool::rand(rng);
                     if should_be_queried {
-                        query_set.insert((i, point));
+                        query_set.insert((label, point));
                         let value = polynomials[i].evaluate(point);
-                        values.insert((i, point), value);
+                        values.insert((label, point), value);
                     }
                 }
             }
 
+            println!();
+
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(
-                &ck,
-                &polynomials,
-                &degree_bounds,
-                &query_set,
-                opening_challenge,
-                &rands,
-            )?;
+            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             let result = MultiPC::check(
                 &vk,
                 &comms,
-                &degree_bounds,
                 &query_set,
                 &values,
                 &proof,
@@ -472,8 +412,14 @@ pub mod tests {
                     "Failed with 10 polynomials, num_points_in_query_set: {:?}",
                     num_points_in_query_set
                 );
+                println!("Degree of polynomials:",);
+                for poly in polynomials {
+                    println!("Degree: {:?}", poly.degree());
+
+                }
+
             }
-            assert!(result, "proof was incorrect");
+            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
         Ok(())
     }

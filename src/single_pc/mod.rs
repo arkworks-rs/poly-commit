@@ -90,30 +90,6 @@ pub trait SinglePolynomialCommitment<F: Field> {
         proofs: &[Self::Proof],
         rng: &mut R,
     ) -> Result<bool, Self::Error>;
-
-    /// Commit to a labeled polynomial.
-    fn commit_labeled(
-        ck: &Self::CommitterKey,
-        labeled_polynomial: &LabeledPolynomial<F>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Self::Commitment, Self::Randomness), Self::Error> {
-        Self::commit(
-            ck,
-            labeled_polynomial.polynomial(),
-            labeled_polynomial.hiding_bound(),
-            rng,
-        )
-    }
-
-    /// Open a labeled polynomial.
-    fn open_labeled<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomial: &LabeledPolynomial<F>,
-        point: F,
-        rand: &Self::Randomness,
-    ) -> Result<Self::Proof, Self::Error> {
-        Self::open(&ck, labeled_polynomial.polynomial(), point, &rand)
-    }
 }
 
 /// Implements the [KZG10](kzg10) construction that satisfies the `SinglePolynomialCommitment`
@@ -142,6 +118,32 @@ pub mod tests {
             }
             let (ck, vk) = SinglePC::setup(degree, rng)?;
             let p = Polynomial::rand(degree, rng);;
+            let hiding_bound = Some(1);
+            let (comm, rand) = SinglePC::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = F::rand(rng);
+            let value = p.evaluate(point);
+            let proof = SinglePC::open(&ck, &p, point, &rand)?;
+            assert!(
+                SinglePC::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
+    pub fn linear_polynomial_test<F, SinglePC>() -> Result<(), SinglePC::Error>
+    where
+        F: Field,
+        SinglePC: SinglePolynomialCommitment<F>,
+    {
+        let rng = &mut thread_rng();
+        for _ in 0..100 {
+            let degree = 2;
+            let (ck, vk) = SinglePC::setup(degree, rng)?;
+            let p = Polynomial::rand(1, rng);;
             let hiding_bound = Some(1);
             let (comm, rand) = SinglePC::commit(&ck, &p, hiding_bound, Some(rng))?;
             let point = F::rand(rng);
