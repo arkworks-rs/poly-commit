@@ -16,7 +16,7 @@ extern crate bench_utils;
 
 use algebra::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
-use rand::Rng;
+use rand_core::RngCore;
 use std::borrow::Cow;
 
 /// Defines `SinglePolynomialCommitment` schemes that allow one to commit to
@@ -67,7 +67,7 @@ pub trait PCRandomness: Clone {
 
     /// Samples randomness for commitments;
     /// `num_queries` specifies the number of queries that the commitment will be opened at.
-    fn rand<R: Rng>(num_queries: usize, rng: &mut R) -> Self;
+    fn rand<R: RngCore>(num_queries: usize, rng: &mut R) -> Self;
 }
 
 /// A polynomial along with information about its degree bound (if any), and the

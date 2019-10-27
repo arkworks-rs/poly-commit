@@ -15,7 +15,7 @@ use algebra::{
     AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
     UniformRand,
 };
-use rand::RngCore;
+use rand_core::RngCore;
 use rayon::prelude::*;
 use std::marker::PhantomData;
 use std::ops::AddAssign;

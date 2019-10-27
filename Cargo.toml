@@ -22,9 +22,12 @@ edition = "2018"
 algebra = { git = "https://github.com/scipr-lab/zexe/", features = [ "parallel" ] }
 ff-fft = { git = "https://github.com/scipr-lab/zexe/" }
 bench-utils = { git = "https://github.com/scipr-lab/zexe/" }
-rand = { version = "0.7" }
+rand_core = { version = "0.5" }
 rayon = { version = "1" }
 derivative = { version = "1" }
+
+[dev-dependencies]
+rand = { version = "0.7" }
 
 [profile.release]
 opt-level = 3
