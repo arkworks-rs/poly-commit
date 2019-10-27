@@ -7,7 +7,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use algebra::PrimeField;
-use rand::RngCore;
+use rand_core::RngCore;
 
 /// Generic construction of a `MultiPolynomialCommitment` scheme from a
 /// `SinglePolynomialCommitment` scheme whenever the commitment and randomness of the
@@ -525,7 +525,7 @@ where
 // Basically, we define a "dummy rng" that does nothing
 // (corresponding to the case that `rng = None`).
 pub(super) mod optional_rng {
-    use rand::RngCore;
+    use rand_core::RngCore;
     pub(super) struct OptionalRng<R>(pub(super) Option<R>);
 
     impl<R: RngCore> RngCore for OptionalRng<R> {
@@ -545,7 +545,7 @@ pub(super) mod optional_rng {
         }
 
         #[inline]
-        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
             Ok(self.fill_bytes(dest))
         }
     }

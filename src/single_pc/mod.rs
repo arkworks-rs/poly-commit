@@ -1,6 +1,6 @@
 use crate::*;
 use algebra::Field;
-use rand::RngCore;
+use rand_core::RngCore;
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to a single polynomial and later provide a succinct proof
