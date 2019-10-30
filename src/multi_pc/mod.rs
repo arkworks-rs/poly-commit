@@ -359,7 +359,7 @@ pub mod tests {
             let mut labels = Vec::new();
 
             // Generate polynomials
-            let num_points_in_query_set = std::cmp::min(max_degree, rand::distributions::Uniform::from(1..6).sample(rng));
+            let num_points_in_query_set = std::cmp::min(max_degree - 1, rand::distributions::Uniform::from(1..6).sample(rng));
             for i in 0..10 {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
