@@ -18,7 +18,7 @@ use algebra::{
 use rand_core::RngCore;
 use rayon::prelude::*;
 use std::marker::PhantomData;
-use std::ops::AddAssign;
+use std::ops::{Range, AddAssign};
 
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
@@ -26,6 +26,31 @@ use std::ops::AddAssign;
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 pub struct KZG10<E: PairingEngine> {
     _engine: PhantomData<E>,
+}
+
+/// `UniversalParams` are the universal parameters for the KZG10 scheme.
+#[derive(Derivative)]
+#[derivative(
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = "")
+)]
+pub struct UniversalParams<E: PairingEngine> {
+    /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
+    pub powers_of_g: Vec<E::G1Affine>,
+    /// Group elements of the form `{ \beta^i \gamma G }`, where `i` ranges from 0 to `degree`.
+    pub powers_of_gamma_g: Vec<E::G1Affine>,
+    /// Maximum degree of polynomials supported by these parameters
+    pub max_degree: usize,
+    /// The generator of G2.
+    pub h: E::G2Affine,
+    /// \beta times the above generator of G2.
+    pub beta_h: E::G2Affine,
+    /// The generator of G2, prepared for use in pairings.
+    pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
+    /// \beta times the above generator of G2, prepared for use in pairings.
+    pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
 }
 
 /// `ComitterKey` is used to commit to and create evaluation proofs for a given
@@ -42,13 +67,15 @@ pub struct CommitterKey<E: PairingEngine> {
     pub powers_of_g: Vec<E::G1Affine>,
     /// Group elements of the form `{ \beta^i \gamma G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_gamma_g: Vec<E::G1Affine>,
+    /// The indices of coefficients supported by `self`.
+    pub coefficient_support: Vec<Range<usize>>,
     /// Maximum degree of polynomials supported by these parameters
-    pub degree: usize,
+    pub max_degree: usize,
 }
 
 impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
     fn max_degree(&self) -> usize {
-        self.degree
+        self.max_degree
     }
 }
 
@@ -69,12 +96,12 @@ pub struct VerifierKey<E: PairingEngine> {
     /// \beta times the above generator of G2, prepared for use in pairings.
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
     /// Maximum degree of polynomials supported by these parameters
-    pub degree: usize,
+    pub max_degree: usize,
 }
 
 impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     fn max_degree(&self) -> usize {
-        self.degree
+        self.max_degree
     }
 }
 
@@ -247,6 +274,7 @@ impl Error {
 }
 
 impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
+    type UniversalParams = UniversalParams<E>;
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
@@ -257,10 +285,10 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
     fn setup<R: RngCore>(
-        degree: usize,
+        max_degree: usize,
         rng: &mut R,
-    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        if degree < 1 {
+    ) -> Result<Self::UniversalParams, Self::Error> {
+        if max_degree < 1 {
             return Err(Error::UnsupportedDegree);
         }
         let setup_time = start_timer!(|| format!("Started KZG10::Setup with degree {}", degree));
@@ -278,12 +306,12 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         // one multiplication.
         // Anyway it shouldn't be a bottleneck?
         // If we use MPC to run the setup, we can consider this optimization.
-        for _ in 0..degree {
+        for _ in 0..max_degree {
             powers_of_beta.push(cur);
             cur *= &beta;
         }
 
-        let window_size = FixedBaseMSM::get_mul_window_size(degree + 1);
+        let window_size = FixedBaseMSM::get_mul_window_size(max_degree + 1);
 
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
@@ -307,29 +335,70 @@ impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
         E::G1Projective::batch_normalization(powers_of_g.as_mut_slice());
         E::G1Projective::batch_normalization(powers_of_gamma_g.as_mut_slice());
 
-        let ck = CommitterKey {
+        let beta_h = h.mul(&beta).into_affine();
+        let h = h.into_affine();
+        let prepared_h = h.prepare();
+        let prepared_beta_h = beta_h.prepare();
+
+        let pp = UniversalParams {
             powers_of_g: powers_of_g.into_iter().map(|e| e.into_affine()).collect(),
             powers_of_gamma_g: powers_of_gamma_g
                 .into_iter()
                 .map(|e| e.into_affine())
                 .collect(),
-            degree,
-        };
-
-        let beta_h = h.mul(&beta).into_affine();
-        let h = h.into_affine();
-        let prepared_h = h.prepare();
-        let prepared_beta_h = beta_h.prepare();
-        let vk = VerifierKey {
-            g: g.into_affine(),
-            gamma_g: gamma_g.into_affine(),
+            max_degree,
             h,
             beta_h,
             prepared_h,
             prepared_beta_h,
-            degree,
         };
         end_timer!(setup_time);
+        Ok(pp)
+    }
+
+    // TODO: enforce that range are sorted, and non-overlapping.
+    fn trim(
+        pp: &Self::UniversalParams,
+        coefficient_support: &[Range<usize>],
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
+        // Sort the support to ensure that there is no overlap
+        let mut coefficient_support = coefficient_support.to_vec();
+        coefficient_support.sort_by(|r1, r2| {
+            if r1.start < r2.start && r1.end < r2.end {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        });
+        // TODO: change to error.
+        assert!(coefficient_support.iter().all(|r| r.start < r.end));
+        // TODO: change to error.
+        assert!(coefficient_support.iter().all(|r| r.start < r.end));
+
+        let mut powers_of_g = Vec::new();
+        let mut powers_of_gamma_g = Vec::new();
+        let mut max_degree = 0;
+
+        for &range in coefficient_support {
+            powers_of_g.extend_from_slice(&pp.powers_of_g[range]);
+            powers_of_gamma_g.extend_from_slice(&pp.powers_of_gamma_g[range]);
+            max_degree = std::cmp::max(range.end, max_degree);
+        }
+        let ck = CommitterKey {
+            powers_of_g,
+            powers_of_gamma_g,
+            coefficient_support: coefficient_support,
+            max_degree,
+        };
+        let vk = VerifierKey {
+            g: pp.powers_of_g[0],
+            gamma_g: pp.powers_of_gamma_g[0],
+            h: pp.h,
+            beta_h: pp.beta_h,
+            prepared_h: pp.prepared_h,
+            prepared_beta_h: pp.prepared_beta_h,
+            max_degree,
+        };
         Ok((ck, vk))
     }
 

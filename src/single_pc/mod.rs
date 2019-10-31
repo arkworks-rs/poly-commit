@@ -30,6 +30,8 @@ use rand_core::RngCore;
 /// assert!(SinglePC::check(&vk, &comm, point, value, &proof)?, "proof was incorrect");
 /// ```
 pub trait SinglePolynomialCommitment<F: Field> {
+    /// The universal parameters that must be specialized for specific degrees.
+    type UniversalParams;
     /// The committer key for the scheme; used to commit to a polynomial and then
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
@@ -44,11 +46,18 @@ pub trait SinglePolynomialCommitment<F: Field> {
     /// The error type for the scheme.
     type Error: std::error::Error;
 
-    /// Constructs public parameters when given as input the maximum degree `degree`
-    /// for the polynomial commitment scheme.
+    /// Constructs universal public parameters when given as input the maximum 
+    /// degree `max_degree` for the polynomial commitment scheme.
     fn setup<R: RngCore>(
-        degree: usize,
+        max_degree: usize,
         rng: &mut R,
+    ) -> Result<Self::UniversalParams, Self::Error>;
+
+    /// "Trims" the universal parameters to support polynomials having coefficients
+    /// defined by `coefficient_support`.
+    fn trim(
+        pp: &Self::UniversalParams,
+        coefficient_support: &[std::ops::Range<usize>],
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitment to `polynomial`. If `hiding_bound.is_some()`, then the
