@@ -21,6 +21,7 @@ pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 /// of evaluation for the corresponding commitments at a query set `Q`, while
 /// enforcing per-polynomial degree bounds.
 pub trait MultiPolynomialCommitment<F: Field> {
+    type UniversalParams;
     /// The committer key for the scheme; used to commit to a polynomial and then
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
@@ -40,6 +41,14 @@ pub trait MultiPolynomialCommitment<F: Field> {
     fn setup<R: RngCore>(
         degree: usize,
         rng: &mut R,
+    ) -> Result<Self::UniversalParams, Self::Error>;
+
+    /// Specializes the public parameters for a given support for coefficients
+    /// for polynomials and degree bounds.
+    fn trim(
+        pp: &Self::UniversalParams,
+        coefficient_support: &[std::ops::Range<usize>],
+        degree_bounds: &[usize],
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitments to `polynomials`. If `polynomials[i].is_hiding()`,
