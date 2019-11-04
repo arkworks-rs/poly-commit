@@ -116,19 +116,14 @@ impl<E: PairingEngine> KZG10<E> {
     ) -> Result<(CommitterKey<E>, VerifierKey<E>), Error> {
         let mut powers_of_g = Vec::new();
         let mut powers_of_gamma_g = Vec::new();
-        let mut max_degree = 0;
-        let mut suppoer = Vec::new();
 
         let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
         let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
-
-        let max_degree = pp.max_degree;
 
         let start = 0;
         let ck = CommitterKey {
             powers_of_g,
             powers_of_gamma_g,
-            supported_degree_bounds: degree_bounds_to_support.to_vec(),
             max_degree,
         };
         let vk = VerifierKey {
@@ -214,79 +209,6 @@ impl<E: PairingEngine> KZG10<E> {
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
-    }
-
-    /// Outputs a commitments to `polynomials`.
-    pub fn multi_commit<'a>(
-        ck: &CommitterKey<E>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<
-        (
-            Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
-        ),
-        Error,
-    > {
-        let commit_time = start_timer!(|| "Committing to polynomials");
-
-        let mut commitments = Vec::new();
-        let mut randomness = Vec::new();
-        let max_degree = ck.max_degree();
-
-        let rng = &mut optional_rng::OptionalRng(rng);
-        for polynomial in polynomials {
-            let label = polynomial.label();
-            let degree_bound = polynomial.degree_bound();
-            let hiding_bound = polynomial.hiding_bound();
-            let polynomial = polynomial.polynomial();
-
-            Error::check_degrees(
-                polynomial.degree(),
-                degree_bound,
-                max_degree,
-                label.to_string(),
-            )?;
-
-            let commit_time = start_timer!(|| format!(
-                "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
-                label,
-                polynomial.degree(),
-                degree_bound,
-                hiding_bound,
-            ));
-            let (comm, rand) = Self::commit(ck, polynomial, hiding_bound, Some(rng))?;
-            let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
-                if degree_bound < max_degree {
-                    let s_polynomial = shift_polynomial(polynomial, degree_bound, max_degree);
-                    assert!(
-                        polynomial.degree() <= s_polynomial.degree()
-                            && s_polynomial.degree() <= max_degree
-                            && s_polynomial.degree()
-                                == polynomial.degree() + max_degree - degree_bound,
-                        "polynomial.degree(): {}; s_polynomial.degree(): {}; max_degree: {}.",
-                        polynomial.degree(),
-                        s_polynomial.degree(),
-                        max_degree
-                    );
-                    let (shifted_comm, shifted_rand) =
-                        Self::commit(ck, &s_polynomial, hiding_bound, Some(rng))?;
-                    (Some(shifted_comm), Some(shifted_rand))
-                } else {
-                    (None, None)
-                }
-            } else {
-                (None, None)
-            };
-
-            let comm = Commitment { comm, shifted_comm };
-            let rand = Randomness { rand, shifted_rand };
-            commitments.push(LabeledCommitment::new(label.to_string(), comm, degree_bound));
-            randomness.push(rand);
-            end_timer!(commit_time);
-        }
-        end_timer!(commit_time);
-        Ok((commitments, randomness))
     }
 
     fn compute_witness_polynomial(

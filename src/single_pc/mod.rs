@@ -31,7 +31,7 @@ use rand_core::RngCore;
 /// ```
 pub trait SinglePolynomialCommitment<F: Field> {
     /// The universal parameters that must be specialized for specific degrees.
-    type UniversalParams;
+    type UniversalParams: PCUniversalParams;
     /// The committer key for the scheme; used to commit to a polynomial and then
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
@@ -43,6 +43,8 @@ pub trait SinglePolynomialCommitment<F: Field> {
     type Randomness: PCRandomness;
     /// The evaluation proof.
     type Proof: Clone;
+    /// The evaluation proof for a query set.
+    type BatchProof: Clone + From<Vec<Self::Proof>>;
     /// The error type for the scheme.
     type Error: std::error::Error;
 
@@ -57,7 +59,7 @@ pub trait SinglePolynomialCommitment<F: Field> {
     /// defined by `coefficient_support`.
     fn trim(
         pp: &Self::UniversalParams,
-        coefficient_support: &[std::ops::Range<usize>],
+        coefficient_support: CoefficientSupport,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitment to `polynomial`. If `hiding_bound.is_some()`, then the
@@ -90,6 +92,8 @@ pub trait SinglePolynomialCommitment<F: Field> {
         proof: &Self::Proof,
     ) -> Result<bool, Self::Error>;
 
+
+
     /// Check a batch of proofs
     fn batch_check<R: RngCore>(
         vk: &Self::VerifierKey,
@@ -106,6 +110,21 @@ pub trait SinglePolynomialCommitment<F: Field> {
 ///
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 pub mod kzg10;
+
+/// A struct that represents the non-zero coefficients of a polynomial.
+pub(crate) struct CoefficientSupport {
+    lower_interval_bound: usize,
+    upper_interval_bound: usize,
+}
+
+impl CoefficientSupport {
+    fn from_dual_interval(lower_interval_bound: usize, upper_interval_bound: usize) -> Self {
+        Self {
+            lower_interval_bound,
+            upper_interval_bound,
+        }
+    }
+}
 
 #[cfg(test)]
 pub mod tests {
@@ -125,7 +144,9 @@ pub mod tests {
             while degree <= 1 {
                 degree = usize::rand(rng) % 20;
             }
-            let (ck, vk) = SinglePC::setup(degree, rng)?;
+            let pp = SinglePC::setup(degree, rng)?;
+            let bounds = 
+            let (ck, vk) = SinglePC::trim(degree, degree);
             let p = Polynomial::rand(degree, rng);;
             let hiding_bound = Some(1);
             let (comm, rand) = SinglePC::commit(&ck, &p, hiding_bound, Some(rng))?;

@@ -12,12 +12,14 @@ pub struct UniversalParams<E: PairingEngine> {
     pub powers_of_g: Vec<E::G1Affine>,
     /// Group elements of the form `{ \beta^i \gamma G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_gamma_g: Vec<E::G1Affine>,
-    /// Group elements of the form `{ \beta^{-i} H }`, where `i` ranges from 0 to `degree`.
-    /// (The negative powers are required for Sonic-style degree bounds)
-    pub powers_of_h: Option<Vec<E::G1Affine>>,
-    /// Group elements of the form `{ \beta^{-i} \gamma H }`, where `i` ranges from 0 to `degree`.
-    /// (The negative powers are required for Sonic-style degree bounds)
-    pub powers_of_gamma_h: Option<Vec<E::G1Affine>>,
+    /// The generator of G2.
+    pub h: E::G2Affine,
+    /// \beta times the above generator of G2.
+    pub beta_h: E::G2Affine,
+    /// The generator of G2, prepared for use in pairings.
+    pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
+    /// \beta times the above generator of G2, prepared for use in pairings.
+    pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
     /// Maximum degree of polynomials supported by these parameters
     pub max_degree: usize,
 }
