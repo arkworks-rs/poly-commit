@@ -29,8 +29,17 @@ pub mod single_pc;
 /// at many points.
 pub mod multi_pc;
 
+pub mod kzg10;
+
 pub use multi_pc::MultiPolynomialCommitment;
 pub use single_pc::SinglePolynomialCommitment;
+
+/// Defines the minimal interface for public params for any polynomial
+/// commitment scheme.
+pub trait PCUniversalParams: Clone {
+    /// Outputs the maximum degree supported by the committer key.
+    fn max_degree(&self) -> usize;
+}
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
