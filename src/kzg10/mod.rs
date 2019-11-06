@@ -5,7 +5,7 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{PCUniversalParams, PCCommitterKey, PCRandomness, Polynomial};
+use crate::{PCRandomness, Polynomial};
 use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra::{
     AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
@@ -36,13 +36,13 @@ impl<E: PairingEngine> KZG10<E> {
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
         max_degree: usize,
-        _has_g2: bool,
+        _produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
-            return Err(Error::UnsupportedDegree);
+            return Err(Error::DegreeIsZero);
         }
-        let setup_time = start_timer!(|| format!("Started KZG10::Setup with degree {}", degree));
+        let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", degree));
         let beta = E::Fr::rand(rng);
         let g = E::G1Projective::rand(rng);
         let gamma_g = E::G1Projective::rand(rng);
@@ -50,13 +50,6 @@ impl<E: PairingEngine> KZG10<E> {
 
         let mut powers_of_beta = vec![E::Fr::one()];
         let mut cur = beta;
-        // TODO: can optimize by computing
-        // beta, beta^2, beta^4, ..., beta^d and using those to compute arbitrary
-        // powers of beta faster via a bit decomposition of each scalar.
-        // But that seems like it would be slower? log(D) additions instead of
-        // one multiplication.
-        // Anyway it shouldn't be a bottleneck?
-        // If we use MPC to run the setup, we can consider this optimization.
         for _ in 0..max_degree {
             powers_of_beta.push(cur);
             cur *= &beta;
@@ -97,7 +90,6 @@ impl<E: PairingEngine> KZG10<E> {
                 .into_iter()
                 .map(|e| e.into_affine())
                 .collect(),
-            max_degree,
             h,
             beta_h,
             prepared_h,
@@ -107,42 +99,14 @@ impl<E: PairingEngine> KZG10<E> {
         Ok(pp)
     }
 
-    /// Specializes the public parameters for a given maximum degree `d` for polynomials
-    /// `d` should be less that `pp.max_degree()`.
-    pub fn trim(
-        pp: &UniversalParams<E>,
-        max_degree: usize,
-    ) -> Result<(CommitterKey<E>, VerifierKey<E>), Error> {
-        let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
-        let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
-
-        let ck = CommitterKey {
-            powers_of_g,
-            powers_of_gamma_g,
-            max_degree,
-            universal_max_degree: pp.max_degree(),
-        };
-        let vk = VerifierKey {
-            g: pp.powers_of_g[0],
-            gamma_g: pp.powers_of_gamma_g[0],
-            h: pp.h,
-            beta_h: pp.beta_h,
-            prepared_h: pp.prepared_h.clone(),
-            prepared_beta_h: pp.prepared_beta_h.clone(),
-            max_degree,
-            universal_max_degree: pp.max_degree(),
-        };
-        Ok((ck, vk))
-    }
-
     /// Outputs a commitment to `polynomial`.
     pub fn commit(
-        ck: &CommitterKey<E>,
+        powers: &Powers<E>,
         polynomial: &Polynomial<E::Fr>,
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<(Commitment<E>, Randomness<E>), Error> {
-        Error::check_degree(polynomial.degree(), ck.max_degree())?;
+        Error::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
             "Committing to polynomial of degree {} with hiding_bound: {:?}",
@@ -150,21 +114,10 @@ impl<E: PairingEngine> KZG10<E> {
             hiding_bound,
         ));
 
-        let mut skip_leading_zeros = 0;
-        while polynomial.coeffs[skip_leading_zeros].is_zero() && skip_leading_zeros < polynomial.coeffs.len() {
-            skip_leading_zeros += 1;
-        }
-
-        let from_mont_repr_time =
-            start_timer!(|| "Converting plaintext polynomial from Montgomery repr");
-        let plain_coeffs = polynomial.coeffs[skip_leading_zeros..]
-            .par_iter()
-            .map(|s| s.into_repr())
-            .collect::<Vec<_>>();
-        end_timer!(from_mont_repr_time);
+        let (num_leading_zeros, plain_coeffs) = skip_leading_zeros_and_convert_to_bigints(&polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = VariableBaseMSM::multi_scalar_mul(&ck.powers_of_g[skip_leading_zeros..], &plain_coeffs);
+        let mut commitment = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
         end_timer!(msm_time);
 
         let mut randomness = Randomness::empty();
@@ -176,29 +129,14 @@ impl<E: PairingEngine> KZG10<E> {
             ));
 
             randomness = Randomness::rand(hiding_degree, &mut rng);
-            if randomness.blinding_polynomial.degree() > ck.max_degree() {
-                eprintln!("The hiding bound is too large for the commitment key.");
-                Err(Error::PolynomialDegreeTooLarge {
-                    poly_degree: randomness.blinding_polynomial.degree(),
-                    max_degree: ck.max_degree(),
-                })?;
-            }
+            Error::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.size())?;
             end_timer!(sample_random_poly_time);
         }
 
-        let from_mont_repr_time =
-            start_timer!(|| "Converting random polynomial from Montgomery repr");
-        let random_ints = randomness
-            .blinding_polynomial
-            .coeffs
-            .par_iter()
-            .map(|s: &E::Fr| s.into_repr())
-            .collect::<Vec<_>>();
-        end_timer!(from_mont_repr_time);
-
+        let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs);
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
         let random_commitment =
-            VariableBaseMSM::multi_scalar_mul(&ck.powers_of_gamma_g, random_ints.as_slice())
+            VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, random_ints.as_slice())
                 .into_affine();
         end_timer!(msm_time);
 
@@ -242,46 +180,18 @@ impl<E: PairingEngine> KZG10<E> {
         Ok((witness_polynomial, random_witness_polynomial))
     }
 
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    pub(crate) fn open<'a>(
-        ck: &CommitterKey<E>,
-        p: &Polynomial<E::Fr>,
-        point: E::Fr,
-        rand: &Randomness<E>,
-    ) -> Result<Proof<E>, Error> {
-        Error::check_degree(p.degree(), ck.max_degree())?;
-        let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
-
-        let witness_time = start_timer!(|| "Computing witness polynomials");
-        let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(p, point, rand)?;
-        end_timer!(witness_time);
-
-        let proof = Self::open_with_witness_polynomial(ck, point, rand, &witness_poly, hiding_witness_poly.as_ref());
-
-        end_timer!(open_time);
-        proof
-    }
-
     pub(crate) fn open_with_witness_polynomial<'a>(
-        ck: &CommitterKey<E>,
+        powers: &Powers<E>,
         point: E::Fr,
         randomness: &Randomness<E>,
         witness_polynomial: &Polynomial<E::Fr>,
         hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
     ) -> Result<Proof<E>, Error> {
-        let convert_time = start_timer!(|| "Converting witness polynomial from Montgomery repr");
-        let mut skip_leading_zeros = 0;
-        while witness_polynomial.coeffs[skip_leading_zeros].is_zero() && skip_leading_zeros < witness_polynomial.coeffs.len() {
-            skip_leading_zeros += 1;
-        }
-        let witness_coeffs = witness_polynomial[skip_leading_zeros..]
-            .par_iter()
-            .map(|s| s.into_repr())
-            .collect::<Vec<_>>();
-        end_timer!(convert_time);
+        Error::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
+        let (num_leading_zeros, witness_coeffs) = skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBaseMSM::multi_scalar_mul(&ck.powers_of_g[skip_leading_zeros..], &witness_coeffs);
+        let mut w = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
         end_timer!(witness_comm_time);
 
         let mut random_v = E::Fr::zero();
@@ -291,15 +201,10 @@ impl<E: PairingEngine> KZG10<E> {
             let blinding_evaluation = blinding_p.evaluate(point);
             end_timer!(blinding_eval_time);
 
-            let random_witness_coeffs = hiding_witness_polynomial
-                .coeffs
-                .par_iter()
-                .map(|s| s.into_repr())
-                .collect::<Vec<_>>();
-
+            let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs);
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBaseMSM::multi_scalar_mul(&ck.powers_of_gamma_g, &random_witness_coeffs);
+            w += &VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, &random_witness_coeffs);
             end_timer!(witness_comm_time);
             random_v = blinding_evaluation;
         }
@@ -308,6 +213,26 @@ impl<E: PairingEngine> KZG10<E> {
             w: w.into_affine(),
             random_v,
         })
+    }
+
+    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
+    pub(crate) fn open<'a>(
+        powers: &Powers<E>,
+        p: &Polynomial<E::Fr>,
+        point: E::Fr,
+        rand: &Randomness<E>,
+    ) -> Result<Proof<E>, Error> {
+        Error::check_degree_is_within_bounds(p.degree(), powers.size())?;
+        let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
+
+        let witness_time = start_timer!(|| "Computing witness polynomials");
+        let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(p, point, rand)?;
+        end_timer!(witness_time);
+
+        let proof = Self::open_with_witness_polynomial(powers, point, rand, &witness_poly, hiding_witness_poly.as_ref());
+
+        end_timer!(open_time);
+        proof
     }
 
     /// Verifies that `value` is the evaluation at `point` of the polynomial
@@ -391,6 +316,22 @@ impl<E: PairingEngine> KZG10<E> {
     }
 }
 
+fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(p: &Polynomial<F>) -> (usize, Vec<F::BigInt>) {
+    let mut num_leading_zeros = 0;
+    while p.coeffs[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs.len() {
+        num_leading_zeros += 1;
+    }
+    let coeffs = convert_to_bigints(&p.coeffs[num_leading_zeros..]);
+    (num_leading_zeros, coeffs)
+}
+
+fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
+    let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
+    let coeffs = p.par_iter().map(|s| s.into_repr()).collect::<Vec<_>>();
+    end_timer!(to_bigint_time);
+    coeffs
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
@@ -422,11 +363,11 @@ mod tests {
         let degree = 4;
         let pp = KZG_Bls12_381::setup(degree, rng).unwrap();
         let support = CoefficientSupport::from_dual_interval(4, 4);
-        let (ck, _) = KZG_Bls12_381::trim(degree).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(degree).unwrap();
 
         let hiding_bound = None;
-        let (comm, _) = KZG10::commit(&ck, &p, hiding_bound, Some(rng)).unwrap();
-        let (f_comm, _) = KZG10::commit(&ck, &f_p, hiding_bound, Some(rng)).unwrap();
+        let (comm, _) = KZG10::commit(&powers, &p, hiding_bound, Some(rng)).unwrap();
+        let (f_comm, _) = KZG10::commit(&powers, &f_p, hiding_bound, Some(rng)).unwrap();
         let mut f_comm_2 = Commitment::empty();
         f_comm_2 += (f, &comm);
 

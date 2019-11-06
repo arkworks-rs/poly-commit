@@ -22,17 +22,15 @@ pub struct UniversalParams<E: PairingEngine> {
     pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
-    /// Maximum degree of polynomials supported by these parameters
-    pub max_degree: usize,
 }
 
 impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
     fn max_degree(&self) -> usize {
-        self.max_degree
+        self.powers_of_g.len() - 1
     }
 }
 
-/// `ComitterKey` is used to commit to and create evaluation proofs for a given
+/// `Powers` is used to commit to and create evaluation proofs for a given
 /// polynomial.
 #[derive(Derivative)]
 #[derivative(
@@ -41,25 +39,17 @@ impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct CommitterKey<E: PairingEngine> {
-    /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
+pub struct Powers<E: PairingEngine> {
+    /// Group elements of the form `β^i G`, for different values of `i`.
     pub powers_of_g: Vec<E::G1Affine>,
-    /// Group elements of the form `{ \beta^i \gamma G }`, where `i` ranges from 0 to `degree`.
+    /// Group elements of the form `β^i γG`, for different values of `i`.
     pub powers_of_gamma_g: Vec<E::G1Affine>,
-    /// Maximum degree of polynomials supported by these parameters
-    pub max_degree: usize,
-    /// Maximum degree of polynomials supported by the universal parameters
-    /// `Self` was derived from.
-    pub universal_max_degree: usize,
 }
 
-impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
-    fn universal_max_degree(&self) -> usize {
-        self.universal_max_degree
-    }
-
-    fn max_degree(&self) -> usize {
-        self.max_degree
+impl<E: PairingEngine> Powers<E> {
+    /// The number of powers in `self`.
+    pub fn size(&self) -> usize {
+        self.powers_of_g.len()
     }
 }
 
@@ -79,21 +69,6 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
-    /// Maximum degree of polynomials supported by these parameters
-    pub max_degree: usize,
-    /// Maximum degree of polynomials supported by the universal parameters
-    /// `Self` was derived from.
-    pub universal_max_degree: usize,
-}
-
-impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
-    fn universal_max_degree(&self) -> usize {
-        self.universal_max_degree
-    }
-
-    fn max_degree(&self) -> usize {
-        self.max_degree
-    }
 }
 
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
