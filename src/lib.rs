@@ -24,6 +24,11 @@ use std::collections::{BTreeMap, BTreeSet};
 pub mod data_structures;
 pub use data_structures::*;
 
+
+/// Errors pertaining to query sets.
+pub mod query_set_error;
+pub use query_set_error::*;
+
 /// The core KZG10 construction.
 pub mod kzg10;
 
@@ -65,14 +70,14 @@ pub trait PolynomialCommitment<F: Field> {
     /// The evaluation proof for a single point.
     type Proof: Clone;
     /// The evaluation proof for a query set.
-    type BatchProof: Clone + From<Vec<Self::Proof>>;
+    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: std::error::Error;
+    type Error: std::error::Error + From<QuerySetError>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
     fn setup<R: RngCore>(
-        degree: usize,
+        max_degree: usize,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error>;
 
@@ -80,8 +85,8 @@ pub trait PolynomialCommitment<F: Field> {
     /// for polynomials and degree bounds.
     fn trim(
         pp: &Self::UniversalParams,
-        max_degree: usize,
-        degree_bounds_to_support: Option<&[usize]>,
+        supported_degree: usize,
+        enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
     /// Outputs a commitments to `polynomials`. If `polynomials[i].is_hiding()`,
@@ -154,9 +159,9 @@ pub trait PolynomialCommitment<F: Field> {
             let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
             let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
             for label in labels {
-                let (polynomial, rand) = polynomials_with_rands.get(label).expect(
-                    "query set references polynomial with incorrect label"
-                );
+                let (polynomial, rand) = polynomials_with_rands
+                    .get(label)
+                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
                 query_polys.push(polynomial);
                 query_rands.push(rand);
             }
@@ -190,13 +195,49 @@ pub trait PolynomialCommitment<F: Field> {
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<F>,
-        values: &Evaluations<F>,
+        evaluations: &Evaluations<F>,
         proof: &Self::BatchProof,
         opening_challenge: F,
-        rng: &mut R,
+        _rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
-        Self::Commitment: 'a;
+        Self::Commitment: 'a
+    {
+        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
+        let mut query_to_labels_map = BTreeMap::new();
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
+        }
+
+        // Implicit assumption: proofs are order in same manner as queries in
+        // `query_to_labels_map`.
+        let proofs: Vec<_> = proof.clone().into();
+        assert_eq!(proofs.len(), query_to_labels_map.len());
+
+        let mut result = true;
+        for ((query, labels), proof) in query_to_labels_map.into_iter().zip(proofs) {
+            let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
+            let mut values = Vec::new();
+            for label in labels.into_iter() {
+                let commitment = commitments
+                    .get(label)
+                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
+
+                let v_i = evaluations
+                    .get(&(label, *query))
+                    .ok_or(QuerySetError::MissingEvaluation { label: label.to_string() })?;
+
+                comms.push(commitment);
+                values.push(*v_i);
+            }
+
+            let proof_time = start_timer!(|| "Checking per-query proof");
+            result &= Self::check(vk, comms, *query, values, &proof, opening_challenge)?;
+            end_timer!(proof_time);
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]

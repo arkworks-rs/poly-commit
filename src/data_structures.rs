@@ -15,10 +15,10 @@ pub trait PCUniversalParams: Clone {
 pub trait PCCommitterKey: Clone {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
-    fn universal_max_degree(&self) -> usize;
+    fn max_degree(&self) -> usize;
 
     /// Outputs the maximum degree supported by the committer key.
-    fn max_degree(&self) -> usize;
+    fn supported_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of verifier keys for any polynomial
@@ -26,10 +26,10 @@ pub trait PCCommitterKey: Clone {
 pub trait PCVerifierKey: Clone {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
-    fn universal_max_degree(&self) -> usize;
+    fn max_degree(&self) -> usize;
 
     /// Outputs the maximum degree supported by the verifier key.
-    fn max_degree(&self) -> usize;
+    fn supported_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of commitments for any polynomial

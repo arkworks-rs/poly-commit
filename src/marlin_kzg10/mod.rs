@@ -2,7 +2,7 @@ use crate::{
     PCUniversalParams, PCCommitterKey, PCRandomness, PCVerifierKey, 
     Polynomial, PolynomialCommitment,
 };
-use crate::{QuerySet, Evaluations};
+use crate::{QuerySetError, QuerySet, Evaluations};
 use crate::{LabeledPolynomial, LabeledCommitment};
 use crate::kzg10;
 
@@ -65,9 +65,9 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             if let Some(degree_bound) = degree_bound {
                 let challenge_i_1 = challenge_i * &opening_challenge;
                 let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_projective();
-                let shifted_value = point.pow([(vk.universal_max_degree() - degree_bound) as u64]) * &value;
+                let shifted_value = point.pow([(vk.max_degree() - degree_bound) as u64]) * &value;
                 // TODO: make error.
-                let shift = vk.get_shift(degree_bound).expect("degree bound not supported");
+                let shift = vk.get_shift_power(degree_bound).expect("degree bound not supported");
                 let shift = shift.mul(shifted_value);
                 combined_comm += &(shifted_comm - &shift);
                 combined_comm.mul_assign(challenge_i_1);
@@ -102,24 +102,19 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
     fn trim(
         pp: &Self::UniversalParams,
-        max_degree: usize,
-        degree_bounds_to_support: Option<&[usize]>,
+        supported_degree: usize,
+        enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        let universal_max_degree = pp.max_degree();
+        let max_degree = pp.max_degree();
         // TODO: Make error.
-        assert!(max_degree <= universal_max_degree, "Trimming cannot create powers");
+        assert!(supported_degree <= max_degree, "Trimming cannot create powers");
 
         // Construct the KZG10 committer key for committing to unshifted polynomials.
-        let ck_time = start_timer!(|| format!("Constructing ck of size {} for unshifted polys", max_degree));
-        let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
-        let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
+        let ck_time = start_timer!(|| format!("Constructing `powers` of size {} for unshifted polys", supported_degree));
+        let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
+        let powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
 
-        let ck = kzg10::CommitterKey {
-            powers_of_g,
-            powers_of_gamma_g,
-            max_degree,
-            universal_max_degree,
-        };
+        let powers = kzg10::Powers { powers_of_g, powers_of_gamma_g };
         end_timer!(ck_time);
 
         // Construct the core KZG10 verifier key.
@@ -130,49 +125,51 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             beta_h: pp.beta_h,
             prepared_h: pp.prepared_h.clone(),
             prepared_beta_h: pp.prepared_beta_h.clone(),
-            max_degree,
-            universal_max_degree,
         };
 
         // Check whether we have some degree bounds to enforce
-        let (shifted_ck, degree_bound_shifts) = if let Some(degree_bounds_to_support) = degree_bounds_to_support {
-            let mut degree_bounds_to_support = degree_bounds_to_support.to_vec();
-            degree_bounds_to_support.sort();
-            // TODO: Make error instead of `expect`.
-            let lowest_shifted_power = universal_max_degree - degree_bounds_to_support.last().expect("degree_bounds_to_support should not be empty");
+        let (shifted_powers, degree_bounds_and_shift_powers) = 
+            if let Some(enforced_degree_bounds) = enforced_degree_bounds {
+                let mut enforced_degree_bounds = enforced_degree_bounds.to_vec();
+                enforced_degree_bounds.sort();
+                // TODO: Make error instead of `expect`.
+                let lowest_shifted_power = max_degree - enforced_degree_bounds
+                    .last()
+                    .expect("degree_bounds_to_support should not be empty");
 
-            let shifted_ck_time = start_timer!(|| format!(
-                    "Constructing shifted_ck of size {} for shifted polys",
-                    pp_max_degree - lowest_shifted_power
-            ));
+                let shifted_ck_time = start_timer!(|| format!(
+                        "Constructing `shifted_powers` of size {}",
+                        max_degree - lowest_shifted_power
+                ));
 
-            let powers_of_g = pp.powers_of_g[lowest_shifted_power..].to_vec();
-            let powers_of_gamma_g = pp.powers_of_gamma_g[..(universal_max_degree - lowest_shifted_power)].to_vec();
+                let powers_of_g = pp.powers_of_g[lowest_shifted_power..].to_vec();
+                let powers_of_gamma_g = pp.powers_of_gamma_g[..(max_degree - lowest_shifted_power)].to_vec();
 
-            let shifted_ck = kzg10::CommitterKey {
-                powers_of_g,
-                powers_of_gamma_g,
-                max_degree: universal_max_degree - lowest_shifted_power,
-                universal_max_degree,
+                let shifted_ck = kzg10::Powers { powers_of_g, powers_of_gamma_g };
+                
+                end_timer!(shifted_ck_time);
+
+                let degree_bounds_and_shift_powers = enforced_degree_bounds
+                    .into_iter()
+                    .map(|d| (d, pp.powers_of_g[max_degree - d]))
+                    .collect();
+                (Some(shifted_ck), Some(degree_bounds_and_shift_powers))
+            } else {
+                (None, None)
             };
-            
-            end_timer!(shifted_ck_time);
-
-            let degree_bound_shifts = degree_bounds_to_support.into_iter().map(|d| (d, pp.powers_of_g[universal_max_degree - d])).collect();
-            (Some(shifted_ck), Some(degree_bound_shifts))
-        } else {
-            (None, None)
-        };
 
         let ck = CommitterKey {
-            ck,
-            shifted_ck,
-            supported_degree_bounds: degree_bounds_to_support.map(|s| s.to_vec()),
+            powers,
+            shifted_powers,
+            supported_degree_bounds: enforced_degree_bounds.map(|s| s.to_vec()),
+            max_degree,
         };
 
         let vk = VerifierKey {
             vk,
-            degree_bound_shifts,
+            degree_bounds_and_shift_powers,
+            supported_degree,
+            max_degree,
         };
         Ok((ck, vk))
     }
@@ -193,7 +190,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
         let mut commitments = Vec::new();
         let mut randomness = Vec::new();
-        let max_degree = ck.max_degree();
+        let supported_degree = ck.supported_degree();
 
         let rng = &mut kzg10::optional_rng::OptionalRng(rng);
         for polynomial in polynomials {
@@ -205,7 +202,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             Self::Error::check_degrees(
                 polynomial.degree(),
                 degree_bound,
-                max_degree,
+                supported_degree,
                 label.to_string(),
             )?;
 
@@ -216,10 +213,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 degree_bound,
                 hiding_bound,
             ));
-            let (comm, rand) = kzg10::KZG10::commit(&ck.ck, polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) = kzg10::KZG10::commit(&ck.powers, polynomial, hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
                 // TODO: Convert to errors
-                let shifted_ck = ck.shifted_ck.as_ref().expect("Polynomial requires degree bounds, but `ck` does not support any");
+                let shifted_ck = ck.shifted_powers.as_ref().expect("Polynomial requires degree bounds, but `ck` does not support any");
                 let supported_degree_bounds = ck.supported_degree_bounds.as_ref().expect("Polynomial requires degree bounds, but `ck` does not support any");
 
                 let max_degree_bound = supported_degree_bounds.last().unwrap();
@@ -229,12 +226,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 let mut shifted_polynomial_coeffs = vec![E::Fr::zero(); max_degree_bound - degree_bound];
                 shifted_polynomial_coeffs.extend_from_slice(&polynomial.coeffs);
                 let s_polynomial = Polynomial::from_coefficients_vec(shifted_polynomial_coeffs);
+                // TODO fix assert message
                 assert!(
-                    s_polynomial.degree() <= shifted_ck.max_degree(), 
+                    s_polynomial.degree() <= shifted_ck.size(), 
                     "polynomial.degree(): {}; s_polynomial.degree(): {}; max_degree: {}.",
                     polynomial.degree(),
                     s_polynomial.degree(),
-                    shifted_ck.max_degree()
+                    shifted_ck.size()
                 );
                 let (shifted_comm, shifted_rand) =
                     kzg10::KZG10::commit(shifted_ck, &s_polynomial, hiding_bound, Some(rng))?;
@@ -264,6 +262,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     where 
         Self::Randomness: 'a
     {
+        let supported_degree = ck.supported_degree();
         let max_degree = ck.max_degree();
         let mut p = Polynomial::zero();
         let mut r = kzg10::Randomness::empty();
@@ -279,7 +278,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             Self::Error::check_degrees(
                 polynomial.degree(),
                 degree_bound,
-                max_degree,
+                supported_degree,
                 label.to_string(),
             )?;
 
@@ -309,14 +308,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             }
         }
         let proof_time = start_timer!(|| "Creating proof for unshifted polynomials");
-        let proof = kzg10::KZG10::open(&ck.ck, &p, point, &r)?;
+        let proof = kzg10::KZG10::open(&ck.powers, &p, point, &r)?;
         let mut w = proof.w.into_projective();
         let mut random_v = proof.random_v;
         end_timer!(proof_time);
 
         if enforce_degree_bound {
             let proof_time = start_timer!(|| "Creating proof for shifted polynomials");
-            let shifted_ck = ck.shifted_ck.as_ref().unwrap();
+            let shifted_ck = ck.shifted_powers.as_ref().unwrap();
             let shifted_proof = kzg10::KZG10::open_with_witness_polynomial(
                 &shifted_ck,
                 point,
@@ -395,15 +394,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment = commitments.get(label).ok_or(Self::Error::IncorrectQuerySet(
-                    "query set references commitment with incorrect label",
-                ))?;
+                let commitment = commitments
+                    .get(label)
+                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
                 let degree_bound = commitment.degree_bound();
                 assert_eq!(degree_bound.is_some(), commitment.commitment().shifted_comm.is_some());
 
                 let v_i = values
                     .get(&(label.clone(), *query))
-                    .ok_or(Self::Error::IncorrectEvaluation("value does not exist"))?;
+                    .ok_or(QuerySetError::MissingEvaluation { label: label.to_string() })?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);

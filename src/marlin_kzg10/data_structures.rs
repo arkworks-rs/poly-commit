@@ -17,26 +17,26 @@ pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 )]
 pub struct CommitterKey<E: PairingEngine> {
     /// The key used to commit to polynomials.
-    pub ck: kzg10::CommitterKey<E>,
+    pub powers: kzg10::Powers<E>,
     /// The key used to commit to shifted polynomials.
     /// This is `None` if `self` does not support enforcing any degree bounds.
-    pub shifted_ck: Option<kzg10::CommitterKey<E>>,
+    pub shifted_powers: Option<kzg10::Powers<E>>,
     /// The degree bounds that are supported by `self`.
     /// In ascending order from smallest to largest.
     /// This is `None` if `self` does not support enforcing any degree bounds.
     pub supported_degree_bounds: Option<Vec<usize>>,
+    /// The maximum degree supported by the `UniversalParams` `self` was derived
+    /// from.
+    pub max_degree: usize,
 }
 
 impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
-    fn universal_max_degree(&self) -> usize {
-        if let Some(shifted_ck) = &self.shifted_ck {
-            assert_eq!(self.ck.universal_max_degree(), shifted_ck.universal_max_degree());
-        }
-        self.ck.universal_max_degree()
+    fn max_degree(&self) -> usize {
+        self.max_degree
     }
 
-    fn max_degree(&self) -> usize {
-        self.ck.max_degree()
+    fn supported_degree(&self) -> usize {
+        self.powers.size()
     }
 }
 
@@ -48,27 +48,33 @@ pub struct VerifierKey<E: PairingEngine> {
     pub vk: kzg10::VerifierKey<E>,
     /// Information required to enforce degree bounds. Each pair
     /// is of the form `(degree_bound, shifting_advice)`.
-    /// The vector is sorted in ascending order of `degree_bound`. 
+    /// The vector is sorted in ascending order of `degree_bound`.
     /// This is `None` if `self` does not support enforcing any degree bounds.
-    pub degree_bound_shifts: Option<Vec<(usize, E::G1Affine)>>,
+    pub degree_bounds_and_shift_powers: Option<Vec<(usize, E::G1Affine)>>,
+    /// The maximum degree supported by the `UniversalParams` `self` was derived
+    /// from.
+    pub max_degree: usize,
+    /// The maximum degree supported by the trimmed parameters that `self` is
+    /// a part of.
+    pub supported_degree: usize,
 }
 
 impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
-    pub fn get_shift(&self, bound: usize) -> Option<E::G1Affine> {
-        self.degree_bound_shifts.as_ref().and_then(|v| {
+    pub fn get_shift_power(&self, bound: usize) -> Option<E::G1Affine> {
+        self.degree_bounds_and_shift_powers.as_ref().and_then(|v| {
             v.binary_search_by(|(d, _)| d.cmp(&bound)).ok().map(|i| v[i].1)
         })
     }
 }
 
 impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
-    fn universal_max_degree(&self) -> usize {
-        self.vk.universal_max_degree()
+    fn max_degree(&self) -> usize {
+        self.max_degree
     }
 
-    fn max_degree(&self) -> usize {
-        self.vk.max_degree()
+    fn supported_degree(&self) -> usize {
+        self.supported_degree
     }
 }
 

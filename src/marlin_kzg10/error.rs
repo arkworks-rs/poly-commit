@@ -1,4 +1,5 @@
 use crate::kzg10;
+use crate::QuerySetError as QSError;
 
 /// Error type for `MultiPCFromSinglePC`.
 #[derive(Debug)]
@@ -28,17 +29,23 @@ pub enum Error {
     },
     /// The inputs to `commit`, `open` or `verify` had incorrect lengths.
     IncorrectInputLength(String),
-    /// The query set referenced a non-existent polynomial.
-    IncorrectQuerySet(&'static str),
-    /// The evaluations referenced a non-existent member of the query set.
-    IncorrectEvaluation(&'static str),
-    /// An error from the underlying `SinglePC`.
+
+    /// An error related to the `QuerySet`.
+    QuerySetError(QSError),
+
+    /// An error from the underlying `KZG10`.
     KZG10Error(kzg10::Error),
 }
 
 impl From<kzg10::Error> for Error {
     fn from(other: kzg10::Error) -> Self {
         Error::KZG10Error(other)
+    }
+}
+
+impl From<QSError> for Error {
+    fn from(other: QSError) -> Self {
+        Error::QuerySetError(other)
     }
 }
 
@@ -111,8 +118,7 @@ impl std::fmt::Display for Error {
                 degree_bound, label, poly_degree, max_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
-            Error::IncorrectQuerySet(err) => write!(f, "{}", err),
-            Error::IncorrectEvaluation(err) => write!(f, "{}", err),
+            Error::QuerySetError(err) => write!(f, "{}", err),
             Error::KZG10Error(err) => write!(f, "KZG10 error: {}", err),
         }
     }
