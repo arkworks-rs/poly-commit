@@ -44,7 +44,7 @@ impl std::error::Error for Error {
 }
 
 impl Error {
-    fn check_degree(d: usize, max_degree: usize) -> Result<(), Self> {
+    pub(crate) fn check_degree(d: usize, max_degree: usize) -> Result<(), Self> {
         if d < 1 {
             Err(Error::UnsupportedDegree)
         } else if d > max_degree {

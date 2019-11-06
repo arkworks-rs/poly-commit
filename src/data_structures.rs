@@ -3,9 +3,6 @@ pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 use std::borrow::Cow;
 
-use rand_core::RngCore;
-use std::borrow::Cow;
-
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
 pub trait PCUniversalParams: Clone {
@@ -16,6 +13,10 @@ pub trait PCUniversalParams: Clone {
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
 pub trait PCCommitterKey: Clone {
+    /// Outputs the maximum degree supported by the universal parameters
+    /// `Self` was derived from.
+    fn universal_max_degree(&self) -> usize;
+
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
@@ -23,6 +24,10 @@ pub trait PCCommitterKey: Clone {
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
 pub trait PCVerifierKey: Clone {
+    /// Outputs the maximum degree supported by the universal parameters
+    /// `Self` was derived from.
+    fn universal_max_degree(&self) -> usize;
+
     /// Outputs the maximum degree supported by the verifier key.
     fn max_degree(&self) -> usize;
 }

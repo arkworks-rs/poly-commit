@@ -1,4 +1,6 @@
-use algebra::PairingEngine;
+use algebra::{AffineCurve, ToBytes, PairingCurve, PairingEngine, PrimeField};
+use crate::*;
+use std::ops::AddAssign;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
@@ -46,9 +48,16 @@ pub struct CommitterKey<E: PairingEngine> {
     pub powers_of_gamma_g: Vec<E::G1Affine>,
     /// Maximum degree of polynomials supported by these parameters
     pub max_degree: usize,
+    /// Maximum degree of polynomials supported by the universal parameters
+    /// `Self` was derived from.
+    pub universal_max_degree: usize,
 }
 
 impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
+    fn universal_max_degree(&self) -> usize {
+        self.universal_max_degree
+    }
+
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -72,9 +81,16 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
     /// Maximum degree of polynomials supported by these parameters
     pub max_degree: usize,
+    /// Maximum degree of polynomials supported by the universal parameters
+    /// `Self` was derived from.
+    pub universal_max_degree: usize,
 }
 
 impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
+    fn universal_max_degree(&self) -> usize {
+        self.universal_max_degree
+    }
+
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -121,7 +137,7 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
-        let other = other.0.into_projective().mul(&f);
+        let other = other.0.mul(f.into_repr());
         self.0 = (self.0.into_projective() + &other).into();
     }
 }
@@ -138,12 +154,14 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
 )]
 pub struct Randomness<E: PairingEngine> {
     /// For KZG10, the commitment randomness is a random polynomial.
-    blinding_polynomial: Polynomial<E::Fr>,
+    pub blinding_polynomial: Polynomial<E::Fr>,
 }
 
 impl<E: PairingEngine> Randomness<E> {
+    /// Does `self` provide any hiding properties to the corresponding commitment?
+    /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
-    fn is_hiding(&self) -> bool {
+    pub fn is_hiding(&self) -> bool {
         !self.blinding_polynomial.is_zero()
     }
 }

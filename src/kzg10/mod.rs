@@ -5,11 +5,7 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{
-    PCUniversalParams, PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey,
-    Polynomial, SinglePolynomialCommitment,
-};
-use algebra::bytes::*;
+use crate::{PCUniversalParams, PCCommitterKey, PCRandomness, Polynomial};
 use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra::{
     AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
@@ -18,13 +14,14 @@ use algebra::{
 use rand_core::RngCore;
 use rayon::prelude::*;
 use std::marker::PhantomData;
-use std::ops::{Range, AddAssign};
 
 mod data_structures;
 pub use data_structures::*;
 
 mod error;
 pub use error::*;
+
+pub(crate) mod optional_rng;
 
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
@@ -39,7 +36,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
         max_degree: usize,
-        has_g2: bool,
+        _has_g2: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
@@ -110,30 +107,30 @@ impl<E: PairingEngine> KZG10<E> {
         Ok(pp)
     }
 
+    /// Specializes the public parameters for a given maximum degree `d` for polynomials
+    /// `d` should be less that `pp.max_degree()`.
     pub fn trim(
         pp: &UniversalParams<E>,
         max_degree: usize,
     ) -> Result<(CommitterKey<E>, VerifierKey<E>), Error> {
-        let mut powers_of_g = Vec::new();
-        let mut powers_of_gamma_g = Vec::new();
-
         let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
         let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
 
-        let start = 0;
         let ck = CommitterKey {
             powers_of_g,
             powers_of_gamma_g,
             max_degree,
+            universal_max_degree: pp.max_degree(),
         };
         let vk = VerifierKey {
             g: pp.powers_of_g[0],
             gamma_g: pp.powers_of_gamma_g[0],
             h: pp.h,
             beta_h: pp.beta_h,
-            prepared_h: pp.prepared_h,
-            prepared_beta_h: pp.prepared_beta_h,
+            prepared_h: pp.prepared_h.clone(),
+            prepared_beta_h: pp.prepared_beta_h.clone(),
             max_degree,
+            universal_max_degree: pp.max_degree(),
         };
         Ok((ck, vk))
     }
@@ -211,8 +208,9 @@ impl<E: PairingEngine> KZG10<E> {
         Ok((Commitment(commitment.into()), randomness))
     }
 
-    fn compute_witness_polynomial(
-        polynomial: &Polynomial<E::Fr>,
+    /// Compute witness polynomial.
+    pub fn compute_witness_polynomial(
+        p: &Polynomial<E::Fr>,
         point: E::Fr,
         randomness: &Randomness<E>,
     ) -> Result<(Polynomial<E::Fr>, Option<Polynomial<E::Fr>>), Error> {
@@ -220,10 +218,11 @@ impl<E: PairingEngine> KZG10<E> {
         let value = p.evaluate(point);
         end_timer!(eval_time);
 
+        let divisor = Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
+
         let witness_time = start_timer!(|| "Computing witness polynomial");
-        let witness_polynomial = &(p - &Polynomial::from_coefficients_vec(vec![value]))
-            / &Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
-        timer_end!(witness_time)
+        let witness_polynomial = &(p - &Polynomial::from_coefficients_vec(vec![value])) / &divisor;
+        end_timer!(witness_time);
 
         let random_witness_polynomial = if randomness.is_hiding() {
             let random_p = &randomness.blinding_polynomial;
@@ -233,22 +232,20 @@ impl<E: PairingEngine> KZG10<E> {
             end_timer!(rand_eval_time);
 
             let witness_time = start_timer!(|| "Computing random witness polynomial");
-            let random_witness_polynomial = &(random_p
-                - &Polynomial::from_coefficients_vec(vec![random_value]))
-                / &Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
+            let random_witness_polynomial = &(random_p - &Polynomial::from_coefficients_vec(vec![random_value])) / &divisor;
             end_timer!(witness_time);
             Some(random_witness_polynomial)
         } else {
             None
         };
 
-        Ok((witness_time, random_witness_polynomial))
+        Ok((witness_polynomial, random_witness_polynomial))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     pub(crate) fn open<'a>(
-        ck: &Self::CommitterKey,
-        polynomial: &Polynomial<E::Fr>,
+        ck: &CommitterKey<E>,
+        p: &Polynomial<E::Fr>,
         point: E::Fr,
         rand: &Randomness<E>,
     ) -> Result<Proof<E>, Error> {
@@ -256,7 +253,7 @@ impl<E: PairingEngine> KZG10<E> {
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
 
         let witness_time = start_timer!(|| "Computing witness polynomials");
-        let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(polynomial, point, rand)?;
+        let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(p, point, rand)?;
         end_timer!(witness_time);
 
         let proof = Self::open_with_witness_polynomial(ck, point, rand, &witness_poly, hiding_witness_poly.as_ref());
@@ -266,19 +263,18 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     pub(crate) fn open_with_witness_polynomial<'a>(
-        ck: &Self::CommitterKey,
+        ck: &CommitterKey<E>,
         point: E::Fr,
         randomness: &Randomness<E>,
         witness_polynomial: &Polynomial<E::Fr>,
         hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
-    ) -> Result<Proof, Error> {
+    ) -> Result<Proof<E>, Error> {
         let convert_time = start_timer!(|| "Converting witness polynomial from Montgomery repr");
         let mut skip_leading_zeros = 0;
-        while witness_polynomial.coeffs[skip_leading_zeros].is_zero() && skip_leading_zeros < polynomial.coeffs.len() {
+        while witness_polynomial.coeffs[skip_leading_zeros].is_zero() && skip_leading_zeros < witness_polynomial.coeffs.len() {
             skip_leading_zeros += 1;
         }
         let witness_coeffs = witness_polynomial[skip_leading_zeros..]
-            .coeffs
             .par_iter()
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
@@ -289,16 +285,15 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(witness_comm_time);
 
         let mut random_v = E::Fr::zero();
-        if let Some(hiding_witness_polynomial) = hiding_witness_poly {
-            assert_eq!(randomness.is_some(), "hiding_witness_polynomial is some, but randomness is none");
+        if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
             let blinding_p = &randomness.blinding_polynomial;
             let blinding_eval_time = start_timer!(|| "Evaluating random polynomial");
             let blinding_evaluation = blinding_p.evaluate(point);
             end_timer!(blinding_eval_time);
 
-            let random_witness_coeffs = random_witness_polynomial
+            let random_witness_coeffs = hiding_witness_polynomial
                 .coeffs
-                .into_par_iter()
+                .par_iter()
                 .map(|s| s.into_repr())
                 .collect::<Vec<_>>();
 
@@ -318,11 +313,11 @@ impl<E: PairingEngine> KZG10<E> {
     /// Verifies that `value` is the evaluation at `point` of the polynomial
     /// committed inside `comm`.
     pub fn check(
-        vk: &Self::VerifierKey,
-        comm: &Self::Commitment,
+        vk: &VerifierKey<E>,
+        comm: &Commitment<E>,
         point: E::Fr,
         value: E::Fr,
-        proof: &Self::Proof,
+        proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
         let inner = comm.0.into_projective()
@@ -337,8 +332,10 @@ impl<E: PairingEngine> KZG10<E> {
         Ok(lhs == rhs)
     }
 
+    /// Check that each `proof_i` in `proofs` is a valid proof of evaluation for 
+    /// `commitment_i` at `point_i`.
     pub fn batch_check<R: RngCore>(
-        vk: &Self::VerifierKey,
+        vk: &VerifierKey<E>,
         commitments: &[Commitment<E>],
         points: &[E::Fr],
         values: &[E::Fr],
@@ -392,49 +389,6 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
     }
-}
-
-impl<E: PairingEngine> SinglePolynomialCommitment<E::Fr> for KZG10<E> {
-    type UniversalParams = UniversalParams<E>;
-    type CommitterKey = CommitterKey<E>;
-    type VerifierKey = VerifierKey<E>;
-    type Commitment = Commitment<E>;
-    type Randomness = Randomness<E>;
-    type Proof = Proof<E>;
-    type Error = Error;
-
-    /// Constructs public parameters when given as input the maximum degree `degree`
-    /// for the polynomial commitment scheme.
-    fn setup<R: RngCore>(
-        max_degree: usize,
-        rng: &mut R,
-    ) -> Result<Self::UniversalParams, Self::Error> {
-        Self::setup(max_degree, rng)
-    }
-
-    fn trim(
-        pp: &Self::UniversalParams,
-        degree: usize,
-    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        Self::trim(pp, degree)
-    }
-
-    /// Outputs a commitment to `polynomial`.
-    fn commit<'a>(
-        ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<
-        (
-            Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
-        ),
-        Self::Error,
-    > {
-        Self::multi_commit(ck, polynomials, rng)
-    }
-
-
 }
 
 #[cfg(test)]

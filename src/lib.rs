@@ -17,30 +17,21 @@ extern crate bench_utils;
 use algebra::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
 
-/// Defines `SinglePolynomialCommitment` schemes that allow one to commit to
-/// a single polynomial, and then provide an evaluation proof for that polynomial
-/// at a single point.
-pub mod single_pc;
-
-/// Defines `MultiPolynomialCommitment` schemes that allow one to commit to
-/// multiple polynomials, and then provide evaluation proofs for these polynomials
-/// at many points.
-pub mod multi_pc;
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
-
 pub use data_structures::*;
 
+/// The core KZG10 construction.
 pub mod kzg10;
 
-use algebra::Field;
-use rand_core::RngCore;
-use std::collections::{BTreeMap, BTreeSet};
-
-use crate::*;
+/// An adaptation of the KZG10 construction that uses the method outlined in 
+/// the [Marlin paper][marlin] to enforce degree bounds.
+///
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod marlin_kzg10;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials
 /// `p` that have previously been committed. Each element of a `QuerySet` is a `(label, query)`
@@ -59,6 +50,8 @@ pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 /// of evaluation for the corresponding commitments at a query set `Q`, while
 /// enforcing per-polynomial degree bounds.
 pub trait PolynomialCommitment<F: Field> {
+    /// The universal parameters for the commitment scheme. These are "trimmed"
+    /// down to `Self::CommitterKey` and `Self::VerifierKey` by `Self::trim`.
     type UniversalParams: PCUniversalParams;
     /// The committer key for the scheme; used to commit to a polynomial and then
     /// open the commitment to produce an evaluation proof.
@@ -116,11 +109,13 @@ pub trait PolynomialCommitment<F: Field> {
     /// of the polynomials at the query point.
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        point: E::Fr,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        point: F,
         opening_challenge: F,
-        rands: impl IntoIterator<Item = &'a Self::Randomness<E::Fr>>,
-    ) -> Result<Self::Proof, Error>;
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    ) -> Result<Self::Proof, Self::Error>
+        where 
+            Self::Randomness: 'a;
 
 
     /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
@@ -130,8 +125,11 @@ pub trait PolynomialCommitment<F: Field> {
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         query_set: &QuerySet<F>,
         opening_challenge: F,
-        rands: &[Self::Randomness],
-    ) -> Result<Self::Proof, Self::Error> {
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    ) -> Result<Self::BatchProof, Self::Error> 
+    where 
+        Self::Randomness: 'a
+    {
         let polynomials_with_rands: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
             .zip(rands)
@@ -152,19 +150,18 @@ pub trait PolynomialCommitment<F: Field> {
         }
 
         let mut proofs = Vec::new();
-        let max_degree = ck.max_degree();
         for (query, labels) in query_to_labels_map.into_iter() {
-            let mut query_polys = Vec::new();
-            let mut query_rands = Vec::new();
-            for (j, label) in labels.into_iter().enumerate() {
-                let (polynomial, rand) = polynomials_with_rands.get(label).ok_or(Error::IncorrectQuerySet(
-                    "query set references polynomial with incorrect label",
-                ))?;
+            let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
+            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            for label in labels {
+                let (polynomial, rand) = polynomials_with_rands.get(label).expect(
+                    "query set references polynomial with incorrect label"
+                );
                 query_polys.push(polynomial);
                 query_rands.push(rand);
             }
             let proof_time = start_timer!(|| "Creating proof");
-            let proof = Self::open(ck, &query_polys, *query, opening_challenge, &rands)?;
+            let proof = Self::open(ck, query_polys, *query, opening_challenge, query_rands)?;
             end_timer!(proof_time);
 
             proofs.push(proof);
@@ -176,53 +173,47 @@ pub trait PolynomialCommitment<F: Field> {
 
     /// Verifies that `values` are the evaluations at `point` of the polynomials
     /// committed inside `commitments`.
-    fn check<'a, R: RngCore>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
-        values: impl IntoIterator<Item = E::Fr>,
+        point: F,
+        values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         opening_challenge: F,
-        rng: &mut R,
-    ) -> Result<bool, Error>;
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a;
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn batch_check<R: RngCore>(
+    fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        labeled_commitments: &[LabeledCommitment<Self::Commitment>],
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<F>,
         values: &Evaluations<F>,
         proof: &Self::BatchProof,
         opening_challenge: F,
         rng: &mut R,
-    ) -> Result<bool, Self::Error>;
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a;
 }
-
-/// Generic construction of a `MultiPolynomialCommitment` scheme from a
-/// `SinglePolynomialCommitment` scheme whenever the commitment and randomness of the
-/// `SinglePolynomialCommitment` scheme are additively homomorphic.
-/// Specifically, we require `C = MultiPolynomialCommitment::Commitment`
-/// to satisfy `for<'a> C: AddAssign<(F, &'a C)>.
-///
-/// The construction follows the blueprint laid out in [CHMMVW19](insert eprint link).
-pub mod mpc_from_spc;
 
 #[cfg(test)]
 pub mod tests {
-    use crate::multi_pc::*;
+    use crate::*;
     use algebra::Field;
     use algebra::UniformRand;
     use rand::{distributions::Distribution, thread_rng};
 
-    pub fn single_poly_test<F, MultiPC>() -> Result<(), MultiPC::Error>
+    pub fn single_poly_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
-        MultiPC: MultiPolynomialCommitment<F>,
+        PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = MultiPC::setup(max_degree, rng)?;
+        let (ck, vk) = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             // Generate polynomials
@@ -241,7 +232,7 @@ pub mod tests {
                 polynomials.push(l_poly);
             }
 
-            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -256,9 +247,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                MultiPC::check(
+                PC::check(
                     &vk,
                     &comms,
                     &query_set,
@@ -273,14 +264,14 @@ pub mod tests {
         Ok(())
     }
 
-    pub fn single_poly_degree_bound_test<F, MultiPC>() -> Result<(), MultiPC::Error>
+    pub fn single_poly_degree_bound_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
-        MultiPC: MultiPolynomialCommitment<F>,
+        PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = MultiPC::setup(max_degree, rng)?;
+        let (ck, vk) = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             // Generate polynomials
@@ -301,7 +292,7 @@ pub mod tests {
                 polynomials.push(l_poly);
             }
 
-            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
             println!("Committed");
 
             // Construct query set
@@ -318,10 +309,10 @@ pub mod tests {
 
             println!("Generated query set");
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             println!("Opened");
             assert!(
-                MultiPC::check(
+                PC::check(
                     &vk,
                     &comms,
                     &query_set,
@@ -336,14 +327,14 @@ pub mod tests {
         Ok(())
     }
 
-    pub fn single_poly_degree_bound_multiple_queries_test<F, MultiPC>() -> Result<(), MultiPC::Error>
+    pub fn single_poly_degree_bound_multiple_queries_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
-        MultiPC: MultiPolynomialCommitment<F>,
+        PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = MultiPC::setup(max_degree, rng)?;
+        let (ck, vk) = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             // Generate polynomials
@@ -364,7 +355,7 @@ pub mod tests {
                 polynomials.push(l_poly);
             }
 
-            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -379,9 +370,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                MultiPC::check(
+                PC::check(
                     &vk,
                     &comms,
                     &query_set,
@@ -396,14 +387,14 @@ pub mod tests {
         Ok(())
     }
 
-    pub fn two_polys_degree_bound_single_query_test<F, MultiPC>() -> Result<(), MultiPC::Error>
+    pub fn two_polys_degree_bound_single_query_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
-        MultiPC: MultiPolynomialCommitment<F>,
+        PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
         let max_degree = 10;
-        let (ck, vk) = MultiPC::setup(max_degree, rng)?;
+        let (ck, vk) = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
             let mut polynomials = Vec::new();
             let mut labels = Vec::new();
@@ -427,7 +418,7 @@ pub mod tests {
                 ))
             }
 
-            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -442,9 +433,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                MultiPC::check(
+                PC::check(
                     &vk,
                     &comms,
                     &query_set,
@@ -459,14 +450,14 @@ pub mod tests {
         Ok(())
     }
 
-    pub fn full_end_to_end_test<F, MultiPC>() -> Result<(), MultiPC::Error>
+    pub fn full_end_to_end_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
-        MultiPC: MultiPolynomialCommitment<F>,
+        PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = MultiPC::setup(max_degree, rng)?;
+        let (ck, vk) = PC::setup(max_degree, rng)?;
         for _ in 0..50 {
             let mut polynomials = Vec::new();
             let mut labels = Vec::new();
@@ -489,7 +480,7 @@ pub mod tests {
                 ))
             }
 
-            let (comms, rands) = MultiPC::commit(&ck, &polynomials, Some(rng))?;
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
             // Construct query set
             let mut query_set = QuerySet::new();
@@ -510,8 +501,8 @@ pub mod tests {
             println!();
 
             let opening_challenge = F::rand(rng);
-            let proof = MultiPC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
-            let result = MultiPC::check(
+            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let result = PC::check(
                 &vk,
                 &comms,
                 &query_set,
