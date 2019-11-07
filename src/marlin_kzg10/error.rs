@@ -1,19 +1,15 @@
 use crate::kzg10;
-use crate::QuerySetError as QSError;
+use crate::{PCCommitterKey, LabeledPolynomial, QuerySetError as QSError};
 
 /// Error type for `MultiPCFromSinglePC`.
 #[derive(Debug)]
 pub enum Error {
-    /// The degree of the `index`-th polynomial passed to `commit` or `open`
-    /// was too large.
-    PolynomialDegreeTooLarge {
-        /// Degree of the polynomial.
-        poly_degree: usize,
-        /// Maximum supported degree.
-        max_degree: usize,
-        /// Index of the offending polynomial.
-        label: String,
-    },
+    /// The degree provided to `trim` was too large.
+    TrimmingDegreeTooLarge,
+    /// The provided `enforced_degree_bounds` was `Some<&[]>`.
+    EmptyDegreeBounds,
+    /// The required degree bound is not supported by ck/vk
+    UnsupportedDegreeBound(usize),
     /// The degree bound for the `index`-th polynomial passed to `commit`, `open`
     /// or `check` was incorrect, that is, `degree_bound >= poly_degree` or
     /// `degree_bound <= max_degree`.
@@ -23,7 +19,7 @@ pub enum Error {
         /// Degree bound.
         degree_bound: usize,
         /// Maximum supported degree.
-        max_degree: usize,
+        supported_degree: usize,
         /// Index of the offending polynomial.
         label: String,
     },
@@ -50,39 +46,24 @@ impl From<QSError> for Error {
 }
 
 impl Error {
-    pub(crate) fn poly_degree_too_large(poly_degree: usize, max_degree: usize, label: String) -> Self {
-        Error::PolynomialDegreeTooLarge {
-            poly_degree,
-            max_degree,
-            label,
-        }
-    }
-
-    pub(crate) fn incorrect_bound(
-        poly_degree: usize,
-        degree_bound: usize,
-        max_degree: usize,
-        label: String,
-    ) -> Self {
-        Error::IncorrectDegreeBound {
-            poly_degree,
-            degree_bound,
-            max_degree,
-            label,
-        }
-    }
-
-    pub(crate) fn check_degrees(
-        d: usize,
-        bound: Option<usize>,
-        max_degree: usize,
-        label: String,
+    pub(crate) fn check_degrees_and_bounds<'a, E: algebra::PairingEngine>(
+        ck: &super::CommitterKey<E>,
+        p: &'a LabeledPolynomial<'a, E::Fr>,
     ) -> Result<(), Self> {
-        if let Some(bound) = bound {
-            if d > max_degree {
-                Err(Error::poly_degree_too_large(d, max_degree, label))
-            } else if bound < d || bound > max_degree {
-                Err(Error::incorrect_bound(d, bound, max_degree, label))
+
+        if let Some(bound) = p.degree_bound() {
+            let enforced_degree_bounds = 
+                ck.enforced_degree_bounds.as_ref().ok_or(Self::UnsupportedDegreeBound(bound))?;
+
+            if enforced_degree_bounds.binary_search(&bound).is_err() {
+                Err(Self::UnsupportedDegreeBound(bound))
+            } else if bound < p.degree() || bound > ck.max_degree() {
+                return Err(Error::IncorrectDegreeBound {
+                    poly_degree: p.degree(),
+                    degree_bound: p.degree_bound().unwrap(),
+                    supported_degree: ck.supported_degree(),
+                    label: p.label().to_string(),
+                })
             } else {
                 Ok(())
             }
@@ -95,27 +76,24 @@ impl Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::PolynomialDegreeTooLarge {
-                poly_degree,
-                max_degree,
-                label,
-            } => write!(
+            Error::TrimmingDegreeTooLarge => write!(f, "the degree provided to `trim` was too large"),
+            Error::EmptyDegreeBounds => write!(f, "provided `enforced_degree_bounds` was `Some<&[]>`"),
+            Error::UnsupportedDegreeBound(bound) => write!(
                 f,
-                "the degree of the polynomial {} ({:?}) is greater than\
-                 the maximum supported degree ({:?})",
-                label, poly_degree, max_degree
+                "the degree bound ({:?}) is not supported by the parameters",
+                bound,
             ),
             Error::IncorrectDegreeBound {
                 poly_degree,
                 degree_bound,
-                max_degree,
+                supported_degree,
                 label,
             } => write!(
                 f,
                 "the degree bound ({:?}) for the polynomial {} \
                  (having degree {:?}) is greater than the maximum \
                  supported degree ({:?})",
-                degree_bound, label, poly_degree, max_degree
+                degree_bound, label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
             Error::QuerySetError(err) => write!(f, "{}", err),

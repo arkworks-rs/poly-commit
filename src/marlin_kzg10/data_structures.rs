@@ -24,7 +24,7 @@ pub struct CommitterKey<E: PairingEngine> {
     /// The degree bounds that are supported by `self`.
     /// In ascending order from smallest to largest.
     /// This is `None` if `self` does not support enforcing any degree bounds.
-    pub supported_degree_bounds: Option<Vec<usize>>,
+    pub enforced_degree_bounds: Option<Vec<usize>>,
     /// The maximum degree supported by the `UniversalParams` `self` was derived
     /// from.
     pub max_degree: usize,
