@@ -335,7 +335,7 @@ fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-    use crate::single_pc::kzg10::*;
+    use crate::kzg10::*;
     use crate::*;
     use algebra::fields::bls12_381::Fr;
 
@@ -361,8 +361,7 @@ mod tests {
         f_p += (f, &p);
 
         let degree = 4;
-        let pp = KZG_Bls12_381::setup(degree, rng).unwrap();
-        let support = CoefficientSupport::from_dual_interval(4, 4);
+        let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
         let (powers, _) = KZG_Bls12_381::trim(degree).unwrap();
 
         let hiding_bound = None;
@@ -380,8 +379,6 @@ mod tests {
 
     #[test]
     fn end_to_end_test() {
-        use crate::single_pc::tests::*;
-
         end_to_end_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
         end_to_end_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
         end_to_end_test::<_, KZG_MNT6>().expect("test failed for MNT6");
@@ -390,8 +387,6 @@ mod tests {
 
     #[test]
     fn linear_polynomial_test() {
-        use crate::single_pc::tests::*;
-
         linear_polynomial_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
         linear_polynomial_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
         linear_polynomial_test::<_, KZG_MNT6>().expect("test failed for MNT6");
@@ -399,8 +394,6 @@ mod tests {
     }
     #[test]
     fn batch_check_test() {
-        use crate::single_pc::tests::*;
-
         batch_check_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
         batch_check_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
         batch_check_test::<_, KZG_MNT6>().expect("test failed for MNT6");

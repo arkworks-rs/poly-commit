@@ -253,9 +253,11 @@ pub mod tests {
         PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = PC::setup(max_degree, rng)?;
+        let max_degree = rand::distributions::Uniform::from(10..64).sample(rng);
+        let pp = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
+            let supported_degree = rand::distributions::Uniform::from(2..max_degree).sample(rng);
+            let (ck, vk) = PC::trim(&pp, supported_degree, None)?;
             let mut polynomials = Vec::new();
             // Generate polynomials
             let num_points_in_query_set = 1;
@@ -288,9 +290,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                PC::check(
+                PC::batch_check(
                     &vk,
                     &comms,
                     &query_set,
@@ -311,19 +313,23 @@ pub mod tests {
         PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = PC::setup(max_degree, rng)?;
+        let max_degree = rand::distributions::Uniform::from(10..64).sample(rng);
+        let pp = PC::setup(max_degree, rng)?;
+        
         for _ in 0..100 {
+            let supported_degree = rand::distributions::Uniform::from(2..max_degree).sample(rng);
             let mut polynomials = Vec::new();
+            let mut degree_bounds = Vec::new();
             // Generate polynomials
             let num_points_in_query_set = 1;
             for _ in 0..1 {
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..supported_degree).sample(rng);
                 let poly = Polynomial::rand(degree, rng);
 
+                let hiding_bound = Some(num_points_in_query_set);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
-                let hiding_bound = Some(num_points_in_query_set);
+                degree_bounds.push(degree_bound.unwrap());
                 let l_poly = LabeledPolynomial::new_owned(
                     String::from("Test"),
                     poly,
@@ -332,6 +338,7 @@ pub mod tests {
                 );
                 polynomials.push(l_poly);
             }
+            let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
             println!("Committed");
@@ -350,10 +357,10 @@ pub mod tests {
 
             println!("Generated query set");
             let opening_challenge = F::rand(rng);
-            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             println!("Opened");
             assert!(
-                PC::check(
+                PC::batch_check(
                     &vk,
                     &comms,
                     &query_set,
@@ -375,17 +382,21 @@ pub mod tests {
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = PC::setup(max_degree, rng)?;
+        let pp = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
+            let supported_degree = rand::distributions::Uniform::from(2..max_degree).sample(rng);
             let mut polynomials = Vec::new();
+            let mut degree_bounds = Vec::new();
             // Generate polynomials
             let num_points_in_query_set = 2;
             for _ in 0..1 {
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..supported_degree).sample(rng);
                 let poly = Polynomial::rand(degree, rng);
 
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
+                degree_bounds.push(degree_bound.unwrap());
+
                 let hiding_bound = Some(num_points_in_query_set);
                 let l_poly = LabeledPolynomial::new_owned(
                     String::from("Test"),
@@ -395,6 +406,7 @@ pub mod tests {
                 );
                 polynomials.push(l_poly);
             }
+            let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
@@ -411,9 +423,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                PC::check(
+                PC::batch_check(
                     &vk,
                     &comms,
                     &query_set,
@@ -435,9 +447,11 @@ pub mod tests {
     {
         let rng = &mut thread_rng();
         let max_degree = 10;
-        let (ck, vk) = PC::setup(max_degree, rng)?;
+        let pp = PC::setup(max_degree, rng)?;
         for _ in 0..100 {
+            let supported_degree = rand::distributions::Uniform::from(2..max_degree).sample(rng);
             let mut polynomials = Vec::new();
+            let mut degree_bounds: Vec<usize> = Vec::new();
             let mut labels = Vec::new();
             let num_points_in_query_set = 1;
             // Generate polynomials
@@ -446,10 +460,11 @@ pub mod tests {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
 
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..supported_degree).sample(rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let poly = Polynomial::rand(degree, rng);
                 let degree_bound = Some(range.sample(rng));
+                degree_bounds.push(degree_bound.unwrap());
                 let hiding_bound = Some(num_points_in_query_set);
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
@@ -458,6 +473,7 @@ pub mod tests {
                     hiding_bound,
                 ))
             }
+            let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
@@ -474,9 +490,9 @@ pub mod tests {
             }
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
             assert!(
-                PC::check(
+                PC::batch_check(
                     &vk,
                     &comms,
                     &query_set,
@@ -498,21 +514,24 @@ pub mod tests {
     {
         let rng = &mut thread_rng();
         let max_degree = rand::distributions::Uniform::from(2..64).sample(rng);
-        let (ck, vk) = PC::setup(max_degree, rng)?;
+        let pp = PC::setup(max_degree, rng)?;
         for _ in 0..50 {
+            let supported_degree = rand::distributions::Uniform::from(2..max_degree).sample(rng);
             let mut polynomials = Vec::new();
+            let mut degree_bounds = Vec::new();
             let mut labels = Vec::new();
 
             // Generate polynomials
-            let num_points_in_query_set = std::cmp::min(max_degree - 1, rand::distributions::Uniform::from(1..6).sample(rng));
+            let num_points_in_query_set = std::cmp::min(supported_degree - 1, rand::distributions::Uniform::from(1..6).sample(rng));
             for i in 0..10 {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
-                let degree = rand::distributions::Uniform::from(1..max_degree).sample(rng);
+                let degree = rand::distributions::Uniform::from(1..supported_degree).sample(rng);
                 let poly = Polynomial::rand(degree, rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
                 let hiding_bound = Some(num_points_in_query_set);
+                degree_bounds.push(degree_bound.unwrap());
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
                     poly,
@@ -520,6 +539,7 @@ pub mod tests {
                     hiding_bound,
                 ))
             }
+            let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
@@ -542,8 +562,8 @@ pub mod tests {
             println!();
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
-            let result = PC::check(
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let result = PC::batch_check(
                 &vk,
                 &comms,
                 &query_set,

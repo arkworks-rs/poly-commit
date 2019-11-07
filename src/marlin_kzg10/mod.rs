@@ -436,75 +436,73 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-    use crate::single_pc::kzg10::*;
-    use crate::*;
-    use algebra::fields::bls12_381::Fr;
 
+    use crate::marlin_kzg10::MarlinKZG10;
+    use crate::kzg10::KZG10;
     use algebra::curves::bls12_377::Bls12_377;
     use algebra::curves::bls12_381::Bls12_381;
     use algebra::curves::mnt6::MNT6;
     use algebra::curves::sw6::SW6;
 
-    use rand::thread_rng;
+    type PC<E> = MarlinKZG10<KZG10<E>>;
+    type PC_Bls12_381 = PC<Bls12_381>;
+    type PC_Bls12_377 = PC<Bls12_377>;
+    type PC_MNT6 = PC<MNT6>;
+    type PC_SW6 = PC<SW6>;
 
     #[test]
-    fn add_commitments_test() {
-        let rng = &mut thread_rng();
-        let p = Polynomial::from_coefficients_slice(&[
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-            Fr::rand(rng),
-        ]);
-        let f = Fr::rand(rng);
-        let mut f_p = Polynomial::zero();
-        f_p += (f, &p);
-
-        let degree = 4;
-        let pp = KZG_Bls12_381::setup(degree, rng).unwrap();
-        let support = CoefficientSupport::from_dual_interval(4, 4);
-        let (ck, _) = KZG_Bls12_381::trim(degree).unwrap();
-
-        let hiding_bound = None;
-        let (comm, _) = KZG10::commit(&ck, &p, hiding_bound, Some(rng)).unwrap();
-        let (f_comm, _) = KZG10::commit(&ck, &f_p, hiding_bound, Some(rng)).unwrap();
-        let mut f_comm_2 = Commitment::empty();
-        f_comm_2 += (f, &comm);
-
-        assert_eq!(f_comm, f_comm_2);
-    }
-    type KZG_Bls12_381 = KZG10<Bls12_381>;
-    type KZG_Bls12_377 = KZG10<Bls12_377>;
-    type KZG_MNT6 = KZG10<MNT6>;
-    type KZG_SW6 = KZG10<SW6>;
-
-    #[test]
-    fn end_to_end_test() {
-        use crate::single_pc::tests::*;
-
-        end_to_end_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        end_to_end_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        end_to_end_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        end_to_end_test::<_, KZG_SW6>().expect("test failed for SW6");
+    fn single_poly_test() {
+        use crate::tests::*;
+        single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
-    fn linear_polynomial_test() {
-        use crate::single_pc::tests::*;
-
-        linear_polynomial_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        linear_polynomial_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        linear_polynomial_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        linear_polynomial_test::<_, KZG_SW6>().expect("test failed for SW6");
+    fn single_poly_degree_bound_test() {
+        use crate::tests::*;
+        single_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        single_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
-    #[test]
-    fn batch_check_test() {
-        use crate::single_pc::tests::*;
 
-        batch_check_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        batch_check_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        batch_check_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        batch_check_test::<_, KZG_SW6>().expect("test failed for SW6");
+    #[test]
+    fn single_poly_degree_bound_multiple_queries_test() {
+        use crate::tests::*;
+        single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
+            .expect("test failed for bls12-377");
+        single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
+            .expect("test failed for bls12-381");
+        single_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
+            .expect("test failed for MNT6");
+        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
+            .expect("test failed for SW6");
+    }
+
+    #[test]
+    fn two_polys_degree_bound_single_query_test() {
+        use crate::tests::*;
+        two_polys_degree_bound_single_query_test::<_, PC_Bls12_377>()
+            .expect("test failed for bls12-377");
+        two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
+            .expect("test failed for bls12-381");
+        two_polys_degree_bound_single_query_test::<_, PC_MNT6>()
+            .expect("test failed for MNT6");
+        two_polys_degree_bound_single_query_test::<_, PC_SW6>().expect("test failed for SW6");
+    }
+
+    #[test]
+    fn full_end_to_end_test() {
+        use crate::tests::*;
+        full_end_to_end_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+        full_end_to_end_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        println!("Finished mnt6");
+        full_end_to_end_test::<_, PC_SW6>().expect("test failed for SW6");
+        println!("Finished sw6");
     }
 }
