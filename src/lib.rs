@@ -262,7 +262,7 @@ pub mod tests {
             // Generate polynomials
             let num_points_in_query_set = 1;
             for _ in 0..1 {
-                let degree = max_degree;
+                let degree = supported_degree;
                 let polynomial = Polynomial::rand(degree, rng);
                 let degree_bound = None;
                 let hiding_bound = Some(num_points_in_query_set);
