@@ -420,13 +420,12 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use crate::marlin_kzg10::MarlinKZG10;
-    use crate::kzg10::KZG10;
     use algebra::curves::bls12_377::Bls12_377;
     use algebra::curves::bls12_381::Bls12_381;
     use algebra::curves::mnt6::MNT6;
     use algebra::curves::sw6::SW6;
 
-    type PC<E> = MarlinKZG10<KZG10<E>>;
+    type PC<E> = MarlinKZG10<E>;
     type PC_Bls12_381 = PC<Bls12_381>;
     type PC_Bls12_377 = PC<Bls12_377>;
     type PC_MNT6 = PC<MNT6>;

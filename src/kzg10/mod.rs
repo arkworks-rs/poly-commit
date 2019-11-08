@@ -146,6 +146,30 @@ impl<E: PairingEngine> KZG10<E> {
         Ok((Commitment(commitment.into()), randomness))
     }
 
+    /// Specializes the public parameters for a given maximum degree `d` for polynomials
+    /// `d` should be less that `pp.max_degree()`.
+    pub fn trim(
+        pp: &UniversalParams<E>,
+        max_degree: usize,
+    ) -> Result<(Powers<E>, VerifierKey<E>), Error> {
+        let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
+        let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
+
+        let powers = Powers {
+            powers_of_g,
+            powers_of_gamma_g,
+        };
+        let vk = VerifierKey {
+            g: pp.powers_of_g[0],
+            gamma_g: pp.powers_of_gamma_g[0],
+            h: pp.h,
+            beta_h: pp.beta_h,
+            prepared_h: pp.prepared_h.clone(),
+            prepared_beta_h: pp.prepared_beta_h.clone(),
+        };
+        Ok((powers, vk))
+    }
+
     /// Compute witness polynomial.
     pub fn compute_witness_polynomial(
         p: &Polynomial<E::Fr>,
@@ -362,7 +386,7 @@ mod tests {
 
         let degree = 4;
         let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
-        let (powers, _) = KZG_Bls12_381::trim(degree).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(&pp, degree).unwrap();
 
         let hiding_bound = None;
         let (comm, _) = KZG10::commit(&powers, &p, hiding_bound, Some(rng)).unwrap();
@@ -372,31 +396,112 @@ mod tests {
 
         assert_eq!(f_comm, f_comm_2);
     }
+
     type KZG_Bls12_381 = KZG10<Bls12_381>;
-    type KZG_Bls12_377 = KZG10<Bls12_377>;
-    type KZG_MNT6 = KZG10<MNT6>;
-    type KZG_SW6 = KZG10<SW6>;
+
+    fn end_to_end_test_template<E: PairingEngine>() -> Result<(), Error> {
+        let rng = &mut thread_rng();
+        for _ in 0..100 {
+            let mut degree = 0;
+            while degree <= 1 {
+                degree = usize::rand(rng) % 20;
+            }
+            let pp = KZG10::<E>::setup(degree, false, rng)?;
+            let (ck, vk) = KZG10::trim(&pp, degree)?;
+            let p = Polynomial::rand(degree, rng);
+            let hiding_bound = Some(1);
+            let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = E::Fr::rand(rng);
+            let value = p.evaluate(point);
+            let proof = KZG10::<E>::open(&ck, &p, point, &rand)?;
+            assert!(
+                KZG10::<E>::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
+    fn linear_polynomial_test_template<E: PairingEngine>() -> Result<(), Error> {
+        let rng = &mut thread_rng();
+        for _ in 0..100 {
+            let degree = 50;
+            let pp = KZG10::<E>::setup(degree, false, rng)?;
+            let (ck, vk) = KZG10::trim(&pp, 1)?;
+            let p = Polynomial::rand(1, rng);;
+            let hiding_bound = Some(1);
+            let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let point = E::Fr::rand(rng);
+            let value = p.evaluate(point);
+            let proof = KZG10::<E>::open(&ck, &p, point, &rand)?;
+            assert!(
+                KZG10::<E>::check(&vk, &comm, point, value, &proof)?,
+                "proof was incorrect for max_degree = {}, polynomial_degree = {}, hiding_bound = {:?}",
+                degree,
+                p.degree(),
+                hiding_bound,
+            );
+        }
+        Ok(())
+    }
+
+    fn batch_check_test_template<E: PairingEngine>() -> Result<(), Error> {
+        let rng = &mut thread_rng();
+        for _ in 0..10 {
+            let mut degree = 0;
+            while degree <= 1 {
+                degree = usize::rand(rng) % 20;
+            }
+            let pp = KZG10::<E>::setup(degree, false, rng)?;
+            let (ck, vk) = KZG10::trim(&pp, degree)?;
+            let mut comms = Vec::new();
+            let mut values = Vec::new();
+            let mut points = Vec::new();
+            let mut proofs = Vec::new();
+            for _ in 0..10 {
+                let p = Polynomial::rand(degree, rng);;
+                let hiding_bound = Some(1);
+                let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
+                let point = E::Fr::rand(rng);
+                let value = p.evaluate(point);
+                let proof = KZG10::<E>::open(&ck, &p, point, &rand)?;
+
+                assert!(KZG10::<E>::check(&vk, &comm, point, value, &proof)?);
+                comms.push(comm);
+                values.push(value);
+                points.push(point);
+                proofs.push(proof);
+            }
+            assert!(KZG10::<E>::batch_check(
+                &vk, &comms, &points, &values, &proofs, rng
+            )?);
+        }
+        Ok(())
+    }
 
     #[test]
     fn end_to_end_test() {
-        end_to_end_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        end_to_end_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        end_to_end_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        end_to_end_test::<_, KZG_SW6>().expect("test failed for SW6");
+        end_to_end_test_template::<Bls12_377>().expect("test failed for bls12-377");
+        end_to_end_test_template::<Bls12_381>().expect("test failed for bls12-381");
+        end_to_end_test_template::<MNT6>().expect("test failed for MNT6");
+        end_to_end_test_template::<SW6>().expect("test failed for SW6");
     }
 
     #[test]
     fn linear_polynomial_test() {
-        linear_polynomial_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        linear_polynomial_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        linear_polynomial_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        linear_polynomial_test::<_, KZG_SW6>().expect("test failed for SW6");
+        linear_polynomial_test_template::<Bls12_377>().expect("test failed for bls12-377");
+        linear_polynomial_test_template::<Bls12_381>().expect("test failed for bls12-381");
+        linear_polynomial_test_template::<MNT6>().expect("test failed for MNT6");
+        linear_polynomial_test_template::<SW6>().expect("test failed for SW6");
     }
     #[test]
     fn batch_check_test() {
-        batch_check_test::<_, KZG_Bls12_377>().expect("test failed for bls12-377");
-        batch_check_test::<_, KZG_Bls12_381>().expect("test failed for bls12-381");
-        batch_check_test::<_, KZG_MNT6>().expect("test failed for MNT6");
-        batch_check_test::<_, KZG_SW6>().expect("test failed for SW6");
+        batch_check_test_template::<Bls12_377>().expect("test failed for bls12-377");
+        batch_check_test_template::<Bls12_381>().expect("test failed for bls12-381");
+        batch_check_test_template::<MNT6>().expect("test failed for MNT6");
+        batch_check_test_template::<SW6>().expect("test failed for SW6");
     }
 }
