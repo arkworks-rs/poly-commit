@@ -59,7 +59,7 @@ pub trait PCRandomness: Clone {
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LabeledPolynomial<'a, F: Field> {
     label: String,
     polynomial: Cow<'a, Polynomial<F>>,

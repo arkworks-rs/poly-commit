@@ -1,6 +1,4 @@
-use crate::{
-    PCUniversalParams, PCRandomness, PCVerifierKey, Polynomial, PolynomialCommitment,
-};
+use crate::{PCUniversalParams, PCRandomness, Polynomial, PolynomialCommitment};
 use crate::{QuerySetError, QuerySet, Evaluations};
 use crate::{LabeledPolynomial, LabeledCommitment};
 use crate::kzg10;
@@ -48,7 +46,6 @@ impl<E: PairingEngine> MarlinKZG10<E> {
     fn accumulate_commitments_and_values<'a>(
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
-        point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         opening_challenge: E::Fr,
     ) -> Result<(E::G1Projective, E::Fr), Error> {
@@ -67,12 +64,11 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             if let Some(degree_bound) = degree_bound {
                 let challenge_i_1 = challenge_i * &opening_challenge;
                 let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_projective();
-                let shifted_value = point.pow([(vk.max_degree() - degree_bound) as u64]) * &value;
 
                 let shift_power = vk.get_shift_power(degree_bound).ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
-                let shift_power = shift_power.mul(shifted_value);
-                combined_comm += &(shifted_comm - &shift_power);
-                combined_comm.mul_assign(challenge_i_1);
+                let mut adjusted_comm = shifted_comm - &shift_power.mul(value);
+                adjusted_comm.mul_assign(challenge_i_1);
+                combined_comm += &adjusted_comm;
             }
             challenge_i *= &opening_challenge.square();
         }
@@ -108,7 +104,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         let max_degree = pp.max_degree();
-        // TODO: Make error.
         if supported_degree > max_degree {
             return Err(Error::TrimmingDegreeTooLarge)
         }
@@ -137,10 +132,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 let mut enforced_degree_bounds = enforced_degree_bounds.to_vec();
                 enforced_degree_bounds.sort();
                 enforced_degree_bounds.dedup();
-                // TODO: Make error instead of `expect`.
+
                 let lowest_shifted_power = max_degree - enforced_degree_bounds
                     .last()
                     .ok_or(Error::EmptyDegreeBounds)?;
+                println!("Lowest_shifted_power {:?}", lowest_shifted_power);
 
                 let shifted_ck_time = start_timer!(|| format!(
                         "Constructing `shifted_powers` of size {}",
@@ -148,7 +144,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 ));
 
                 let powers_of_g = pp.powers_of_g[lowest_shifted_power..].to_vec();
-                let powers_of_gamma_g = pp.powers_of_gamma_g[..(max_degree - lowest_shifted_power)].to_vec();
+                let powers_of_gamma_g = pp.powers_of_gamma_g[..=(max_degree - lowest_shifted_power)].to_vec();
+                assert_eq!(powers_of_g.len(), powers_of_gamma_g.len());
 
                 let shifted_ck = kzg10::Powers { powers_of_g, powers_of_gamma_g };
                 
@@ -212,11 +209,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 degree_bound,
                 hiding_bound,
             ));
+            println!("Polynomial: {:?}", p);
             let (comm, rand) = kzg10::KZG10::commit(&ck.powers, polynomial, hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
 
                 let shifted_powers = ck.shifted_powers.as_ref().ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
                 let s_polynomial = shift_polynomial(ck, &polynomial, degree_bound);
+                println!("Shifted Polynomial: {:?}", s_polynomial);
 
                 assert!(
                     s_polynomial.degree() <= shifted_powers.size(), 
@@ -297,11 +296,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
         if enforce_degree_bound {
             let proof_time = start_timer!(|| "Creating proof for shifted polynomials");
-            let shifted_ck = ck.shifted_powers.as_ref().unwrap();
+            let shifted_powers = ck.shifted_powers.as_ref().unwrap();
             let shifted_proof = kzg10::KZG10::open_with_witness_polynomial(
-                &shifted_ck,
+                &shifted_powers,
                 point,
-                &r,
+                &shifted_r,
                 &shifted_w,
                 Some(&shifted_r_witness),
             )?;
@@ -336,7 +335,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             Self::accumulate_commitments_and_values(
                 vk,
                 commitments,
-                point,
                 values,
                 opening_challenge,
             )?;
@@ -392,7 +390,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let (c, v) = Self::accumulate_commitments_and_values(
                 vk,
                 comms_to_combine,
-                *query,
                 values_to_combine,
                 opening_challenge,
             )?;
@@ -439,6 +436,17 @@ mod tests {
         single_poly_test::<_, PC_MNT6>().expect("test failed for MNT6");
         single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
+
+
+    #[test]
+    fn linear_poly_degree_bound_test() {
+        use crate::tests::*;
+        linear_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        linear_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        linear_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        linear_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
+    }
+
 
     #[test]
     fn single_poly_degree_bound_test() {
