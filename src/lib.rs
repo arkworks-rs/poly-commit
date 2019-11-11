@@ -454,7 +454,11 @@ pub mod tests {
                 let degree_bound = Some(range.sample(rng));
                 degree_bounds.push(degree_bound.unwrap());
 
-                let hiding_bound = Some(num_points_in_query_set);
+                let hiding_bound = if num_points_in_query_set >= degree {
+                    Some(degree)
+                } else {
+                    Some(num_points_in_query_set)
+                };
                 let l_poly = LabeledPolynomial::new_owned(
                     String::from("Test"),
                     poly,
@@ -464,7 +468,6 @@ pub mod tests {
                 polynomials.push(l_poly);
             }
             let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
-            println!("vk: {:?}", vk);
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
@@ -588,7 +591,11 @@ pub mod tests {
                 let poly = Polynomial::rand(degree, rng);
                 let range = rand::distributions::Uniform::from(degree..max_degree);
                 let degree_bound = Some(range.sample(rng));
-                let hiding_bound = Some(num_points_in_query_set);
+                let hiding_bound = if num_points_in_query_set >= degree {
+                    Some(degree)
+                } else {
+                    Some(num_points_in_query_set)
+                };
                 degree_bounds.push(degree_bound.unwrap());
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,

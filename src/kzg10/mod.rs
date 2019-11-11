@@ -441,7 +441,7 @@ mod tests {
             let degree = 50;
             let pp = KZG10::<E>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::trim(&pp, 2)?;
-            let p = Polynomial::rand(1, rng);;
+            let p = Polynomial::rand(1, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
             let point = E::Fr::rand(rng);
@@ -472,7 +472,7 @@ mod tests {
             let mut points = Vec::new();
             let mut proofs = Vec::new();
             for _ in 0..10 {
-                let p = Polynomial::rand(degree, rng);;
+                let p = Polynomial::rand(degree, rng);
                 let hiding_bound = Some(1);
                 let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
                 let point = E::Fr::rand(rng);
