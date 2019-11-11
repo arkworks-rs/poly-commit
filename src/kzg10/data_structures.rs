@@ -1,6 +1,7 @@
 use algebra::{AffineCurve, ToBytes, PairingCurve, PairingEngine, PrimeField};
 use crate::*;
 use std::ops::AddAssign;
+use std::borrow::Cow;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
@@ -19,8 +20,10 @@ pub struct UniversalParams<E: PairingEngine> {
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
     /// The generator of G2, prepared for use in pairings.
+    #[derivative(Debug="ignore")]
     pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
+    #[derivative(Debug="ignore")]
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
 }
 
@@ -39,14 +42,14 @@ impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct Powers<E: PairingEngine> {
+pub struct Powers<'a, E: PairingEngine> {
     /// Group elements of the form `β^i G`, for different values of `i`.
-    pub powers_of_g: Vec<E::G1Affine>,
+    pub powers_of_g: Cow<'a, [E::G1Affine]>,
     /// Group elements of the form `β^i γG`, for different values of `i`.
-    pub powers_of_gamma_g: Vec<E::G1Affine>,
+    pub powers_of_gamma_g: Cow<'a, [E::G1Affine]>,
 }
 
-impl<E: PairingEngine> Powers<E> {
+impl<E: PairingEngine> Powers<'_, E> {
     /// The number of powers in `self`.
     pub fn size(&self) -> usize {
         self.powers_of_g.len()
@@ -66,8 +69,10 @@ pub struct VerifierKey<E: PairingEngine> {
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
     /// The generator of G2, prepared for use in pairings.
+    #[derivative(Debug="ignore")]
     pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
+    #[derivative(Debug="ignore")]
     pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
 }
 
@@ -150,6 +155,7 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
 
     fn rand<R: RngCore>(d: usize, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
+        // TODO: decide on degree of polynomial: do we need d + 1?
         randomness.blinding_polynomial = Polynomial::rand(d + 1, rng);
         randomness
     }

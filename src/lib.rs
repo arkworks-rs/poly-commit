@@ -26,8 +26,8 @@ pub use data_structures::*;
 
 
 /// Errors pertaining to query sets.
-pub mod query_set_error;
-pub use query_set_error::*;
+pub mod error;
+pub use error::*;
 
 /// The core KZG10 construction.
 pub mod kzg10;
@@ -313,11 +313,11 @@ pub mod tests {
         PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = 10;
+        let max_degree = 1;
         let pp = PC::setup(max_degree, rng)?;
         
         for _ in 0..100 {
-            let supported_degree = 2;
+            let supported_degree = 1;
             let mut polynomials = Vec::new();
             let mut degree_bounds = Vec::new();
             // Generate polynomials
@@ -328,7 +328,7 @@ pub mod tests {
 
                 let hiding_bound = Some(num_points_in_query_set);
                 let degree_bound = Some(1);
-                degree_bounds.push(1);
+                degree_bounds.push(degree_bound.unwrap());
                 let l_poly = LabeledPolynomial::new_owned(
                     String::from("Test"),
                     poly,
@@ -336,16 +336,10 @@ pub mod tests {
                     hiding_bound,
                 );
                 polynomials.push(l_poly);
-
-                println!("Max degree: {:?}", max_degree);
-                println!("Supported degree: {:?}", supported_degree);
-                println!("Polynomial degree: {:?}", degree);
-                println!("Degree bounds: {:?}", degree_bounds);
             }
             let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
-            println!("Committed");
 
             // Construct query set
             let mut values = Vec::new();
@@ -376,7 +370,7 @@ pub mod tests {
         PC: PolynomialCommitment<F>,
     {
         let rng = &mut thread_rng();
-        let max_degree = 10;//rand::distributions::Uniform::from(10..64).sample(rng);
+        let max_degree = rand::distributions::Uniform::from(10..64).sample(rng);
         let pp = PC::setup(max_degree, rng)?;
         
         for _ in 0..100 {
@@ -400,11 +394,6 @@ pub mod tests {
                     hiding_bound,
                 );
                 polynomials.push(l_poly);
-
-                println!("Max degree: {:?}", max_degree);
-                println!("Supported degree: {:?}", supported_degree);
-                println!("Polynomial degree: {:?}", degree);
-                println!("Degree bounds: {:?}", degree_bounds);
             }
             let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
 
@@ -475,6 +464,7 @@ pub mod tests {
                 polynomials.push(l_poly);
             }
             let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
+            println!("vk: {:?}", vk);
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 

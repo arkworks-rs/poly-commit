@@ -17,10 +17,15 @@ pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 )]
 pub struct CommitterKey<E: PairingEngine> {
     /// The key used to commit to polynomials.
-    pub powers: kzg10::Powers<E>,
+    pub powers: Vec<E::G1Affine>,
+
     /// The key used to commit to shifted polynomials.
     /// This is `None` if `self` does not support enforcing any degree bounds.
-    pub shifted_powers: Option<kzg10::Powers<E>>,
+    pub shifted_powers: Option<Vec<E::G1Affine>>,
+
+    /// The key used to commit to hiding polynomials.
+    pub powers_of_gamma_g: Vec<E::G1Affine>,
+
     /// The degree bounds that are supported by `self`.
     /// In ascending order from smallest to largest.
     /// This is `None` if `self` does not support enforcing any degree bounds.
@@ -30,13 +35,44 @@ pub struct CommitterKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
+impl<E: PairingEngine> CommitterKey<E> {
+    /// Obtain powers for the underlying KZG10 construction
+    pub fn powers<'a>(&'a self) -> kzg10::Powers<'a, E> {
+        kzg10::Powers {
+            powers_of_g: self.powers.as_slice().into(),
+            powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
+        }
+    }
+
+    /// Obtain powers for committing to shifted polynomials.
+    pub fn shifted_powers<'a>(
+        &'a self,
+        degree_bound: impl Into<Option<usize>>
+    ) -> Option<kzg10::Powers<'a, E>> {
+        self.shifted_powers.as_ref().map(|shifted_powers| {
+            let powers_range = if let Some(degree_bound) = degree_bound.into() {
+                assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
+                let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
+                (max_bound - degree_bound)..
+            } else {
+                0..
+            };
+            let ck = kzg10::Powers {
+                powers_of_g: (&shifted_powers[powers_range]).into(),
+                powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
+            };
+            ck
+        })
+    }
+}
+
 impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
 
     fn supported_degree(&self) -> usize {
-        self.powers.size()
+        self.powers.len()
     }
 }
 

@@ -19,7 +19,7 @@ pub enum Error {
     /// The hiding bound was too large for the given `Powers`.
     HidingBoundToolarge {
         /// The hiding bound
-        hiding_bound: usize,
+        hiding_poly_degree: usize,
         /// The number of powers.
         num_powers: usize,
     },
@@ -47,12 +47,12 @@ impl std::fmt::Display for Error {
                 "this scheme does not support non-`None` hiding bounds that are 0"
             ),
             Error::HidingBoundToolarge {
-                hiding_bound,
+                hiding_poly_degree,
                 num_powers,
             } => write!(
                 f,
-                "the hiding bound ({:?}) is greater than the maximum number of powers in `Powers` ({:?})",
-                hiding_bound, num_powers
+                "the degree of the hiding poly ({:?}) is not less than the maximum number of powers in `Powers` ({:?})",
+                hiding_poly_degree, num_powers
             )
         }
     }
@@ -85,12 +85,12 @@ impl Error {
         }
     }
 
-    pub(crate) fn check_hiding_bound(hiding_bound: usize, num_powers: usize) -> Result<(), Self> {
-        if hiding_bound == 0 {
+    pub(crate) fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Self> {
+        if hiding_poly_degree == 0 {
             Err(Error::HidingBoundIsZero)
-        } else if hiding_bound > num_powers {
+        } else if hiding_poly_degree >= num_powers {
             Err(Error::HidingBoundToolarge {
-                hiding_bound,
+                hiding_poly_degree,
                 num_powers,
             })
         } else {

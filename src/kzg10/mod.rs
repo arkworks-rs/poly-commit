@@ -35,12 +35,15 @@ impl<E: PairingEngine> KZG10<E> {
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
-        max_degree: usize,
+        mut max_degree: usize,
         _produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
             return Err(Error::DegreeIsZero);
+        } else if max_degree == 1 {
+            // FIXME: hack to support hiding for degree one polynomials.
+            max_degree += 1;
         }
         let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", degree));
         let beta = E::Fr::rand(rng);
@@ -128,8 +131,10 @@ impl<E: PairingEngine> KZG10<E> {
                 hiding_degree
             ));
 
+            // TODO: decide on degree of polynomial, and then adjust check in 
+            // Error::check_hiding_bound.
             randomness = Randomness::rand(hiding_degree, &mut rng);
-            Error::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.size())?;
+            Error::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.powers_of_gamma_g.len())?;
             end_timer!(sample_random_poly_time);
         }
 
@@ -144,30 +149,6 @@ impl<E: PairingEngine> KZG10<E> {
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
-    }
-
-    /// Specializes the public parameters for a given maximum degree `d` for polynomials
-    /// `d` should be less that `pp.max_degree()`.
-    pub fn trim(
-        pp: &UniversalParams<E>,
-        max_degree: usize,
-    ) -> Result<(Powers<E>, VerifierKey<E>), Error> {
-        let powers_of_g = pp.powers_of_g[..=max_degree].to_vec();
-        let powers_of_gamma_g = pp.powers_of_gamma_g[..=max_degree].to_vec();
-
-        let powers = Powers {
-            powers_of_g,
-            powers_of_gamma_g,
-        };
-        let vk = VerifierKey {
-            g: pp.powers_of_g[0],
-            gamma_g: pp.powers_of_gamma_g[0],
-            h: pp.h,
-            beta_h: pp.beta_h,
-            prepared_h: pp.prepared_h.clone(),
-            prepared_beta_h: pp.prepared_beta_h.clone(),
-        };
-        Ok((powers, vk))
     }
 
     /// Compute witness polynomial.
@@ -370,6 +351,35 @@ mod tests {
 
     use rand::thread_rng;
 
+    impl<E: PairingEngine> KZG10<E> {
+        /// Specializes the public parameters for a given maximum degree `d` for polynomials
+        /// `d` should be less that `pp.max_degree()`.
+        pub(crate) fn trim(
+            pp: &UniversalParams<E>,
+            mut supported_degree: usize,
+        ) -> Result<(Powers<E>, VerifierKey<E>), Error> {
+            if supported_degree == 1 {
+                supported_degree += 1;
+            }
+            let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
+            let powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
+
+            let powers = Powers {
+                powers_of_g: std::borrow::Cow::Owned(powers_of_g),
+                powers_of_gamma_g: std::borrow::Cow::Owned(powers_of_gamma_g),
+            };
+            let vk = VerifierKey {
+                g: pp.powers_of_g[0],
+                gamma_g: pp.powers_of_gamma_g[0],
+                h: pp.h,
+                beta_h: pp.beta_h,
+                prepared_h: pp.prepared_h.clone(),
+                prepared_beta_h: pp.prepared_beta_h.clone(),
+            };
+            Ok((powers, vk))
+        }
+    }
+
     #[test]
     fn add_commitments_test() {
         let rng = &mut thread_rng();
@@ -430,7 +440,7 @@ mod tests {
         for _ in 0..100 {
             let degree = 50;
             let pp = KZG10::<E>::setup(degree, false, rng)?;
-            let (ck, vk) = KZG10::trim(&pp, 1)?;
+            let (ck, vk) = KZG10::trim(&pp, 2)?;
             let p = Polynomial::rand(1, rng);;
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
