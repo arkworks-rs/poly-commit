@@ -144,6 +144,12 @@ impl<E: PairingEngine> Randomness<E> {
     pub fn is_hiding(&self) -> bool {
         !self.blinding_polynomial.is_zero()
     }
+
+    /// What is the degree of the hiding polynomial for a given hiding bound?
+    #[inline]
+    pub fn calculate_hiding_polynomial_degree(hiding_bound: usize) -> usize {
+        hiding_bound + 1
+    }
 }
 
 impl<E: PairingEngine> PCRandomness for Randomness<E> {
@@ -153,10 +159,10 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn rand<R: RngCore>(d: usize, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
-        // TODO: decide on degree of polynomial: do we need d + 1?
-        randomness.blinding_polynomial = Polynomial::rand(d + 1, rng);
+        let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
+        randomness.blinding_polynomial = Polynomial::rand(hiding_poly_degree, rng);
         randomness
     }
 }

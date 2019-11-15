@@ -86,6 +86,8 @@ impl Error {
     }
 
     pub(crate) fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Self> {
+        // TODO: decide on how to compute degree of hiding polynomial, and then adjust check in 
+        // Error::check_hiding_bound.
         if hiding_poly_degree == 0 {
             Err(Error::HidingBoundIsZero)
         } else if hiding_poly_degree >= num_powers {
