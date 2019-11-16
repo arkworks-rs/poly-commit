@@ -285,7 +285,7 @@ pub mod tests {
             let mut labels = Vec::new();
 
             // Generate polynomials
-            let num_points_in_query_set = rand::distributions::Uniform::from(1..max_num_queries).sample(rng);
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
             for i in 0..num_polynomials {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
@@ -299,7 +299,7 @@ pub mod tests {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set >= degree {
+                let hiding_bound = if num_points_in_query_set > degree {
                     Some(degree)
                 } else {
                     Some(num_points_in_query_set)
@@ -325,15 +325,13 @@ pub mod tests {
                 let point = F::rand(rng);
                 for (i, label) in labels.iter().enumerate() {
                     let should_be_queried = bool::rand(rng);
-                    if should_be_queried {
+                    if should_be_queried || num_polynomials == 1 {
                         query_set.insert((label, point));
                         let value = polynomials[i].evaluate(point);
                         values.insert((label, point), value);
                     }
                 }
             }
-
-            println!();
 
             let opening_challenge = F::rand(rng);
             let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
@@ -348,7 +346,8 @@ pub mod tests {
             )?;
             if !result {
                 println!(
-                    "Failed with 10 polynomials, num_points_in_query_set: {:?}",
+                    "Failed with {} polynomials, num_points_in_query_set: {:?}",
+                    num_polynomials,
                     num_points_in_query_set
                 );
                 println!("Degree of polynomials:",);
@@ -386,7 +385,7 @@ pub mod tests {
     {
         let info = TestInfo {
             num_iters: 100,
-            max_degree: Some(1),
+            max_degree: Some(2),
             supported_degree: Some(1),
             num_polynomials: 1,
             enforce_degree_bounds: true,
