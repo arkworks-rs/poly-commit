@@ -102,23 +102,20 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     // have to store many powers of gamma_g.
     fn trim(
         pp: &Self::UniversalParams,
-        mut supported_degree: usize,
+        supported_degree: usize,
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         let max_degree = pp.max_degree();
         if supported_degree > max_degree {
             return Err(Error::TrimmingDegreeTooLarge)
         }
-        if supported_degree == 1 {
-            // FIXME: temporary hack until we resolve what to do when polynomial 
-            // is linear.
-            supported_degree += 1;
-        }
 
         // Construct the KZG10 committer key for committing to unshifted polynomials.
         let ck_time = start_timer!(|| format!("Constructing `powers` of size {} for unshifted polys", supported_degree));
         let powers = pp.powers_of_g[..=supported_degree].to_vec();
-        let mut powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
+        // We want to support making up to supported_degree queries to committed
+        // polynomials.
+        let powers_of_gamma_g = pp.powers_of_gamma_g[..=(supported_degree + 1)].to_vec();
         end_timer!(ck_time);
 
         // Construct the core KZG10 verifier key.
@@ -151,13 +148,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 ));
 
                 let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
-
-                // The degree of the hiding polynomial needs to be large enough
-                // to hide both shifted and unshifted polynomials.
-                if shifted_powers.len() > powers_of_gamma_g.len() {
-                    powers_of_gamma_g = pp.powers_of_gamma_g[..shifted_powers.len()].to_vec();
-                }
-
                 end_timer!(shifted_ck_time);
 
                 let degree_bounds_and_shift_powers = enforced_degree_bounds
@@ -439,6 +429,15 @@ mod tests {
         single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
+
+    #[test]
+    fn quadratic_poly_degree_bound_multiple_queries_test() {
+        use crate::tests::*;
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
+    }
 
     #[test]
     fn linear_poly_degree_bound_test() {

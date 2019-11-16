@@ -244,7 +244,6 @@ pub trait PolynomialCommitment<F: Field> {
 pub mod tests {
     use crate::*;
     use algebra::Field;
-    use algebra::UniformRand;
     use rand::{distributions::Distribution, thread_rng};
 
     struct TestInfo {
@@ -281,8 +280,14 @@ pub mod tests {
                 supported_degree.unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
             assert!(max_degree >= supported_degree, "max_degree < supported_degree");
             let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
+            let mut degree_bounds = if enforce_degree_bounds {
+                Some(Vec::new())
+            } else {
+                None
+            };
+                
             let mut labels = Vec::new();
+            println!("Sampled supported degree");
 
             // Generate polynomials
             let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
@@ -292,20 +297,22 @@ pub mod tests {
                 let degree = rand::distributions::Uniform::from(1..=supported_degree).sample(rng);
                 let poly = Polynomial::rand(degree, rng);
 
-                let degree_bound = if enforce_degree_bounds {
+                let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
                     let range = rand::distributions::Uniform::from(degree..=max_degree);
-                    Some(range.sample(rng))
+                    let degree_bound = range.sample(rng);
+                    degree_bounds.push(degree_bound);
+                    Some(degree_bound)
                 } else {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set > degree {
+                let hiding_bound = if num_points_in_query_set >= degree {
                     Some(degree)
                 } else {
                     Some(num_points_in_query_set)
                 };
+                println!("Hiding bound: {:?}", hiding_bound);
 
-                degree_bounds.push(degree_bound.unwrap());
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
                     poly,
@@ -313,7 +320,10 @@ pub mod tests {
                     hiding_bound,
                 ))
             }
-            let (ck, vk) = PC::trim(&pp, supported_degree, Some(&degree_bounds))?;
+            println!("supported degree: {:?}", supported_degree);
+            println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+            let (ck, vk) = PC::trim(&pp, supported_degree, degree_bounds.as_ref().map(|s| s.as_slice()))?;
+            println!("Trimmed");
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
@@ -324,14 +334,12 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for (i, label) in labels.iter().enumerate() {
-                    let should_be_queried = bool::rand(rng);
-                    if should_be_queried || num_polynomials == 1 {
-                        query_set.insert((label, point));
-                        let value = polynomials[i].evaluate(point);
-                        values.insert((label, point), value);
-                    }
+                    query_set.insert((label, point));
+                    let value = polynomials[i].evaluate(point);
+                    values.insert((label, point), value);
                 }
             }
+            println!("Generated query set");
 
             let opening_challenge = F::rand(rng);
             let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
@@ -407,6 +415,22 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 1,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn quadratic_poly_degree_bound_multiple_queries_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: Some(3),
+            supported_degree: Some(2),
+            num_polynomials: 1,
+            enforce_degree_bounds: true,
+            max_num_queries: 2,
         };
         test_template::<F, PC>(info)
     }

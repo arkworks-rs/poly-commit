@@ -35,15 +35,12 @@ impl<E: PairingEngine> KZG10<E> {
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
-        mut max_degree: usize,
+        max_degree: usize,
         _produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
             return Err(Error::DegreeIsZero);
-        } else if max_degree == 1 {
-            // FIXME: hack to support hiding for degree one polynomials.
-            max_degree += 1;
         }
         let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", degree));
         let beta = E::Fr::rand(rng);
@@ -78,6 +75,9 @@ impl<E: PairingEngine> KZG10<E> {
             &gamma_g_table,
             &powers_of_beta,
         );
+        // Add an additional power of gamma_g, because we want to be able to support
+        // up to D queries.
+        powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
         E::G1Projective::batch_normalization(powers_of_g.as_mut_slice());
         E::G1Projective::batch_normalization(powers_of_gamma_g.as_mut_slice());
