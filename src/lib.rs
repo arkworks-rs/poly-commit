@@ -17,177 +17,469 @@ extern crate bench_utils;
 use algebra::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
 
-/// Defines `SinglePolynomialCommitment` schemes that allow one to commit to
-/// a single polynomial, and then provide an evaluation proof for that polynomial
-/// at a single point.
-pub mod single_pc;
 
-/// Defines `MultiPolynomialCommitment` schemes that allow one to commit to
-/// multiple polynomials, and then provide evaluation proofs for these polynomials
-/// at many points.
-pub mod multi_pc;
+/// Data structures used by a polynomial commitment scheme.
+pub mod data_structures;
+pub use data_structures::*;
 
-pub use multi_pc::MultiPolynomialCommitment;
-pub use single_pc::SinglePolynomialCommitment;
 
-/// Defines the minimal interface of committer keys for any polynomial
-/// commitment scheme.
-pub trait PCCommitterKey: Clone {
-    /// Outputs the maximum degree supported by the committer key.
-    fn max_degree(&self) -> usize;
-}
+/// Errors pertaining to query sets.
+pub mod error;
+pub use error::*;
 
-/// Defines the minimal interface of verifier keys for any polynomial
-/// commitment scheme.
-pub trait PCVerifierKey: Clone {
-    /// Outputs the maximum degree supported by the verifier key.
-    fn max_degree(&self) -> usize;
-}
+/// The core KZG10 construction.
+pub mod kzg10;
 
-/// Defines the minimal interface of commitments for any polynomial
-/// commitment scheme.
-pub trait PCCommitment: Clone + algebra::ToBytes {
-    /// Outputs a non-hiding commitment to the zero polynomial.
-    fn empty() -> Self;
+/// An adaptation of the KZG10 construction that uses the method outlined in
+/// the [Marlin paper][marlin] to enforce degree bounds.
+///
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod marlin_kzg10;
 
-    /// Does this commitment have a degree bound?
-    fn has_degree_bound(&self) -> bool;
+/// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials
+/// `p` that have previously been committed. Each element of a `QuerySet` is a `(label, query)`
+/// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
+/// that `p[label]` is to be queried at.
+pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
 
-    /// Size in bytes
-    fn size_in_bytes(&self) -> usize;
-}
+/// `Evaluations` is the result of querying a set of labeled polynomials `p` at a `QuerySet`
+/// `Q`. It maps each element of `Q` to the resulting evaluation. That is,
+/// if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
+/// should equal `p[label].evaluate(query)`.
+pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 
-/// Defines the minimal interface of commitment randomness for any polynomial
-/// commitment scheme.
-pub trait PCRandomness: Clone {
-    /// Outputs empty randomness that does not hide the commitment.
-    fn empty() -> Self;
+/// Describes the interface for a polynomial commitment scheme that allows
+/// a sender to commit to multiple polynomials and later provide a succinct proof
+/// of evaluation for the corresponding commitments at a query set `Q`, while
+/// enforcing per-polynomial degree bounds.
+pub trait PolynomialCommitment<F: Field> {
+    /// The universal parameters for the commitment scheme. These are "trimmed"
+    /// down to `Self::CommitterKey` and `Self::VerifierKey` by `Self::trim`.
+    type UniversalParams: PCUniversalParams;
+    /// The committer key for the scheme; used to commit to a polynomial and then
+    /// open the commitment to produce an evaluation proof.
+    type CommitterKey: PCCommitterKey;
+    /// The verifier key for the scheme; used to check an evaluation proof.
+    type VerifierKey: PCVerifierKey;
+    /// The commitment to a polynomial.
+    type Commitment: PCCommitment;
+    /// The commitment randomness.
+    type Randomness: PCRandomness;
+    /// The evaluation proof for a single point.
+    type Proof: Clone;
+    /// The evaluation proof for a query set.
+    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
+    /// The error type for the scheme.
+    type Error: std::error::Error + From<QuerySetError>;
 
-    /// Samples randomness for commitments;
-    /// `num_queries` specifies the number of queries that the commitment will be opened at.
-    fn rand<R: RngCore>(num_queries: usize, rng: &mut R) -> Self;
-}
+    /// Constructs public parameters when given as input the maximum degree `degree`
+    /// for the polynomial commitment scheme.
+    fn setup<R: RngCore>(
+        max_degree: usize,
+        rng: &mut R,
+    ) -> Result<Self::UniversalParams, Self::Error>;
 
-/// A polynomial along with information about its degree bound (if any), and the
-/// maximum number of queries that will be made to it. This latter number determines
-/// the amount of protection that will be provided to a commitment for this polynomial.
-#[derive(Clone)]
-pub struct LabeledPolynomial<'a, F: Field> {
-    label: String,
-    polynomial: Cow<'a, Polynomial<F>>,
-    degree_bound: Option<usize>,
-    hiding_bound: Option<usize>,
-}
+    /// Specializes the public parameters for a given support for coefficients
+    /// for polynomials and degree bounds.
+    fn trim(
+        pp: &Self::UniversalParams,
+        supported_degree: usize,
+        enforced_degree_bounds: Option<&[usize]>,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
-impl<'a, F: Field> std::ops::Deref for LabeledPolynomial<'a, F> {
-    type Target = Polynomial<F>;
+    /// Outputs a commitments to `polynomials`. If `polynomials[i].is_hiding()`,
+    /// then the `i`-th commitment is hiding up to `polynomials.hiding_bound()` queries.
+    /// `rng` should not be `None` if `polynomials[i].is_hiding() == true` for any `i`.
+    ///
+    /// If for some `i`, `polynomials[i].is_hiding() == false`, then the
+    /// corresponding randomness is `Self::Randomness::empty()`.
+    ///
+    /// If for some `i`, `polynomials[i].degree_bound().is_some()`, then that
+    /// polynomial will have the corresponding degree bound enforced.
+    fn commit<'a>(
+        ck: &Self::CommitterKey,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<
+        (
+            Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::Randomness>,
+        ),
+        Self::Error,
+    >;
 
-    fn deref(&self) -> &Self::Target {
-        &self.polynomial
-    }
-}
+    /// On input a list of labeled polynomials and a query pont, `open` outputs a proof of evaluation
+    /// of the polynomials at the query point.
+    fn open<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        point: F,
+        opening_challenge: F,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    ) -> Result<Self::Proof, Self::Error>
+        where
+            Self::Randomness: 'a;
 
-impl<'a, F: Field> LabeledPolynomial<'a, F> {
-    /// Construct a new labeled polynomial by consuming `polynomial`.
-    pub fn new_owned(
-        label: String,
-        polynomial: Polynomial<F>,
-        degree_bound: Option<usize>,
-        hiding_bound: Option<usize>,
-    ) -> Self {
-        Self {
-            label,
-            polynomial: Cow::Owned(polynomial),
-            degree_bound,
-            hiding_bound,
+
+    /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
+    /// of the polynomials at the points in the query set.
+    fn batch_open<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        query_set: &QuerySet<F>,
+        opening_challenge: F,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    ) -> Result<Self::BatchProof, Self::Error>
+    where
+        Self::Randomness: 'a
+    {
+        let polynomials_with_rands: BTreeMap<_, _> = labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .map(|(poly, r)| (poly.label(), (poly, r)))
+            .collect();
+
+        let open_time = start_timer!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            polynomials_with_rands.len(),
+            query_set.len(),
+        ));
+
+        let mut query_to_labels_map = BTreeMap::new();
+
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
         }
-    }
 
-    /// Construct a new labeled polynomial.
-    pub fn new(
-        label: String,
-        polynomial: &'a Polynomial<F>,
-        degree_bound: Option<usize>,
-        hiding_bound: Option<usize>,
-    ) -> Self {
-        Self {
-            label,
-            polynomial: Cow::Borrowed(polynomial),
-            degree_bound,
-            hiding_bound,
+        let mut proofs = Vec::new();
+        for (query, labels) in query_to_labels_map.into_iter() {
+            let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
+            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            for label in labels {
+                let (polynomial, rand) = polynomials_with_rands
+                    .get(label)
+                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
+                query_polys.push(polynomial);
+                query_rands.push(rand);
+            }
+            let proof_time = start_timer!(|| "Creating proof");
+            let proof = Self::open(ck, query_polys, *query, opening_challenge, query_rands)?;
+            end_timer!(proof_time);
+
+            proofs.push(proof);
         }
+        end_timer!(open_time);
+
+        Ok(proofs.into())
     }
 
-    /// Return the label for `self`.
-    pub fn label(&self) -> &str {
-        &self.label
-    }
+    /// Verifies that `values` are the evaluations at `point` of the polynomials
+    /// committed inside `commitments`.
+    fn check<'a>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        point: F,
+        values: impl IntoIterator<Item = F>,
+        proof: &Self::Proof,
+        opening_challenge: F,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a;
 
-    /// Retrieve the polynomial from `self`.
-    pub fn polynomial(&self) -> &Polynomial<F> {
-        &self.polynomial
-    }
-
-    /// Evaluate the polynomial in `self`.
-    pub fn evaluate(&self, point: F) -> F {
-        self.polynomial.evaluate(point)
-    }
-
-    /// Retrieve the degree bound in `self`.
-    pub fn degree_bound(&self) -> Option<usize> {
-        self.degree_bound
-    }
-
-    /// Retrieve whether the polynomial in `self` should be hidden.
-    pub fn is_hiding(&self) -> bool {
-        self.hiding_bound.is_some()
-    }
-
-    /// Retrieve the hiding bound for the polynomial in `self`.
-    pub fn hiding_bound(&self) -> Option<usize> {
-        self.hiding_bound
-    }
-}
-
-/// A commitment along with information about its degree bound (if any).
-#[derive(Clone)]
-pub struct LabeledCommitment<C: PCCommitment> {
-    label: String,
-    commitment: C,
-    degree_bound: Option<usize>,
-}
-
-impl<C: PCCommitment> LabeledCommitment<C> {
-    /// Instantiate a new polynomial_context.
-    pub fn new(label: String, commitment: C, degree_bound: Option<usize>) -> Self {
-        Self {
-            label,
-            commitment,
-            degree_bound,
+    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
+    /// committed in `labeled_commitments`.
+    fn batch_check<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<F>,
+        evaluations: &Evaluations<F>,
+        proof: &Self::BatchProof,
+        opening_challenge: F,
+        _rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a
+    {
+        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
+        let mut query_to_labels_map = BTreeMap::new();
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
         }
-    }
 
-    /// Return the label for `self`.
-    pub fn label(&self) -> &str {
-        &self.label
-    }
+        // Implicit assumption: proofs are order in same manner as queries in
+        // `query_to_labels_map`.
+        let proofs: Vec<_> = proof.clone().into();
+        assert_eq!(proofs.len(), query_to_labels_map.len());
 
-    /// Retrieve the polynomial from `self`.
-    pub fn commitment(&self) -> &C {
-        &self.commitment
-    }
+        let mut result = true;
+        for ((query, labels), proof) in query_to_labels_map.into_iter().zip(proofs) {
+            let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
+            let mut values = Vec::new();
+            for label in labels.into_iter() {
+                let commitment = commitments
+                    .get(label)
+                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
 
-    /// Retrieve the degree bound in `self`.
-    pub fn degree_bound(&self) -> Option<usize> {
-        self.degree_bound
+                let v_i = evaluations
+                    .get(&(label, *query))
+                    .ok_or(QuerySetError::MissingEvaluation { label: label.to_string() })?;
+
+                comms.push(commitment);
+                values.push(*v_i);
+            }
+
+            let proof_time = start_timer!(|| "Checking per-query proof");
+            result &= Self::check(vk, comms, *query, values, &proof, opening_challenge)?;
+            end_timer!(proof_time);
+        }
+        Ok(result)
     }
 }
 
-impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
-    #[inline]
-    fn write<W: std::io::Write>(&self, writer: W) -> std::io::Result<()> {
-        self.commitment.write(writer)
+#[cfg(test)]
+pub mod tests {
+    use crate::*;
+    use algebra::Field;
+    use rand::{distributions::Distribution, thread_rng};
+
+    struct TestInfo {
+        num_iters: usize,
+        max_degree: Option<usize>,
+        supported_degree: Option<usize>,
+        num_polynomials: usize,
+        enforce_degree_bounds: bool,
+        max_num_queries: usize,
+    }
+
+    fn test_template<F, PC>(
+        info: TestInfo,
+    ) -> Result<(), PC::Error>
+        where
+            F: Field,
+            PC: PolynomialCommitment<F>
+    {
+        let TestInfo {
+            num_iters,
+            max_degree,
+            supported_degree,
+            num_polynomials,
+            enforce_degree_bounds,
+            max_num_queries,
+        } = info;
+
+        let rng = &mut thread_rng();
+        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(1..=64).sample(rng));
+        let pp = PC::setup(max_degree, rng)?;
+
+        for _ in 0..num_iters {
+            let supported_degree =
+                supported_degree.unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
+            assert!(max_degree >= supported_degree, "max_degree < supported_degree");
+            let mut polynomials = Vec::new();
+            let mut degree_bounds = if enforce_degree_bounds {
+                Some(Vec::new())
+            } else {
+                None
+            };
+                
+            let mut labels = Vec::new();
+            println!("Sampled supported degree");
+
+            // Generate polynomials
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
+            for i in 0..num_polynomials {
+                let label = format!("Test{}", i);
+                labels.push(label.clone());
+                let degree = rand::distributions::Uniform::from(1..=supported_degree).sample(rng);
+                let poly = Polynomial::rand(degree, rng);
+
+                let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
+                    let range = rand::distributions::Uniform::from(degree..=max_degree);
+                    let degree_bound = range.sample(rng);
+                    degree_bounds.push(degree_bound);
+                    Some(degree_bound)
+                } else {
+                    None
+                };
+
+                let hiding_bound = if num_points_in_query_set >= degree {
+                    Some(degree)
+                } else {
+                    Some(num_points_in_query_set)
+                };
+                println!("Hiding bound: {:?}", hiding_bound);
+
+                polynomials.push(LabeledPolynomial::new_owned(
+                    label,
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                ))
+            }
+            println!("supported degree: {:?}", supported_degree);
+            println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+            let (ck, vk) = PC::trim(&pp, supported_degree, degree_bounds.as_ref().map(|s| s.as_slice()))?;
+            println!("Trimmed");
+
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+            // Construct query set
+            let mut query_set = QuerySet::new();
+            let mut values = Evaluations::new();
+            // let mut point = F::one();
+            for _ in 0..num_points_in_query_set {
+                let point = F::rand(rng);
+                for (i, label) in labels.iter().enumerate() {
+                    query_set.insert((label, point));
+                    let value = polynomials[i].evaluate(point);
+                    values.insert((label, point), value);
+                }
+            }
+            println!("Generated query set");
+
+            let opening_challenge = F::rand(rng);
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let result = PC::batch_check(
+                &vk,
+                &comms,
+                &query_set,
+                &values,
+                &proof,
+                opening_challenge,
+                rng,
+            )?;
+            if !result {
+                println!(
+                    "Failed with {} polynomials, num_points_in_query_set: {:?}",
+                    num_polynomials,
+                    num_points_in_query_set
+                );
+                println!("Degree of polynomials:",);
+                for poly in polynomials {
+                    println!("Degree: {:?}", poly.degree());
+
+                }
+
+            }
+            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
+        }
+        Ok(())
+    }
+
+    pub fn single_poly_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 1,
+            enforce_degree_bounds: false,
+            max_num_queries: 1,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn linear_poly_degree_bound_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: Some(2),
+            supported_degree: Some(1),
+            num_polynomials: 1,
+            enforce_degree_bounds: true,
+            max_num_queries: 1,
+        };
+        test_template::<F, PC>(info)
+    }
+
+
+    pub fn single_poly_degree_bound_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 1,
+            enforce_degree_bounds: true,
+            max_num_queries: 1,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn quadratic_poly_degree_bound_multiple_queries_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: Some(3),
+            supported_degree: Some(2),
+            num_polynomials: 1,
+            enforce_degree_bounds: true,
+            max_num_queries: 2,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn single_poly_degree_bound_multiple_queries_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 1,
+            enforce_degree_bounds: true,
+            max_num_queries: 2,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn two_polys_degree_bound_single_query_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 2,
+            enforce_degree_bounds: true,
+            max_num_queries: 1,
+        };
+        test_template::<F, PC>(info)
+    }
+
+    pub fn full_end_to_end_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 10,
+            enforce_degree_bounds: true,
+            max_num_queries: 5,
+        };
+        test_template::<F, PC>(info)
     }
 }
