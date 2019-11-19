@@ -42,7 +42,7 @@ impl<E: PairingEngine> KZG10<E> {
         if max_degree < 1 {
             return Err(Error::DegreeIsZero);
         }
-        let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", degree));
+        let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", max_degree));
         let beta = E::Fr::rand(rng);
         let g = E::G1Projective::rand(rng);
         let gamma_g = E::G1Projective::rand(rng);
