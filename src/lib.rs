@@ -110,7 +110,7 @@ pub trait PolynomialCommitment<F: Field> {
         Self::Error,
     >;
 
-    /// On input a list of labeled polynomials and a query pont, `open` outputs a proof of evaluation
+    /// On input a list of labeled polynomials and a query point, `open` outputs a proof of evaluation
     /// of the polynomials at the query point.
     fn open<'a>(
         ck: &Self::CommitterKey,
