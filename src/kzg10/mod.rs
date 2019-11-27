@@ -1,4 +1,4 @@
-//! Here we constuct a polynomial commitment that enables users to commit to a
+//! Here we construct a polynomial commitment that enables users to commit to a
 //! single polynomial `p`, and then later provide an evaluation proof that
 //! convinces verifiers that a claimed value `v` is the true evaluation of `p`
 //! at a chosen point `x`. Our construction follows the template of the construction
