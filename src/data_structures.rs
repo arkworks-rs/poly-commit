@@ -184,3 +184,49 @@ impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
         self.commitment.write(writer)
     }
 }
+
+
+/// A linear equation where the LHS consists of linear combinations of polynomials,
+/// while the RHS contains a claimed evaluatoin of the LHS at a challenge
+/// point.
+#[derive(Clone)]
+pub struct Equation<F> {
+    /// The label for the equation.
+    pub label: String,
+    /// The RHS of the equation, consisting of `(coeff, poly_label)` pairs.
+    pub lhs: Vec<(F, String)>,
+    /// The LHS of the equation, consisting of the evaluation of `self.lhs` at
+    /// `self.evaluation_point`.
+    pub rhs: F,
+    /// The point that makes the equation satisfied.
+    pub evaluation_point: F
+}
+
+impl<F: Field> Equation<F> {
+    /// Construct a new labeled equation.
+    pub fn empty(
+        label: String,
+        evaluation_point: F,
+    ) -> Self {
+        Self {
+            label,
+            lhs: Vec::new(),
+            rhs: F::zero(),
+            evaluation_point,
+        }
+    }
+
+    /// Add a term to the equation, updating the LHS and RHS in the process.
+    pub fn push(&mut self, term: (F, String), eval: F) {
+        self.rhs += &eval;
+        self.lhs.push(term);
+    }
+
+    /// Obtain a query set from the given iterator over equations.
+    pub fn query_set<'a>(equations: impl IntoIterator<Item = &'a Self>) -> crate::QuerySet<'a, F> {
+        equations.into_iter().flat_map(|eqn| {
+            let point = eqn.evaluation_point;
+            eqn.lhs.iter().map(move |poly| (poly.1.as_str(), point))
+        }).collect()
+    }
+}
