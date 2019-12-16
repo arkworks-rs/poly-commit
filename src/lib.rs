@@ -238,6 +238,66 @@ pub trait PolynomialCommitment<F: Field> {
         }
         Ok(result)
     }
+
+    /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
+    /// of the polynomials at the points in the query set.
+    fn open_equation<'a>(
+        ck: &Self::CommitterKey,
+        equations: impl IntoIterator<Item = &'a Equation<F>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        opening_challenge: F,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    ) -> Result<Self::BatchProof, Self::Error>
+    where
+        Self::Randomness: 'a
+    {
+        let query_set = Equation::query_set(equations);
+        Self::batch_open(ck, labeled_polynomials, &query_set, opening_challenge, rands)
+    }
+
+    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
+    /// committed in `labeled_commitments`.
+    fn check_equation<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        equations: impl IntoIterator<Item = &'a Equation<F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        evaluations: Option<&Evaluations<F>>,
+        proof: &Self::BatchProof,
+        opening_challenge: F,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a
+    {
+        let evaluations = evaluations.unwrap();
+        let equations = equations.into_iter().collect::<Vec<_>>();
+        for eqn in &equations {
+            let claimed_rhs = eqn.rhs;
+            let mut actual_rhs = F::zero();
+            let eval_point = eqn.evaluation_point;
+
+            for (coeff, label) in &eqn.lhs {
+                let eval = evaluations
+                    .get(&(label.as_str(), eval_point))
+                    .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
+                actual_rhs += &(*coeff * eval);
+            }
+            if claimed_rhs != actual_rhs {
+                eprintln!("Equation {} failed to verify", eqn.label);
+                return Ok(false);
+            }
+        }
+        let query_set = Equation::query_set(equations);
+
+        let pc_result = Self::batch_check(vk, commitments, &query_set, evaluations, proof, opening_challenge, rng)?;
+        if !pc_result {
+            eprintln!("Evaluation proofs failed to verify");
+            return Ok(false);
+        }
+
+
+        Ok(true)
+    }
 }
 
 #[cfg(test)]
@@ -285,7 +345,7 @@ pub mod tests {
             } else {
                 None
             };
-                
+
             let mut labels = Vec::new();
             println!("Sampled supported degree");
 
