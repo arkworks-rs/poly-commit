@@ -81,8 +81,8 @@ pub trait PolynomialCommitment<F: Field> {
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error>;
 
-    /// Specializes the public parameters for a given support for coefficients
-    /// for polynomials and degree bounds.
+    /// Specializes the public parameters for polynomials up to the given `supported_degree`
+    /// and for enforcing degree bounds in the range `1..=supported_degree`.
     fn trim(
         pp: &Self::UniversalParams,
         supported_degree: usize,

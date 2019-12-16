@@ -100,6 +100,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
     // TODO: should trim also take in the hiding_bounds? That way we don't
     // have to store many powers of gamma_g.
+    // TODO: add an optional hiding_bound.
     fn trim(
         pp: &Self::UniversalParams,
         supported_degree: usize,
