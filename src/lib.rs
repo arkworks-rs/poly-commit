@@ -68,7 +68,7 @@ pub trait PolynomialCommitment<F: Field> {
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
-    type Proof: Clone;
+    type Proof: PCProof + Clone;
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.

@@ -192,3 +192,18 @@ pub struct Proof<E: PairingEngine> {
     /// the evaluation proof was produced.
     pub random_v: E::Fr,
 }
+
+impl<E: PairingEngine> PCProof for Proof<E> {
+    fn size_in_bytes(&self) -> usize {
+        to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + to_bytes![E::Fr::zero()].unwrap().len()
+    }
+}
+
+
+impl<E: PairingEngine> ToBytes for Proof<E> {
+    #[inline]
+    fn write<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
+        self.w.write(&mut writer)?;
+        self.random_v.write(&mut writer)
+    }
+}
