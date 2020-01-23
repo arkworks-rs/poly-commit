@@ -56,6 +56,13 @@ pub trait PCRandomness: Clone {
     fn rand<R: RngCore>(num_queries: usize, rng: &mut R) -> Self;
 }
 
+/// Defines the minimal interface of evaluation proofs for any polynomial
+/// commitment scheme.
+pub trait PCProof: Clone + algebra::ToBytes {
+    /// Size in bytes
+    fn size_in_bytes(&self) -> usize;
+}
+
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
