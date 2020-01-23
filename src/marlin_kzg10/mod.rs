@@ -3,7 +3,7 @@ use crate::{QuerySetError, QuerySet, Evaluations};
 use crate::{LabeledPolynomial, LabeledCommitment};
 use crate::kzg10;
 
-use algebra::{AffineCurve, Field, PairingEngine, ProjectiveCurve};
+use algebra::{AffineCurve, Field, PairingEngine, ProjectiveCurve, One, Zero};
 use rand_core::RngCore;
 use std::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};

@@ -8,8 +8,8 @@
 use crate::{PCRandomness, Polynomial};
 use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra::{
-    AffineCurve, Field, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
-    UniformRand,
+    AffineCurve, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
+    UniformRand, One, Zero
 };
 use rand_core::RngCore;
 use rayon::prelude::*;
@@ -275,8 +275,8 @@ impl<E: PairingEngine> KZG10<E> {
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
 
-        let mut total_c = <E::G1Projective as ProjectiveCurve>::zero();
-        let mut total_w = <E::G1Projective as ProjectiveCurve>::zero();
+        let mut total_c = <E::G1Projective>::zero();
+        let mut total_w = <E::G1Projective>::zero();
 
         let combination_time = start_timer!(|| "Combining commitments and proofs");
         let mut randomizer = E::Fr::one();
