@@ -1,4 +1,4 @@
-use algebra::{AffineCurve, ToBytes, PairingCurve, PairingEngine, PrimeField};
+use algebra::{AffineCurve, ProjectiveCurve, ToBytes, PairingCurve, PairingEngine, PrimeField, Zero};
 use crate::*;
 use std::ops::AddAssign;
 use std::borrow::Cow;
@@ -117,8 +117,9 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
-        let other = other.0.mul(f.into_repr());
-        self.0 = (self.0.into_projective() + &other).into();
+        let mut other = other.0.mul(f.into_repr());
+        other.add_assign_mixed(&self.0);
+        self.0 = other.into();
     }
 }
 
