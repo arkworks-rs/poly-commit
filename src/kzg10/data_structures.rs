@@ -1,6 +1,6 @@
 use algebra::{AffineCurve, ProjectiveCurve, ToBytes, PairingCurve, PairingEngine, PrimeField, Zero};
 use crate::*;
-use std::ops::AddAssign;
+use std::ops::{Add, AddAssign};
 use std::borrow::Cow;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -165,6 +165,33 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
         randomness.blinding_polynomial = Polynomial::rand(hiding_poly_degree, rng);
         randomness
+    }
+}
+
+impl<'a, E: PairingEngine> Add<&'a Randomness<E>> for Randomness<E> {
+    type Output = Self;
+
+    #[inline]
+    fn add(mut self, other: &'a Self) -> Self {
+        self.blinding_polynomial += &other.blinding_polynomial;
+        self
+    }
+}
+
+impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+    type Output = Self;
+
+    #[inline]
+    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
+        self += other;
+        self
+    }
+}
+
+impl<'a, E: PairingEngine> AddAssign<&'a Randomness<E>> for Randomness<E> {
+    #[inline]
+    fn add_assign(&mut self, other: &'a Self) {
+        self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 

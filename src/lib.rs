@@ -241,7 +241,7 @@ pub trait PolynomialCommitment<F: Field> {
 
     /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
     /// of the polynomials at the points in the query set.
-    fn open_equation<'a>(
+    fn open_equations<'a>(
         ck: &Self::CommitterKey,
         equations: impl IntoIterator<Item = &'a Equation<F>>,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
@@ -257,7 +257,7 @@ pub trait PolynomialCommitment<F: Field> {
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn check_equation<'a, R: RngCore>(
+    fn check_equations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         equations: impl IntoIterator<Item = &'a Equation<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -294,7 +294,6 @@ pub trait PolynomialCommitment<F: Field> {
             eprintln!("Evaluation proofs failed to verify");
             return Ok(false);
         }
-
 
         Ok(true)
     }
