@@ -1,6 +1,7 @@
 use rand_core::RngCore;
 use algebra::{ToBytes, PairingEngine};
 use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey};
+use std::ops::{Add, AddAssign};
 
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -175,6 +176,52 @@ pub struct Randomness<E: PairingEngine> {
     pub(crate) rand: kzg10::Randomness<E>,
     pub(crate) shifted_rand: Option<kzg10::Randomness<E>>,
 }
+
+impl<'a, E: PairingEngine> Add<&'a Self> for Randomness<E> {
+    type Output = Self;
+
+    fn add(mut self, other: &'a Self) -> Self {
+        self += other;
+        self
+    }
+}
+
+impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
+    #[inline]
+    fn add_assign(&mut self, other: &'a Self) {
+        self.rand += &other.rand;
+        if let Some(r1) = &mut self.shifted_rand {
+            *r1 += other.shifted_rand.as_ref().unwrap_or(&kzg10::Randomness::empty());
+        } else {
+            self.shifted_rand = other.shifted_rand.as_ref().map(|r| r.clone());
+        }
+    }
+}
+
+impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+    type Output = Self;
+
+    #[inline]
+    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
+        self += other;
+        self
+    }
+}
+
+impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+    #[inline]
+    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
+        self.rand += (f, &other.rand);
+        let empty = kzg10::Randomness::empty();
+        if let Some(r1) = &mut self.shifted_rand {
+            *r1 += (f, other.shifted_rand.as_ref().unwrap_or(&empty));
+        } else {
+            self.shifted_rand = other.shifted_rand.as_ref().map(|r| empty + (f, r));
+        }
+    }
+}
+
+
 
 impl<E: PairingEngine> PCRandomness for Randomness<E> {
     fn empty() -> Self {

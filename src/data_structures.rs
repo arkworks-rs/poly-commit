@@ -3,6 +3,9 @@ pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 use std::borrow::Cow;
 
+/// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
+pub type PolynomialLabel = String;
+
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
 pub trait PCUniversalParams: Clone + std::fmt::Debug {
@@ -68,7 +71,7 @@ pub trait PCProof: Clone + algebra::ToBytes {
 /// the amount of protection that will be provided to a commitment for this polynomial.
 #[derive(Debug, Clone)]
 pub struct LabeledPolynomial<'a, F: Field> {
-    label: String,
+    label: PolynomialLabel,
     polynomial: Cow<'a, Polynomial<F>>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
@@ -85,7 +88,7 @@ impl<'a, F: Field> std::ops::Deref for LabeledPolynomial<'a, F> {
 impl<'a, F: Field> LabeledPolynomial<'a, F> {
     /// Construct a new labeled polynomial by consuming `polynomial`.
     pub fn new_owned(
-        label: String,
+        label: PolynomialLabel,
         polynomial: Polynomial<F>,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
@@ -100,7 +103,7 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
 
     /// Construct a new labeled polynomial.
     pub fn new(
-        label: String,
+        label: PolynomialLabel,
         polynomial: &'a Polynomial<F>,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
@@ -147,14 +150,14 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
 /// A commitment along with information about its degree bound (if any).
 #[derive(Clone)]
 pub struct LabeledCommitment<C: PCCommitment> {
-    label: String,
+    label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
 }
 
 impl<C: PCCommitment> LabeledCommitment<C> {
     /// Instantiate a new polynomial_context.
-    pub fn new(label: String, commitment: C, degree_bound: Option<usize>) -> Self {
+    pub fn new(label: PolynomialLabel, commitment: C, degree_bound: Option<usize>) -> Self {
         Self {
             label,
             commitment,
@@ -187,18 +190,18 @@ impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
 
 
 /// A linear equation where the LHS consists of linear combinations of polynomials,
-/// while the RHS contains a claimed evaluatoin of the LHS at a challenge
+/// while the RHS contains a claimed evaluation of the LHS at a challenge
 /// point.
 #[derive(Clone)]
 pub struct Equation<F> {
     /// The label for the equation.
     pub label: String,
     /// The RHS of the equation, consisting of `(coeff, poly_label)` pairs.
-    pub lhs: Vec<(F, String)>,
+    pub lhs: Vec<(F, PolynomialLabel)>,
     /// The LHS of the equation, consisting of the evaluation of `self.lhs` at
     /// `self.evaluation_point`.
     pub rhs: F,
-    /// The point that makes the equation satisfied.
+    /// The point that satisfies the equation.
     pub evaluation_point: F
 }
 
@@ -217,12 +220,14 @@ impl<F: Field> Equation<F> {
     }
 
     /// Add a term to the equation, updating the LHS and RHS in the process.
-    pub fn push(&mut self, term: (F, String), eval: F) {
+    pub fn push(&mut self, term: (F, PolynomialLabel), eval: F) {
         self.rhs += &eval;
         self.lhs.push(term);
     }
 
-    /// Obtain a query set from the given iterator over equations.
+    /// Obtain a query set from the given equations.
+    /// This method simply maps each polynomial in an equation into its own
+    /// entry in the query set.
     pub fn query_set<'a>(equations: impl IntoIterator<Item = &'a Self>) -> crate::QuerySet<'a, F> {
         equations.into_iter().flat_map(|eqn| {
             let point = eqn.evaluation_point;

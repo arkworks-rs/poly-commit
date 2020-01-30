@@ -8,6 +8,9 @@ pub enum Error {
     TrimmingDegreeTooLarge,
     /// The provided `enforced_degree_bounds` was `Some<&[]>`.
     EmptyDegreeBounds,
+    /// The provided equation contained multiple polynomials, of which least one
+    /// had a strict degree bound.
+    EquationHasDegreeBounds(String),
     /// The required degree bound is not supported by ck/vk
     UnsupportedDegreeBound(usize),
     /// The degree bound for the `index`-th polynomial passed to `commit`, `open`
@@ -78,6 +81,8 @@ impl std::fmt::Display for Error {
         match self {
             Error::TrimmingDegreeTooLarge => write!(f, "the degree provided to `trim` was too large"),
             Error::EmptyDegreeBounds => write!(f, "provided `enforced_degree_bounds` was `Some<&[]>`"),
+            Error::EquationHasDegreeBounds(e) => 
+                write!(f, "the eqaution \"{}\" contained degree-bounded polynomials", e),
             Error::UnsupportedDegreeBound(bound) => write!(
                 f,
                 "the degree bound ({:?}) is not supported by the parameters",
