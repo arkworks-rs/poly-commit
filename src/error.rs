@@ -1,4 +1,4 @@
-/// The error type for `KZG10`.
+/// Errors that arise when dealing with query sets.
 #[derive(Debug)]
 pub enum QuerySetError {
     /// The query set contains a label for a polynomial that was not provided as 
@@ -33,6 +33,34 @@ impl std::fmt::Display for QuerySetError {
 }
 
 impl std::error::Error for QuerySetError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+/// Equation errors that arise when dealing with query sets.
+#[derive(Debug)]
+pub enum EquationError {
+    /// The LHS of the equation is empty.
+    MissingLHS {
+        /// The label of the equation.
+        label: String
+    },
+}
+
+impl std::fmt::Display for EquationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EquationError::MissingLHS { label } => write!(
+                f,
+                "Equation \"{}\" does not have a LHS.",
+                label
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EquationError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
     }

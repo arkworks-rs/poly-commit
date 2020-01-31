@@ -160,7 +160,7 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, _: bool, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
         randomness.blinding_polynomial = Polynomial::rand(hiding_poly_degree, rng);
