@@ -72,7 +72,7 @@ pub trait PolynomialCommitment<F: Field> {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: std::error::Error + From<QuerySetError>;
+    type Error: std::error::Error + From<QuerySetError> + From<EquationError>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
@@ -303,8 +303,9 @@ pub trait PolynomialCommitment<F: Field> {
 pub mod tests {
     use crate::*;
     use algebra::Field;
-    use rand::{distributions::Distribution, thread_rng};
+    use rand::{distributions::Distribution, thread_rng, Rng};
 
+    #[derive(Default)]
     struct TestInfo {
         num_iters: usize,
         max_degree: Option<usize>,
@@ -312,6 +313,7 @@ pub mod tests {
         num_polynomials: usize,
         enforce_degree_bounds: bool,
         max_num_queries: usize,
+        num_equations: Option<usize>
     }
 
     fn test_template<F, PC>(
@@ -328,10 +330,11 @@ pub mod tests {
             num_polynomials,
             enforce_degree_bounds,
             max_num_queries,
+            ..
         } = info;
 
         let rng = &mut thread_rng();
-        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(1..=64).sample(rng));
+        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
         let pp = PC::setup(max_degree, rng)?;
 
         for _ in 0..num_iters {
@@ -429,6 +432,148 @@ pub mod tests {
         Ok(())
     }
 
+    fn equation_test_template<F, PC>(
+        info: TestInfo,
+    ) -> Result<(), PC::Error>
+        where
+            F: Field,
+            PC: PolynomialCommitment<F>
+    {
+        let TestInfo {
+            num_iters,
+            max_degree,
+            supported_degree,
+            num_polynomials,
+            enforce_degree_bounds,
+            max_num_queries,
+            num_equations,
+        } = info;
+
+        let rng = &mut thread_rng();
+        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
+        let pp = PC::setup(max_degree, rng)?;
+
+        for _ in 0..num_iters {
+            let supported_degree =
+                supported_degree.unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
+            assert!(max_degree >= supported_degree, "max_degree < supported_degree");
+            let mut polynomials = Vec::new();
+            let mut degree_bounds = if enforce_degree_bounds {
+                Some(Vec::new())
+            } else {
+                None
+            };
+
+            let mut labels = Vec::new();
+            println!("Sampled supported degree");
+
+            // Generate polynomials
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
+            for i in 0..num_polynomials {
+                let label = format!("Test{}", i);
+                labels.push(label.clone());
+                let degree = rand::distributions::Uniform::from(1..=supported_degree).sample(rng);
+                let poly = Polynomial::rand(degree, rng);
+
+                let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
+                    if rng.gen() {
+                        let range = rand::distributions::Uniform::from(degree..=max_degree);
+                        let degree_bound = range.sample(rng);
+                        degree_bounds.push(degree_bound);
+                        Some(degree_bound)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let hiding_bound = if num_points_in_query_set >= degree {
+                    Some(degree)
+                } else {
+                    Some(num_points_in_query_set)
+                };
+                println!("Hiding bound: {:?}", hiding_bound);
+
+                polynomials.push(LabeledPolynomial::new_owned(
+                    label,
+                    poly,
+                    degree_bound,
+                    hiding_bound,
+                ))
+            }
+            println!("supported degree: {:?}", supported_degree);
+            println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+            let (ck, vk) = PC::trim(&pp, supported_degree, degree_bounds.as_ref().map(|s| s.as_slice()))?;
+            println!("Trimmed");
+
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+            // Let's construct our equations
+            let mut equations = Vec::new();
+            for i in 0..num_points_in_query_set {
+                let point = F::rand(rng);
+                for j in 0..num_equations.unwrap() {
+                    let mut equation = Equation::empty(format!("query {} eqn {}", i, j), point);
+                    let should_have_degree_bounds: bool = rng.gen();
+                    for (k, label) in labels.iter().enumerate() {
+                        if should_have_degree_bounds {
+                            let eval = polynomials[k].evaluate(point);
+                            equation.push((F::one(), label.to_string()), eval);
+                            break;
+                        } else {
+                            let poly = &polynomials[k];
+                            if poly.degree_bound().is_some() {
+                                continue;
+                            } else {
+                                assert!(poly.degree_bound().is_none());
+                                let coeff = F::rand(rng);
+                                let eval = coeff * poly.evaluate(point);
+                                equation.push((coeff, label.to_string()), eval);
+                            }
+                        }
+                    }
+                    if !equation.lhs.is_empty() {
+                        equations.push(equation);
+                    }
+                }
+            }
+            if equations.is_empty() {
+                continue
+            }
+            println!("Generated query set");
+
+            let opening_challenge = F::rand(rng);
+            let proof = PC::open_equations(&ck, &equations, &polynomials, opening_challenge, &rands)?;
+            let result = PC::check_equations(
+                &vk,
+                &equations,
+                &comms,
+                None,
+                &proof,
+                opening_challenge,
+                rng,
+            )?;
+            if !result {
+                println!(
+                    "Failed with {} polynomials, num_points_in_query_set: {:?}",
+                    num_polynomials,
+                    num_points_in_query_set
+                );
+                println!("Degree of polynomials:",);
+                for poly in polynomials {
+                    println!("Degree: {:?}", poly.degree());
+
+                }
+
+            }
+            assert!(result, "proof was incorrect, equations: {:#?}", equations);
+        }
+        Ok(())
+    }
+
+
+
     pub fn single_poly_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
@@ -441,6 +586,7 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: false,
             max_num_queries: 1,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -457,6 +603,7 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 1,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -474,6 +621,7 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 1,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -490,6 +638,7 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 2,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -506,6 +655,7 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 2,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -522,6 +672,7 @@ pub mod tests {
             num_polynomials: 2,
             enforce_degree_bounds: true,
             max_num_queries: 1,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
     }
@@ -538,7 +689,76 @@ pub mod tests {
             num_polynomials: 10,
             enforce_degree_bounds: true,
             max_num_queries: 5,
+            ..Default::default()
         };
         test_template::<F, PC>(info)
+    }
+
+    pub fn full_end_to_end_equation_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 10,
+            enforce_degree_bounds: true,
+            max_num_queries: 5,
+            num_equations: Some(10),
+        };
+        equation_test_template::<F, PC>(info)
+    }
+
+    pub fn single_equation_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 1,
+            enforce_degree_bounds: false,
+            max_num_queries: 1,
+            num_equations: Some(1),
+        };
+        equation_test_template::<F, PC>(info)
+    }
+
+    pub fn two_equation_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 2,
+            enforce_degree_bounds: false,
+            max_num_queries: 1,
+            num_equations: Some(2),
+        };
+        equation_test_template::<F, PC>(info)
+    }
+
+    pub fn two_equation_degree_bound_test<F, PC>() -> Result<(), PC::Error>
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_polynomials: 2,
+            enforce_degree_bounds: true,
+            max_num_queries: 1,
+            num_equations: Some(2),
+        };
+        equation_test_template::<F, PC>(info)
     }
 }

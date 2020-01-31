@@ -227,14 +227,19 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
     fn empty() -> Self {
         Self {
             rand: kzg10::Randomness::empty(),
-            shifted_rand: Some(kzg10::Randomness::empty()),
+            shifted_rand: None,
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
+        let shifted_rand = if has_degree_bound {
+            Some(kzg10::Randomness::rand(hiding_bound, false, rng))
+        } else {
+            None
+        };
         Self {
-            rand: kzg10::Randomness::rand(hiding_bound, rng),
-            shifted_rand: Some(kzg10::Randomness::rand(hiding_bound, rng)),
+            rand: kzg10::Randomness::rand(hiding_bound, false, rng),
+            shifted_rand,
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{PCUniversalParams, PCRandomness, Polynomial, PolynomialCommitment};
-use crate::{QuerySetError, QuerySet, Evaluations};
+use crate::{QuerySetError, EquationError, QuerySet, Evaluations};
 use crate::{LabeledPolynomial, LabeledCommitment, Equation};
 use crate::kzg10;
 
@@ -42,15 +42,19 @@ pub(crate) fn shift_polynomial<E: PairingEngine>(
 }
 
 impl<E: PairingEngine> MarlinKZG10<E> {
-    /// MSM for `commitments` and `coeffs` 
-    fn combine_commitments(
-        coeffs_and_comms: impl IntoIterator<Item = (E::Fr, kzg10::Commitment<E>)>,
-    ) -> E::G1Projective {
+    /// MSM for `commitments` and `coeffs`
+    fn combine_commitments<'a>(
+        coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a Commitment<E>)>,
+    ) -> (E::G1Projective, E::G1Projective) {
         let mut combined_comm = E::G1Projective::zero();
+        let mut combined_shifted_comm = E::G1Projective::zero();
         for (coeff, comm) in coeffs_and_comms {
-            combined_comm += &comm.0.mul(coeff);
+            combined_comm += &comm.comm.0.mul(coeff);
+            if let Some(shifted_comm) = &comm.shifted_comm {
+                combined_shifted_comm += &shifted_comm.0.mul(coeff);
+            }
         }
-        combined_comm
+        (combined_comm, combined_shifted_comm)
     }
 
     /// Accumulate `commitments` and `values` according to `opening_challenge`.
@@ -150,23 +154,27 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         // Check whether we have some degree bounds to enforce
         let (shifted_powers, degree_bounds_and_shift_powers) =
             if let Some(enforced_degree_bounds) = enforced_degree_bounds.as_ref() {
-                let lowest_shifted_power = max_degree - enforced_degree_bounds
-                    .last()
-                    .ok_or(Error::EmptyDegreeBounds)?;
+                if enforced_degree_bounds.is_empty() {
+                    (None, None)
+                } else {
+                    let lowest_shifted_power = max_degree - enforced_degree_bounds
+                        .last()
+                        .ok_or(Error::EmptyDegreeBounds)?;
 
-                let shifted_ck_time = start_timer!(|| format!(
-                        "Constructing `shifted_powers` of size {}",
-                        max_degree - lowest_shifted_power + 1
-                ));
+                    let shifted_ck_time = start_timer!(|| format!(
+                            "Constructing `shifted_powers` of size {}",
+                            max_degree - lowest_shifted_power + 1
+                    ));
 
-                let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
-                end_timer!(shifted_ck_time);
+                    let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
+                    end_timer!(shifted_ck_time);
 
-                let degree_bounds_and_shift_powers = enforced_degree_bounds
-                    .iter()
-                    .map(|d| (*d, pp.powers_of_g[max_degree - d]))
-                    .collect();
-                (Some(shifted_powers), Some(degree_bounds_and_shift_powers))
+                    let degree_bounds_and_shift_powers = enforced_degree_bounds
+                        .iter()
+                        .map(|d| (*d, pp.powers_of_g[max_degree - d]))
+                        .collect();
+                    (Some(shifted_powers), Some(degree_bounds_and_shift_powers))
+                }
             } else {
                 (None, None)
             };
@@ -427,18 +435,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     where
         Self::Randomness: 'a
     {
-        let labeled_polynomials = labeled_polynomials.into_iter().collect::<Vec<_>>();
-        let label_poly_map =
+        let label_poly_rand_map =
             labeled_polynomials
-            .iter()
-            .map(|p| (p.label(), p))
-            .collect::<BTreeMap<_, _>>();
-
-        let label_rand_map =
-            labeled_polynomials
-            .iter()
+            .into_iter()
             .zip(rands)
-            .map(|(p, r)| (p.label(), r))
+            .map(|(p, r)| (p.label(), (p, r)))
             .collect::<BTreeMap<_, _>>();
 
         let mut equation_polynomials = Vec::new();
@@ -451,35 +452,44 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut degree_bound = None;
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
+            assert!(randomness.shifted_rand.is_none());
 
             let num_polys = equation.lhs.len();
+            if equation.lhs_is_empty() {
+                Err(EquationError::MissingLHS { label: equation_label.clone() })?;
+            }
 
             for (coeff, label) in &equation.lhs {
-                let &cur_poly = label_poly_map
-                    .get(label.as_str())
-                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
-                let &cur_rand = label_rand_map
+                let &(cur_poly, cur_rand) = label_poly_rand_map
                     .get(label.as_str())
                     .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
 
-                if degree_bound.is_some() {
-                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
-                } else if num_polys == 1 {
+                if num_polys == 1 && cur_poly.degree_bound().is_some() {
                     assert!(coeff.is_one(), "Coefficient must be one for degree-bounded equations");
                     degree_bound = cur_poly.degree_bound();
+                } else if cur_poly.degree_bound().is_some() {
+                    eprintln!("Degree bound when number of equations is non-zero");
+                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
                 }
 
                 // Some(_) > None, always.
                 hiding_bound = std::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
+
+                if degree_bound.is_none() {
+                    assert!(randomness.shifted_rand.is_none());
+                }
             }
             let equation_poly = LabeledPolynomial::new_owned(equation_label, poly, degree_bound, hiding_bound);
+            assert_eq!(equation_poly.evaluate(equation.evaluation_point), equation.rhs);
+
             equation_polynomials.push(equation_poly);
             equation_randomness.push(randomness);
             query_set.insert((&equation.label, equation.evaluation_point));
             evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
         }
+
         Self::batch_open(ck, equation_polynomials.iter(), &query_set, opening_challenge, equation_randomness.iter())
     }
 
@@ -519,13 +529,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     .get(label.as_str())
                     .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
 
-                if degree_bound.is_some() {
-                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
-                } else if num_polys == 1 {
+                if num_polys == 1 && cur_comm.degree_bound().is_some() {
                     assert!(coeff.is_one(), "Coefficient must be one for degree-bounded equations");
                     degree_bound = cur_comm.degree_bound();
+                } else if cur_comm.degree_bound().is_some() {
+                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
                 }
-                coeffs_and_comms.push((*coeff, cur_comm.commitment().comm));
+                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
             }
             commitments.push(Self::combine_commitments(coeffs_and_comms));
             equation_info.push((equation_label, degree_bound));
@@ -533,19 +543,27 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             query_set.insert((&equation.label, equation.evaluation_point));
             evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
         }
-        E::G1Projective::batch_normalization(&mut commitments);
+        let (mut comms, mut shifted_comms): (Vec<_>, Vec<_>) = commitments.into_iter().unzip();
+        E::G1Projective::batch_normalization(&mut comms);
+        E::G1Projective::batch_normalization(&mut shifted_comms);
         let equation_commitments = equation_info
             .into_iter()
-            .zip(commitments)
-            .map(|((label, degree_bound), c)| {
+            .zip(comms)
+            .zip(shifted_comms)
+            .map(|(((label, degree_bound), c), s_c)| {
+                let shifted_comm = if !s_c.is_zero() {
+                    Some(kzg10::Commitment(s_c.into()))
+                } else {
+                    None
+                };
                 let commitment = Commitment {
                     comm: kzg10::Commitment(c.into()),
-                    shifted_comm: None,
+                    shifted_comm: shifted_comm,
                 };
                 LabeledCommitment::new(label, commitment, degree_bound)
             })
         .collect::<Vec<_>>();
-            
+
         Self::batch_check(vk, equation_commitments.iter(), &query_set, &evaluations, proof, opening_challenge, rng)
     }
 }
@@ -639,6 +657,60 @@ mod tests {
         full_end_to_end_test::<_, PC_MNT6>().expect("test failed for MNT6");
         println!("Finished mnt6");
         full_end_to_end_test::<_, PC_SW6>().expect("test failed for SW6");
+        println!("Finished sw6");
+    }
+
+    #[test]
+    fn single_equation_test() {
+        use crate::tests::*;
+        single_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+        single_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        println!("Finished mnt6");
+        single_equation_test::<_, PC_SW6>().expect("test failed for SW6");
+        println!("Finished sw6");
+    }
+
+    #[test]
+    fn two_equation_test() {
+        use crate::tests::*;
+        two_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+        two_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        println!("Finished mnt6");
+        two_equation_test::<_, PC_SW6>().expect("test failed for SW6");
+        println!("Finished sw6");
+    }
+
+    #[test]
+    fn two_equation_degree_bound_test() {
+        use crate::tests::*;
+        two_equation_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        two_equation_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+        two_equation_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        println!("Finished mnt6");
+        two_equation_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
+        println!("Finished sw6");
+    }
+
+
+
+    #[test]
+    fn full_end_to_end_equation_test() {
+        use crate::tests::*;
+        full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+        full_end_to_end_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
+        println!("Finished mnt6");
+        full_end_to_end_equation_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
 }

@@ -131,7 +131,7 @@ impl<E: PairingEngine> KZG10<E> {
                 hiding_degree
             ));
 
-            randomness = Randomness::rand(hiding_degree, &mut rng);
+            randomness = Randomness::rand(hiding_degree, false, &mut rng);
             Error::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.powers_of_gamma_g.len())?;
             end_timer!(sample_random_poly_time);
         }

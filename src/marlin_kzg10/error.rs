@@ -1,5 +1,5 @@
 use crate::kzg10;
-use crate::{PCCommitterKey, LabeledPolynomial, QuerySetError as QSError};
+use crate::{PCCommitterKey, LabeledPolynomial, QuerySetError as QSError, EquationError as EqError};
 
 /// Error type for `MultiPCFromSinglePC`.
 #[derive(Debug)]
@@ -32,6 +32,9 @@ pub enum Error {
     /// An error related to the `QuerySet`.
     QuerySetError(QSError),
 
+    /// An error related to the `QuerySet`.
+    EquationError(EqError),
+
     /// An error from the underlying `KZG10`.
     KZG10Error(kzg10::Error),
 }
@@ -45,6 +48,12 @@ impl From<kzg10::Error> for Error {
 impl From<QSError> for Error {
     fn from(other: QSError) -> Self {
         Error::QuerySetError(other)
+    }
+}
+
+impl From<EqError> for Error {
+    fn from(other: EqError) -> Self {
+        Error::EquationError(other)
     }
 }
 
@@ -102,6 +111,7 @@ impl std::fmt::Display for Error {
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
             Error::QuerySetError(err) => write!(f, "{}", err),
+            Error::EquationError(err) => write!(f, "{}", err),
             Error::KZG10Error(err) => write!(f, "KZG10 error: {}", err),
         }
     }

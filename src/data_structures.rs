@@ -56,7 +56,9 @@ pub trait PCRandomness: Clone {
 
     /// Samples randomness for commitments;
     /// `num_queries` specifies the number of queries that the commitment will be opened at.
-    fn rand<R: RngCore>(num_queries: usize, rng: &mut R) -> Self;
+    /// `has_degree_bound` indicates that the corresponding commitment has an enforced
+    /// strict degree bound.
+    fn rand<R: RngCore>(num_queries: usize, has_degree_bound: bool, rng: &mut R) -> Self;
 }
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
@@ -192,7 +194,7 @@ impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
 /// A linear equation where the LHS consists of linear combinations of polynomials,
 /// while the RHS contains a claimed evaluation of the LHS at a challenge
 /// point.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Equation<F> {
     /// The label for the equation.
     pub label: String,
@@ -219,7 +221,14 @@ impl<F: Field> Equation<F> {
         }
     }
 
+    /// Returns `true` if the LHS of `self` is empty.
+    pub fn lhs_is_empty(&self) -> bool {
+        self.lhs.is_empty()
+    }
+
     /// Add a term to the equation, updating the LHS and RHS in the process.
+    /// It *must* be the case that `eval` is the evaluation of the provided term
+    /// at `self.evaluation_point`.
     pub fn push(&mut self, term: (F, PolynomialLabel), eval: F) {
         self.rhs += &eval;
         self.lhs.push(term);
