@@ -8,8 +8,7 @@
 use crate::{PCRandomness, Polynomial, Vec};
 use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra_core::{
-    AffineCurve, Group, PairingEngine, PrimeField, ProjectiveCurve,
-    UniformRand, One, Zero
+    AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
 use rand_core::RngCore;
 #[cfg(feature = "parallel")]
@@ -119,10 +118,14 @@ impl<E: PairingEngine> KZG10<E> {
             hiding_bound,
         ));
 
-        let (num_leading_zeros, plain_coeffs) = skip_leading_zeros_and_convert_to_bigints(&polynomial);
+        let (num_leading_zeros, plain_coeffs) =
+            skip_leading_zeros_and_convert_to_bigints(&polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
+        let mut commitment = VariableBaseMSM::multi_scalar_mul(
+            &powers.powers_of_g[num_leading_zeros..],
+            &plain_coeffs,
+        );
         end_timer!(msm_time);
 
         let mut randomness = Randomness::empty();
@@ -134,7 +137,10 @@ impl<E: PairingEngine> KZG10<E> {
             ));
 
             randomness = Randomness::rand(hiding_degree, false, &mut rng);
-            Error::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.powers_of_gamma_g.len())?;
+            Error::check_hiding_bound(
+                randomness.blinding_polynomial.degree(),
+                powers.powers_of_gamma_g.len(),
+            )?;
             end_timer!(sample_random_poly_time);
         }
 
@@ -175,7 +181,8 @@ impl<E: PairingEngine> KZG10<E> {
             end_timer!(rand_eval_time);
 
             let witness_time = start_timer!(|| "Computing random witness polynomial");
-            let random_witness_polynomial = &(random_p - &Polynomial::from_coefficients_vec(vec![random_value])) / &divisor;
+            let random_witness_polynomial =
+                &(random_p - &Polynomial::from_coefficients_vec(vec![random_value])) / &divisor;
             end_timer!(witness_time);
             Some(random_witness_polynomial)
         } else {
@@ -193,10 +200,14 @@ impl<E: PairingEngine> KZG10<E> {
         hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
     ) -> Result<Proof<E>, Error> {
         Error::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
-        let (num_leading_zeros, witness_coeffs) = skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
+        let (num_leading_zeros, witness_coeffs) =
+            skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
+        let mut w = VariableBaseMSM::multi_scalar_mul(
+            &powers.powers_of_g[num_leading_zeros..],
+            &witness_coeffs,
+        );
         end_timer!(witness_comm_time);
 
         let mut random_v = E::Fr::zero();
@@ -209,7 +220,10 @@ impl<E: PairingEngine> KZG10<E> {
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs);
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, &random_witness_coeffs);
+            w += &VariableBaseMSM::multi_scalar_mul(
+                &powers.powers_of_gamma_g,
+                &random_witness_coeffs,
+            );
             end_timer!(witness_comm_time);
             random_v = blinding_evaluation;
         }
@@ -234,7 +248,13 @@ impl<E: PairingEngine> KZG10<E> {
         let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(p, point, rand)?;
         end_timer!(witness_time);
 
-        let proof = Self::open_with_witness_polynomial(powers, point, rand, &witness_poly, hiding_witness_poly.as_ref());
+        let proof = Self::open_with_witness_polynomial(
+            powers,
+            point,
+            rand,
+            &witness_poly,
+            hiding_witness_poly.as_ref(),
+        );
 
         end_timer!(open_time);
         proof
@@ -262,7 +282,7 @@ impl<E: PairingEngine> KZG10<E> {
         Ok(lhs == rhs)
     }
 
-    /// Check that each `proof_i` in `proofs` is a valid proof of evaluation for 
+    /// Check that each `proof_i` in `proofs` is a valid proof of evaluation for
     /// `commitment_i` at `point_i`.
     pub fn batch_check<R: RngCore>(
         vk: &VerifierKey<E>,
@@ -321,7 +341,9 @@ impl<E: PairingEngine> KZG10<E> {
     }
 }
 
-fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(p: &Polynomial<F>) -> (usize, Vec<F::BigInt>) {
+fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
+    p: &Polynomial<F>,
+) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
     while p.coeffs[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs.len() {
         num_leading_zeros += 1;
@@ -332,7 +354,9 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(p: &Polynomial<F>) -
 
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-    let coeffs = ff_fft::cfg_iter!(p).map(|s| s.into_repr()).collect::<Vec<_>>();
+    let coeffs = ff_fft::cfg_iter!(p)
+        .map(|s| s.into_repr())
+        .collect::<Vec<_>>();
     end_timer!(to_bigint_time);
     coeffs
 }
@@ -344,11 +368,11 @@ mod tests {
     use crate::*;
 
     use algebra::bls12_381::Fr;
+    use algebra::test_rng;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
     use algebra::MNT6;
     use algebra::SW6;
-    use algebra::test_rng;
 
     type KZG_Bls12_381 = KZG10<Bls12_381>;
 

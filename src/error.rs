@@ -2,17 +2,17 @@ use crate::String;
 /// Errors that arise when dealing with query sets.
 #[derive(Debug)]
 pub enum QuerySetError {
-    /// The query set contains a label for a polynomial that was not provided as 
+    /// The query set contains a label for a polynomial that was not provided as
     /// input to the `PC::open`.
     MissingPolynomial {
         /// The label of the missing polynomial.
-        label: String
+        label: String,
     },
-    /// `Evaluations` does not contain an evaluation for the polynomial labelled 
+    /// `Evaluations` does not contain an evaluation for the polynomial labelled
     /// `label` at a particular query.
     MissingEvaluation {
         /// The label of the missing polynomial.
-        label: String
+        label: String,
     },
 }
 
@@ -41,18 +41,16 @@ pub enum EquationError {
     /// The LHS of the equation is empty.
     MissingLHS {
         /// The label of the equation.
-        label: String
+        label: String,
     },
 }
 
 impl core::fmt::Display for EquationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            EquationError::MissingLHS { label } => write!(
-                f,
-                "Equation \"{}\" does not have a LHS.",
-                label
-            ),
+            EquationError::MissingLHS { label } => {
+                write!(f, "Equation \"{}\" does not have a LHS.", label)
+            }
         }
     }
 }
