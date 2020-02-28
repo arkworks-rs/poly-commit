@@ -190,7 +190,6 @@ impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
     }
 }
 
-
 /// A linear equation where the LHS consists of linear combinations of polynomials,
 /// while the RHS contains a claimed evaluation of the LHS at a challenge
 /// point.
@@ -204,15 +203,12 @@ pub struct Equation<F> {
     /// `self.evaluation_point`.
     pub rhs: F,
     /// The point that satisfies the equation.
-    pub evaluation_point: F
+    pub evaluation_point: F,
 }
 
 impl<F: Field> Equation<F> {
     /// Construct a new labeled equation.
-    pub fn empty(
-        label: String,
-        evaluation_point: F,
-    ) -> Self {
+    pub fn empty(label: String, evaluation_point: F) -> Self {
         Self {
             label,
             lhs: Vec::new(),
@@ -238,9 +234,12 @@ impl<F: Field> Equation<F> {
     /// This method simply maps each polynomial in an equation into its own
     /// entry in the query set.
     pub fn query_set<'a>(equations: impl IntoIterator<Item = &'a Self>) -> crate::QuerySet<'a, F> {
-        equations.into_iter().flat_map(|eqn| {
-            let point = eqn.evaluation_point;
-            eqn.lhs.iter().map(move |poly| (poly.1.as_str(), point))
-        }).collect()
+        equations
+            .into_iter()
+            .flat_map(|eqn| {
+                let point = eqn.evaluation_point;
+                eqn.lhs.iter().map(move |poly| (poly.1.as_str(), point))
+            })
+            .collect()
     }
 }

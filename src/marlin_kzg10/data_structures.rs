@@ -1,7 +1,7 @@
-use rand_core::RngCore;
-use algebra_core::{ToBytes, PairingEngine};
 use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec};
+use algebra_core::{PairingEngine, ToBytes};
 use core::ops::{Add, AddAssign};
+use rand_core::RngCore;
 
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -48,12 +48,21 @@ impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for committing to shifted polynomials.
     pub fn shifted_powers<'a>(
         &'a self,
-        degree_bound: impl Into<Option<usize>>
+        degree_bound: impl Into<Option<usize>>,
     ) -> Option<kzg10::Powers<'a, E>> {
         self.shifted_powers.as_ref().map(|shifted_powers| {
             let powers_range = if let Some(degree_bound) = degree_bound.into() {
-                assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
-                let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
+                assert!(self
+                    .enforced_degree_bounds
+                    .as_ref()
+                    .unwrap()
+                    .contains(&degree_bound));
+                let max_bound = self
+                    .enforced_degree_bounds
+                    .as_ref()
+                    .unwrap()
+                    .last()
+                    .unwrap();
                 (max_bound - degree_bound)..
             } else {
                 0..
@@ -100,7 +109,9 @@ impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, bound: usize) -> Option<E::G1Affine> {
         self.degree_bounds_and_shift_powers.as_ref().and_then(|v| {
-            v.binary_search_by(|(d, _)| d.cmp(&bound)).ok().map(|i| v[i].1)
+            v.binary_search_by(|(d, _)| d.cmp(&bound))
+                .ok()
+                .map(|i| v[i].1)
         })
     }
 }
@@ -191,7 +202,10 @@ impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
     fn add_assign(&mut self, other: &'a Self) {
         self.rand += &other.rand;
         if let Some(r1) = &mut self.shifted_rand {
-            *r1 += other.shifted_rand.as_ref().unwrap_or(&kzg10::Randomness::empty());
+            *r1 += other
+                .shifted_rand
+                .as_ref()
+                .unwrap_or(&kzg10::Randomness::empty());
         } else {
             self.shifted_rand = other.shifted_rand.as_ref().map(|r| r.clone());
         }
@@ -220,8 +234,6 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<
         }
     }
 }
-
-
 
 impl<E: PairingEngine> PCRandomness for Randomness<E> {
     fn empty() -> Self {
