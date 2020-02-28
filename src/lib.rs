@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 //! A crate for polynomial commitment schemes.
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
@@ -24,7 +25,7 @@ extern crate alloc;
 use alloc::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    string::String,
+    string::{String, ToString},
     vec::Vec,
 };
 
@@ -32,7 +33,7 @@ use alloc::{
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    string::String,
+    string::{String, ToString},
     vec::Vec,
 };
 
@@ -43,6 +44,12 @@ pub use data_structures::*;
 /// Errors pertaining to query sets.
 pub mod error;
 pub use error::*;
+
+#[cfg(not(feature = "std"))]
+macro_rules! eprintln {
+    () => {};
+    ($($arg: tt)*) => {};
+}
 
 /// The core KZG10 construction.
 pub mod kzg10;
