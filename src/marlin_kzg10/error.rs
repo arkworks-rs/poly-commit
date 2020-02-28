@@ -1,8 +1,8 @@
 use crate::kzg10;
-use crate::String;
 use crate::{
     EquationError as EqError, LabeledPolynomial, PCCommitterKey, QuerySetError as QSError,
 };
+use crate::{String, ToString};
 
 /// Error type for `MultiPCFromSinglePC`.
 #[derive(Debug)]

@@ -21,7 +21,7 @@ edition = "2018"
 [dependencies]
 algebra-core = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
 ff-fft = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
-bench-utils = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
+bench-utils = { git = "https://github.com/scipr-lab/zexe/" }
 rand_core = { version = "0.5", default-features = false }
 rayon = { version = "1", optional = true }
 derivative = { version = "1", features = [ "use_core" ] }
