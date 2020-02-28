@@ -1,7 +1,7 @@
 use rand_core::RngCore;
-use algebra::{ToBytes, PairingEngine};
-use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey};
-use std::ops::{Add, AddAssign};
+use algebra_core::{ToBytes, PairingEngine};
+use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec};
+use core::ops::{Add, AddAssign};
 
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -133,7 +133,7 @@ pub struct Commitment<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;

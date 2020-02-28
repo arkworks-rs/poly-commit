@@ -8,22 +8,29 @@
 #![forbid(unsafe_code)]
 
 #[macro_use]
-extern crate algebra;
-#[macro_use]
 extern crate derivative;
 #[macro_use]
 extern crate bench_utils;
 
-use algebra::Field;
+use algebra_core::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use std::collections::{BTreeMap, BTreeSet};
+
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::{borrow::Cow, string::String, vec::Vec, collections::{BTreeSet, BTreeMap}};
+
+#[cfg(feature = "std")]
+use std::{borrow::Cow, string::String, vec::Vec, collections::{BTreeMap, BTreeSet}};
 
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
 pub use data_structures::*;
-
 
 /// Errors pertaining to query sets.
 pub mod error;
@@ -72,7 +79,7 @@ pub trait PolynomialCommitment<F: Field> {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: std::error::Error + From<QuerySetError> + From<EquationError>;
+    type Error: algebra_core::Error + From<QuerySetError> + From<EquationError>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
@@ -302,8 +309,8 @@ pub trait PolynomialCommitment<F: Field> {
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use algebra::Field;
-    use rand::{distributions::Distribution, thread_rng, Rng};
+    use algebra::{Field, test_rng};
+    use rand::{distributions::Distribution, Rng};
 
     #[derive(Default)]
     struct TestInfo {
@@ -333,7 +340,7 @@ pub mod tests {
             ..
         } = info;
 
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
         let pp = PC::setup(max_degree, rng)?;
 
@@ -449,7 +456,7 @@ pub mod tests {
             num_equations,
         } = info;
 
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
         let pp = PC::setup(max_degree, rng)?;
 
