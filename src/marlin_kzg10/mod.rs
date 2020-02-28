@@ -1,12 +1,12 @@
 use crate::{PCUniversalParams, PCRandomness, Polynomial, PolynomialCommitment};
+use crate::{BTreeMap, BTreeSet, Vec};
 use crate::{QuerySetError, EquationError, QuerySet, Evaluations};
 use crate::{LabeledPolynomial, LabeledCommitment, Equation};
 use crate::kzg10;
 
-use algebra::{AffineCurve, Field, PairingEngine, ProjectiveCurve, One, Zero};
+use algebra_core::{AffineCurve, Field, PairingEngine, ProjectiveCurve, One, Zero};
 use rand_core::RngCore;
-use std::marker::PhantomData;
-use std::collections::{BTreeMap, BTreeSet};
+use core::marker::PhantomData;
 
 mod data_structures;
 pub use data_structures::*;
@@ -473,7 +473,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 }
 
                 // Some(_) > None, always.
-                hiding_bound = std::cmp::max(hiding_bound, cur_poly.hiding_bound());
+                hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
 
@@ -573,10 +573,10 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use crate::marlin_kzg10::MarlinKZG10;
-    use algebra::curves::bls12_377::Bls12_377;
-    use algebra::curves::bls12_381::Bls12_381;
-    use algebra::curves::mnt6::MNT6;
-    use algebra::curves::sw6::SW6;
+    use algebra::Bls12_377;
+    use algebra::Bls12_381;
+    use algebra::MNT6;
+    use algebra::SW6;
 
     type PC<E> = MarlinKZG10<E>;
     type PC_Bls12_381 = PC<Bls12_381>;

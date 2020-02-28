@@ -1,21 +1,21 @@
-use algebra::Field;
+use crate::{Cow, String, Vec};
+use algebra_core::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use std::borrow::Cow;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
 
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
-pub trait PCUniversalParams: Clone + std::fmt::Debug {
+pub trait PCUniversalParams: Clone + core::fmt::Debug {
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
-pub trait PCCommitterKey: Clone + std::fmt::Debug {
+pub trait PCCommitterKey: Clone + core::fmt::Debug {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -26,7 +26,7 @@ pub trait PCCommitterKey: Clone + std::fmt::Debug {
 
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCVerifierKey: Clone + std::fmt::Debug {
+pub trait PCVerifierKey: Clone + core::fmt::Debug {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -37,7 +37,7 @@ pub trait PCVerifierKey: Clone + std::fmt::Debug {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + algebra::ToBytes {
+pub trait PCCommitment: Clone + algebra_core::ToBytes {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -63,7 +63,7 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + algebra::ToBytes {
+pub trait PCProof: Clone + algebra_core::ToBytes {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
 }
@@ -79,7 +79,7 @@ pub struct LabeledPolynomial<'a, F: Field> {
     hiding_bound: Option<usize>,
 }
 
-impl<'a, F: Field> std::ops::Deref for LabeledPolynomial<'a, F> {
+impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<'a, F> {
     type Target = Polynomial<F>;
 
     fn deref(&self) -> &Self::Target {
@@ -183,9 +183,9 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 }
 
-impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
+impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
     #[inline]
-    fn write<W: std::io::Write>(&self, writer: W) -> std::io::Result<()> {
+    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
         self.commitment.write(writer)
     }
 }

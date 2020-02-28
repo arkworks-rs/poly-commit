@@ -5,15 +5,17 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{PCRandomness, Polynomial};
-use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra::{
-    AffineCurve, Group, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
+use crate::{PCRandomness, Polynomial, Vec};
+use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
+use algebra_core::{
+    AffineCurve, Group, PairingEngine, PrimeField, ProjectiveCurve,
     UniformRand, One, Zero
 };
 use rand_core::RngCore;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use std::marker::PhantomData;
+
+use core::marker::PhantomData;
 
 mod data_structures;
 pub use data_structures::*;
@@ -82,10 +84,10 @@ impl<E: PairingEngine> KZG10<E> {
         E::G1Projective::batch_normalization(powers_of_g.as_mut_slice());
         E::G1Projective::batch_normalization(powers_of_gamma_g.as_mut_slice());
 
-        let beta_h = h.mul(&beta).into_affine();
+        let beta_h = h.mul(beta).into_affine();
         let h = h.into_affine();
-        let prepared_h = h.prepare();
-        let prepared_beta_h = beta_h.prepare();
+        let prepared_h = h.into();
+        let prepared_beta_h = beta_h.into();
 
         let pp = UniversalParams {
             powers_of_g: powers_of_g.into_iter().map(|e| e.into_affine()).collect(),
@@ -249,11 +251,11 @@ impl<E: PairingEngine> KZG10<E> {
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
         let inner = comm.0.into_projective()
-            - &vk.g.into_projective().mul(&value)
-            - &vk.gamma_g.into_projective().mul(&proof.random_v);
+            - &vk.g.into_projective().mul(value)
+            - &vk.gamma_g.into_projective().mul(proof.random_v);
         let lhs = E::pairing(inner, vk.h);
 
-        let inner = vk.beta_h.into_projective() - &vk.h.into_projective().mul(&point);
+        let inner = vk.beta_h.into_projective() - &vk.h.into_projective().mul(point);
         let rhs = E::pairing(proof.w, inner);
 
         end_timer!(check_time, || format!("Result: {}", lhs == rhs));
@@ -287,17 +289,17 @@ impl<E: PairingEngine> KZG10<E> {
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
             let mut c = c.0.into_projective();
             let w = proof.w.into_projective();
-            c += &w.mul(z);
+            c += &w.mul(*z);
             g_multiplier += &(randomizer * &v);
             gamma_g_multiplier += &(randomizer * &proof.random_v);
-            total_c += &c.mul(&randomizer);
-            total_w += &w.mul(&randomizer);
+            total_c += &c.mul(randomizer);
+            total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(&g_multiplier);
-        total_c -= &gamma_g.mul(&gamma_g_multiplier);
+        total_c -= &g.mul(g_multiplier);
+        total_c -= &gamma_g.mul(gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
@@ -310,8 +312,8 @@ impl<E: PairingEngine> KZG10<E> {
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&[
-            (&total_w.prepare(), &vk.prepared_beta_h),
-            (&total_c.prepare(), &vk.prepared_h),
+            (total_w.into(), vk.prepared_beta_h.clone()),
+            (total_c.into(), vk.prepared_h.clone()),
         ]) == E::Fqk::one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
@@ -330,7 +332,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(p: &Polynomial<F>) -
 
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-    let coeffs = p.par_iter().map(|s| s.into_repr()).collect::<Vec<_>>();
+    let coeffs = ff_fft::cfg_iter!(p).map(|s| s.into_repr()).collect::<Vec<_>>();
     end_timer!(to_bigint_time);
     coeffs
 }
@@ -340,14 +342,15 @@ mod tests {
     #![allow(non_camel_case_types)]
     use crate::kzg10::*;
     use crate::*;
-    use algebra::fields::bls12_381::Fr;
 
-    use algebra::curves::bls12_377::Bls12_377;
-    use algebra::curves::bls12_381::Bls12_381;
-    use algebra::curves::mnt6::MNT6;
-    use algebra::curves::sw6::SW6;
+    use algebra::bls12_381::Fr;
+    use algebra::Bls12_377;
+    use algebra::Bls12_381;
+    use algebra::MNT6;
+    use algebra::SW6;
+    use algebra::test_rng;
 
-    use rand::thread_rng;
+    type KZG_Bls12_381 = KZG10<Bls12_381>;
 
     impl<E: PairingEngine> KZG10<E> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
@@ -363,8 +366,8 @@ mod tests {
             let powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
 
             let powers = Powers {
-                powers_of_g: std::borrow::Cow::Owned(powers_of_g),
-                powers_of_gamma_g: std::borrow::Cow::Owned(powers_of_gamma_g),
+                powers_of_g: Cow::Owned(powers_of_g),
+                powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
             };
             let vk = VerifierKey {
                 g: pp.powers_of_g[0],
@@ -380,7 +383,7 @@ mod tests {
 
     #[test]
     fn add_commitments_test() {
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         let p = Polynomial::from_coefficients_slice(&[
             Fr::rand(rng),
             Fr::rand(rng),
@@ -405,10 +408,8 @@ mod tests {
         assert_eq!(f_comm, f_comm_2);
     }
 
-    type KZG_Bls12_381 = KZG10<Bls12_381>;
-
     fn end_to_end_test_template<E: PairingEngine>() -> Result<(), Error> {
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         for _ in 0..100 {
             let mut degree = 0;
             while degree <= 1 {
@@ -434,7 +435,7 @@ mod tests {
     }
 
     fn linear_polynomial_test_template<E: PairingEngine>() -> Result<(), Error> {
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         for _ in 0..100 {
             let degree = 50;
             let pp = KZG10::<E>::setup(degree, false, rng)?;
@@ -457,7 +458,7 @@ mod tests {
     }
 
     fn batch_check_test_template<E: PairingEngine>() -> Result<(), Error> {
-        let rng = &mut thread_rng();
+        let rng = &mut test_rng();
         for _ in 0..10 {
             let mut degree = 0;
             while degree <= 1 {

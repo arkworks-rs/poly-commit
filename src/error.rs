@@ -1,3 +1,4 @@
+use crate::String;
 /// Errors that arise when dealing with query sets.
 #[derive(Debug)]
 pub enum QuerySetError {
@@ -15,8 +16,8 @@ pub enum QuerySetError {
     },
 }
 
-impl std::fmt::Display for QuerySetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for QuerySetError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             QuerySetError::MissingPolynomial { label } => write!(
                 f,
@@ -32,11 +33,7 @@ impl std::fmt::Display for QuerySetError {
     }
 }
 
-impl std::error::Error for QuerySetError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl algebra_core::Error for QuerySetError {}
 
 /// Equation errors that arise when dealing with query sets.
 #[derive(Debug)]
@@ -48,8 +45,8 @@ pub enum EquationError {
     },
 }
 
-impl std::fmt::Display for EquationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for EquationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             EquationError::MissingLHS { label } => write!(
                 f,
@@ -60,8 +57,4 @@ impl std::fmt::Display for EquationError {
     }
 }
 
-impl std::error::Error for EquationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl algebra_core::Error for EquationError {}

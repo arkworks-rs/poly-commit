@@ -19,15 +19,16 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-algebra = { git = "https://github.com/scipr-lab/zexe/", features = [ "parallel" ] }
-ff-fft = { git = "https://github.com/scipr-lab/zexe/" }
-bench-utils = { git = "https://github.com/scipr-lab/zexe/" }
-rand_core = { version = "0.5" }
-rayon = { version = "1" }
-derivative = { version = "1" }
+algebra-core = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
+ff-fft = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
+bench-utils = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
+rand_core = { version = "0.5", default-features = false }
+rayon = { version = "1", optional = true }
+derivative = { version = "1", features = [ "use_core" ] }
 
 [dev-dependencies]
-rand = { version = "0.7" }
+rand = { version = "0.7", default-features = false }
+algebra = { git = "https://github.com/scipr-lab/zexe/", default-features = false, features = ["full"] }
 
 [profile.release]
 opt-level = 3
@@ -42,4 +43,7 @@ incremental = true
 debug = true
 
 [features]
+default = ["std"]
+std = [ "algebra-core/std", "ff-fft/std", ]
 print-trace = [ "bench-utils/print-trace" ]
+parallel = [ "std", "algebra-core/parallel", "ff-fft/parallel", "rayon" ]

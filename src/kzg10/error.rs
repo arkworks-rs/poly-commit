@@ -25,8 +25,8 @@ pub enum Error {
     },
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
             Error::DegreeIsZero => write!(
@@ -58,11 +58,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl algebra_core::Error for Error {}
 
 impl Error {
     pub(crate) fn check_degree_is_within_bounds(num_coefficients: usize, num_powers: usize) -> Result<(), Self> {
