@@ -93,7 +93,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
                     .get_shift_power(degree_bound)
                     .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
                 let mut adjusted_comm = shifted_comm - &shift_power.mul(value);
-                adjusted_comm.mul_assign(challenge_i_1);
+                adjusted_comm *= challenge_i_1;
                 combined_comm += &adjusted_comm;
             }
             challenge_i *= &opening_challenge.square();

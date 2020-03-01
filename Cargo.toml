@@ -43,7 +43,7 @@ incremental = true
 debug = true
 
 [features]
-default = ["std"]
+default = ["std", "parallel"]
 std = [ "algebra-core/std", "ff-fft/std", ]
 print-trace = [ "bench-utils/print-trace" ]
 parallel = [ "std", "algebra-core/parallel", "ff-fft/parallel", "rayon" ]
