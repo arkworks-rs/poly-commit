@@ -158,31 +158,25 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     /// Compute witness polynomial.
+    /// Originally the witness polynomial W(x) is computed as the quotient of f(x) - f(z) / x - z
+    /// One can observe that the quotient does not change when f(z) is changed because
+    /// f(z) is the remainder term. We can therefore, remove f(z) when computing the witness
     pub fn compute_witness_polynomial(
         p: &Polynomial<E::Fr>,
         point: E::Fr,
         randomness: &Randomness<E>,
     ) -> Result<(Polynomial<E::Fr>, Option<Polynomial<E::Fr>>), Error> {
-        let eval_time = start_timer!(|| "Evaluating polynomial");
-        let value = p.evaluate(point);
-        end_timer!(eval_time);
-
         let divisor = Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
 
         let witness_time = start_timer!(|| "Computing witness polynomial");
-        let witness_polynomial = &(p - &Polynomial::from_coefficients_vec(vec![value])) / &divisor;
+        let witness_polynomial = p / &divisor;
         end_timer!(witness_time);
 
         let random_witness_polynomial = if randomness.is_hiding() {
             let random_p = &randomness.blinding_polynomial;
 
-            let rand_eval_time = start_timer!(|| "Evaluating random polynomial");
-            let random_value = random_p.evaluate(point);
-            end_timer!(rand_eval_time);
-
             let witness_time = start_timer!(|| "Computing random witness polynomial");
-            let random_witness_polynomial =
-                &(random_p - &Polynomial::from_coefficients_vec(vec![random_value])) / &divisor;
+            let random_witness_polynomial = random_p / &divisor;
             end_timer!(witness_time);
             Some(random_witness_polynomial)
         } else {
