@@ -158,9 +158,10 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     /// Compute witness polynomial.
-    /// Originally the witness polynomial W(x) is computed as the quotient of f(x) - f(z) / x - z
-    /// One can observe that the quotient does not change when f(z) is changed because
-    /// f(z) is the remainder term. We can therefore, remove f(z) when computing the witness
+    ///
+    /// The witness polynomial w(x) the quotient of the division (p(x) - p(z)) / (x - z)
+    /// Observe that this quotient does not change with z because
+    /// p(z) is the remainder term. We can therefore omit p(z) when computing the quotient.
     pub fn compute_witness_polynomial(
         p: &Polynomial<E::Fr>,
         point: E::Fr,
