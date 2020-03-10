@@ -191,56 +191,46 @@ impl<C: PCCommitment> algebra::ToBytes for LabeledCommitment<C> {
 }
 
 
-/// A linear equation where the LHS consists of linear combinations of polynomials,
-/// while the RHS contains a claimed evaluation of the LHS at a challenge
-/// point.
+/// A labeled linear combinations of polynomials.
 #[derive(Clone, Debug)]
-pub struct Equation<F> {
-    /// The label for the equation.
+pub struct LinearCombination<F> {
+    /// The label.
     pub label: String,
-    /// The RHS of the equation, consisting of `(coeff, poly_label)` pairs.
-    pub lhs: Vec<(F, PolynomialLabel)>,
-    /// The LHS of the equation, consisting of the evaluation of `self.lhs` at
-    /// `self.evaluation_point`.
-    pub rhs: F,
-    /// The point that satisfies the equation.
-    pub evaluation_point: F
+    /// The linear combination of `(coeff, poly_label)` pairs.
+    inner: Vec<(F, PolynomialLabel)>,
 }
 
-impl<F: Field> Equation<F> {
-    /// Construct a new labeled equation.
+impl<F: Field> LinearCombination<F> {
+    /// Construct an empty labeled linear combination.
     pub fn empty(
         label: String,
-        evaluation_point: F,
     ) -> Self {
         Self {
             label,
-            lhs: Vec::new(),
-            rhs: F::zero(),
-            evaluation_point,
+            inner: Vec::new(),
         }
     }
 
-    /// Returns `true` if the LHS of `self` is empty.
-    pub fn lhs_is_empty(&self) -> bool {
-        self.lhs.is_empty()
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
-    /// Add a term to the equation, updating the LHS and RHS in the process.
-    /// It *must* be the case that `eval` is the evaluation of the provided term
-    /// at `self.evaluation_point`.
-    pub fn push(&mut self, term: (F, PolynomialLabel), eval: F) {
-        self.rhs += &eval;
-        self.lhs.push(term);
+    /// Returns `true` if the linear combination has no terms.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
-    /// Obtain a query set from the given equations.
-    /// This method simply maps each polynomial in an equation into its own
-    /// entry in the query set.
-    pub fn query_set<'a>(equations: impl IntoIterator<Item = &'a Self>) -> crate::QuerySet<'a, F> {
-        equations.into_iter().flat_map(|eqn| {
-            let point = eqn.evaluation_point;
-            eqn.lhs.iter().map(move |poly| (poly.1.as_str(), point))
-        }).collect()
+    /// Add a term to the linear combination.
+    pub fn push(&mut self, term: (F, PolynomialLabel)) -> &mut Self {
+        self.inner.push(term);
+        self
+    }
+}
+
+impl<F: Field> std::ops::Deref for LinearCombination<F> {
+    type Target = [(F, PolynomialLabel)];
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }

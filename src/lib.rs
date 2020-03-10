@@ -18,6 +18,7 @@ use algebra::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter::FromIterator;
 
 
 /// Data structures used by a polynomial commitment scheme.
@@ -38,15 +39,15 @@ pub mod kzg10;
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod marlin_kzg10;
 
-/// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials
-/// `p` that have previously been committed. Each element of a `QuerySet` is a `(label, query)`
+/// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
+/// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
 /// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
 /// that `p[label]` is to be queried at.
 pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
 
-/// `Evaluations` is the result of querying a set of labeled polynomials `p` at a `QuerySet`
-/// `Q`. It maps each element of `Q` to the resulting evaluation. That is,
-/// if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
+/// `Evaluations` is the result of querying a set of labeled polynomials or equations
+/// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation. 
+/// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 
@@ -239,39 +240,69 @@ pub trait PolynomialCommitment<F: Field> {
         Ok(result)
     }
 
-    /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
-    /// of the polynomials at the points in the query set.
-    fn open_equations<'a>(
+    /// On input a list of polynomials, labeled linear combinations of those polynomials,
+    /// and a query set, `open_combination` outputs a proof of evaluation of 
+    /// the combinations at the points in the query set.
+    fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        equations: impl IntoIterator<Item = &'a Equation<F>>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
-        Self::Randomness: 'a
+        Self::Randomness: 'a 
     {
-        let query_set = Equation::query_set(equations);
-        Self::batch_open(ck, labeled_polynomials, &query_set, opening_challenge, rands)
+        let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations, query_set);
+        Self::batch_open(ck, polynomials, query_set, opening_challenge, rands)
     }
 
-    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
-    /// committed in `labeled_commitments`.
-    fn check_equations<'a, R: RngCore>(
+    /// Produce evaluations for the input combinations at `query_set`.
+    fn evaluate_combinations<'a>(
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        query_set: &QuerySet<F>,
+    ) -> Evaluations<'a, F> {
+        let polys = labeled_polynomials.into_iter().map(|p| (p.label(), p));
+        let polys = BTreeMap::from_iter(polys);
+        let lc_s = linear_combinations.into_iter().map(|lc| (lc.label(), lc));
+        let lc_s = BTreeMap::from_iter(lc_s);
+        let mut evaluations = Evaluations::new();
+        for (label, point) in query_set {
+            if let Some(lc) = lc_s.get(label) {
+                for (_, poly_label) in lc.iter() {
+                    let poly = polys.get(poly_label.as_str()).expect("polynomial in evaluated lc is not found");
+                    let eval = poly.evaluate(*point);
+                    evaluations.insert((poly_label, *point), eval);
+                }
+            }
+        }
+        evaluations
+    }
+
+    // TODO: add back default impl which does straightforward thing.
+    /// Checks that `evaluations` are the true evaluations at `query_set` of the 
+    /// linear combinations of polynomials committed in `commitments`.
+    ///
+    /// # Note
+    ///
+    /// `evaluations` must have been produced by invoking `Self::evaluate_combinations`.
+    fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        equations: impl IntoIterator<Item = &'a Equation<F>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        evaluations: Option<&Evaluations<F>>,
+        query_set: &QuerySet<F>,
+        evaluations: &Evaluations<F>,
         proof: &Self::BatchProof,
         opening_challenge: F,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
-        Self::Commitment: 'a
+        Self::Commitment: 'a 
     {
-        let evaluations = evaluations.unwrap();
-        let equations = equations.into_iter().collect::<Vec<_>>();
-        for eqn in &equations {
+        let linear_combinations = linear_combinations.into_iter().collect::<Vec<_>>();
+        for &lc in &linear_combinations {
             let claimed_rhs = eqn.rhs;
             let mut actual_rhs = F::zero();
             let eval_point = eqn.evaluation_point;
@@ -281,10 +312,6 @@ pub trait PolynomialCommitment<F: Field> {
                     .get(&(label.as_str(), eval_point))
                     .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
                 actual_rhs += &(*coeff * eval);
-            }
-            if claimed_rhs != actual_rhs {
-                eprintln!("Equation {} failed to verify", eqn.label);
-                return Ok(false);
             }
         }
         let query_set = Equation::query_set(equations);
@@ -297,6 +324,23 @@ pub trait PolynomialCommitment<F: Field> {
 
         Ok(true)
     }
+}
+
+fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
+    linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
+    query_set: &QuerySet<F>,
+) -> QuerySet<'a, F> {
+    let mut poly_query_set = QuerySet::new();
+    let lc_s = linear_combinations.into_iter().map(|lc| (lc.label(), lc));
+    let linear_combinations = BTreeMap::from_iter(lc_s);
+    for (lc_label, point) in query_set {
+        if let Some(lc) = linear_combinations.get(lc_label)  {
+            for (c, poly_label) in lc.iter() {
+                poly_query_set.insert((poly_label, *point));
+            }
+        }
+    }
+    poly_query_set
 }
 
 #[cfg(test)]
@@ -510,16 +554,23 @@ pub mod tests {
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
             // Let's construct our equations
-            let mut equations = Vec::new();
+            let mut linear_combinations = Vec::new();
+            let mut query_set = QuerySet::new();
+            let mut values = Evaluations::new();
             for i in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for j in 0..num_equations.unwrap() {
-                    let mut equation = Equation::empty(format!("query {} eqn {}", i, j), point);
+                    let label = format!("query {} eqn {}", i, j);
+                    let mut lc = LinearCombination::empty(label);
+                    // Insert query
+                    query_set.insert((label.as_str(), point));
+
+                    let mut value = F::zero();
                     let should_have_degree_bounds: bool = rng.gen();
                     for (k, label) in labels.iter().enumerate() {
                         if should_have_degree_bounds {
-                            let eval = polynomials[k].evaluate(point);
-                            equation.push((F::one(), label.to_string()), eval);
+                            value += &polynomials[k].evaluate(point);
+                            lc.push((F::one(), label.to_string()));
                             break;
                         } else {
                             let poly = &polynomials[k];
@@ -528,28 +579,37 @@ pub mod tests {
                             } else {
                                 assert!(poly.degree_bound().is_none());
                                 let coeff = F::rand(rng);
-                                let eval = coeff * poly.evaluate(point);
-                                equation.push((coeff, label.to_string()), eval);
+                                value += &(coeff * poly.evaluate(point));
+                                lc.push((coeff, label.to_string()));
                             }
                         }
                     }
-                    if !equation.lhs.is_empty() {
-                        equations.push(equation);
+                    values.insert((label.as_str(), point), value);
+                    if !lc.is_empty() {
+                        linear_combinations.push(lc);
                     }
                 }
             }
-            if equations.is_empty() {
+            if linear_combinations.is_empty() {
                 continue
             }
             println!("Generated query set");
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::open_equations(&ck, &equations, &polynomials, opening_challenge, &rands)?;
-            let result = PC::check_equations(
+            let proof = PC::open_combinations(
+                &ck,
+                &linear_combinations,
+                &polynomials,
+                &query_set,
+                opening_challenge,
+                &rands
+            )?;
+            let result = PC::check_combinations(
                 &vk,
-                &equations,
+                &linear_combinations,
                 &comms,
-                None,
+                &query_set,
+                &values,
                 &proof,
                 opening_challenge,
                 rng,
@@ -567,7 +627,7 @@ pub mod tests {
                 }
 
             }
-            assert!(result, "proof was incorrect, equations: {:#?}", equations);
+            assert!(result, "proof was incorrect, equations: {:#?}", linear_combinations);
         }
         Ok(())
     }
