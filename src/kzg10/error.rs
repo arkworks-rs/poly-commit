@@ -25,8 +25,8 @@ pub enum Error {
     },
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
             Error::DegreeIsZero => write!(
@@ -58,14 +58,13 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl algebra_core::Error for Error {}
 
 impl Error {
-    pub(crate) fn check_degree_is_within_bounds(num_coefficients: usize, num_powers: usize) -> Result<(), Self> {
+    pub(crate) fn check_degree_is_within_bounds(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
         if num_coefficients < 1 {
             Err(Error::DegreeIsZero)
         } else {
@@ -73,8 +72,10 @@ impl Error {
         }
     }
 
-
-    pub(crate) fn check_degree_is_too_large(num_coefficients: usize, num_powers: usize) -> Result<(), Self> {
+    pub(crate) fn check_degree_is_too_large(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
                 num_coefficients,
@@ -85,12 +86,15 @@ impl Error {
         }
     }
 
-    pub(crate) fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Self> {
+    pub(crate) fn check_hiding_bound(
+        hiding_poly_degree: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
         if hiding_poly_degree == 0 {
             Err(Error::HidingBoundIsZero)
         } else if hiding_poly_degree >= num_powers {
             // The above check uses `>=` because committing to a hiding poly with
-            // degree `hiding_poly_degree` requires `hiding_poly_degree + 1` 
+            // degree `hiding_poly_degree` requires `hiding_poly_degree + 1`
             // powers.
             Err(Error::HidingBoundToolarge {
                 hiding_poly_degree,

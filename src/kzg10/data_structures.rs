@@ -1,15 +1,10 @@
-use algebra::{AffineCurve, ProjectiveCurve, ToBytes, PairingCurve, PairingEngine, PrimeField, Zero};
 use crate::*;
-use std::ops::{Add, AddAssign};
-use std::borrow::Cow;
+use algebra_core::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve, ToBytes, Zero};
+use core::ops::{Add, AddAssign};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = "")
-)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
@@ -20,11 +15,11 @@ pub struct UniversalParams<E: PairingEngine> {
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
     /// The generator of G2, prepared for use in pairings.
-    #[derivative(Debug="ignore")]
-    pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
+    #[derivative(Debug = "ignore")]
+    pub prepared_h: E::G2Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
-    #[derivative(Debug="ignore")]
-    pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
+    #[derivative(Debug = "ignore")]
+    pub prepared_beta_h: E::G2Prepared,
 }
 
 impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
@@ -69,11 +64,11 @@ pub struct VerifierKey<E: PairingEngine> {
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
     /// The generator of G2, prepared for use in pairings.
-    #[derivative(Debug="ignore")]
-    pub prepared_h: <E::G2Affine as PairingCurve>::Prepared,
+    #[derivative(Debug = "ignore")]
+    pub prepared_h: E::G2Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
-    #[derivative(Debug="ignore")]
-    pub prepared_beta_h: <E::G2Affine as PairingCurve>::Prepared,
+    #[derivative(Debug = "ignore")]
+    pub prepared_beta_h: E::G2Prepared,
 }
 
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
@@ -94,7 +89,7 @@ pub struct Commitment<E: PairingEngine>(
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: std::io::Write>(&self, writer: W) -> std::io::Result<()> {
+    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
         self.0.write(writer)
     }
 }
@@ -110,7 +105,7 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
     }
 }
 
@@ -223,14 +218,14 @@ pub struct Proof<E: PairingEngine> {
 
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
-        to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + to_bytes![E::Fr::zero()].unwrap().len()
+        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+            + algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
     }
 }
 
-
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
-    fn write<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
         self.w.write(&mut writer)?;
         self.random_v.write(&mut writer)
     }
