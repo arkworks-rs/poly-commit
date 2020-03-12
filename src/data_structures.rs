@@ -190,7 +190,6 @@ impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
     }
 }
 
-
 /// A labeled linear combinations of polynomials.
 #[derive(Clone, Debug)]
 pub struct LinearCombination<F> {
@@ -202,10 +201,7 @@ pub struct LinearCombination<F> {
 
 impl<F: Field> LinearCombination<F> {
     /// Construct an empty labeled linear combination.
-    pub fn empty(
-        label: String,
-    ) -> Self {
-
+    pub fn empty(label: String) -> Self {
         Self {
             label,
             inner: Vec::new(),

@@ -1,7 +1,7 @@
 use crate::kzg10;
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
-use crate::{LinearCombination, LabeledCommitment, LabeledPolynomial};
-use crate::{Evaluations, QuerySet, QuerySetError, BatchLCProof};
+use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
+use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
@@ -85,7 +85,11 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             .zip(s_comms)
             .zip(s_flags)
             .map(|((c, s_c), flag)| {
-                let shifted_comm = if flag { Some(kzg10::Commitment(s_c)) } else { None };
+                let shifted_comm = if flag {
+                    Some(kzg10::Commitment(s_c))
+                } else {
+                    None
+                };
                 Commitment {
                     comm: kzg10::Commitment(c),
                     shifted_comm,
@@ -492,7 +496,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
-        Self::Randomness: 'a 
+        Self::Randomness: 'a,
     {
         let label_poly_rand_map = polynomials
             .into_iter()
@@ -512,12 +516,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter() {
-                let &(cur_poly, cur_rand) = label_poly_rand_map
-                    .get(label)
-                    .ok_or(QuerySetError::MissingPolynomial {
-                        label: label.to_string(),
-                    },
-                )?;
+                let &(cur_poly, cur_rand) =
+                    label_poly_rand_map
+                        .get(label)
+                        .ok_or(QuerySetError::MissingPolynomial {
+                            label: label.to_string(),
+                        })?;
 
                 if num_polys == 1 && cur_poly.degree_bound().is_some() {
                     assert!(
@@ -539,8 +543,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     assert!(randomness.shifted_rand.is_none());
                 }
             }
-            let lc_poly =
-                LabeledPolynomial::new_owned(lc_label, poly, degree_bound, hiding_bound);
+            let lc_poly = LabeledPolynomial::new_owned(lc_label, poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
         }
@@ -552,10 +555,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             opening_challenge,
             lc_randomness.iter(),
         )?;
-        Ok(BatchLCProof {
-            proof,
-            evals: None,
-        })
+        Ok(BatchLCProof { proof, evals: None })
     }
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
@@ -573,9 +573,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     where
         Self::Commitment: 'a,
     {
-        let BatchLCProof {
-            proof, ..
-        } = proof;
+        let BatchLCProof { proof, .. } = proof;
         let label_comm_map = commitments
             .into_iter()
             .map(|c| (c.label(), c))

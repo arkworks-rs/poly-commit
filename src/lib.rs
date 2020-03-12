@@ -15,9 +15,9 @@ extern crate derivative;
 extern crate bench_utils;
 
 use algebra_core::Field;
+use core::iter::FromIterator;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use core::iter::FromIterator;
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -69,7 +69,7 @@ pub mod marlin_kzg10;
 pub type QuerySet<'a, F> = BTreeSet<(String, F)>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials or equations
-/// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation. 
+/// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation.
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
@@ -81,7 +81,6 @@ pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     /// Evaluations required to verify the proof.
     pub evals: Option<Vec<F>>,
 }
-
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
@@ -262,12 +261,11 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                             label: label.to_string(),
                         })?;
 
-                let v_i =
-                    evaluations
-                        .get(&(label.clone(), *query))
-                        .ok_or(QuerySetError::MissingEvaluation {
-                            label: label.to_string(),
-                        })?;
+                let v_i = evaluations.get(&(label.clone(), *query)).ok_or(
+                    QuerySetError::MissingEvaluation {
+                        label: label.to_string(),
+                    },
+                )?;
 
                 comms.push(commitment);
                 values.push(*v_i);
@@ -281,7 +279,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// On input a list of polynomials, labeled linear combinations of those polynomials,
-    /// and a query set, `open_combination` outputs a proof of evaluation of 
+    /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
@@ -292,20 +290,21 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<BatchLCProof<F, Self>, Self::Error>
     where
-        Self::Randomness: 'a 
+        Self::Randomness: 'a,
     {
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
         let polynomials: Vec<_> = polynomials.into_iter().collect();
-        let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
+        let poly_query_set =
+            lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
         let poly_evals = evaluate_query_set(polynomials.iter().copied(), &poly_query_set);
         let proof = Self::batch_open(ck, polynomials, &poly_query_set, opening_challenge, rands)?;
         Ok(BatchLCProof {
-            proof, 
+            proof,
             evals: Some(poly_evals.values().copied().collect()),
         })
     }
 
-    /// Checks that `evaluations` are the true evaluations at `query_set` of the 
+    /// Checks that `evaluations` are the true evaluations at `query_set` of the
     /// linear combinations of polynomials committed in `commitments`.
     ///
     /// # Note
@@ -324,30 +323,30 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     where
         Self::Commitment: 'a,
     {
-        let BatchLCProof {
-            proof,
-            evals,
-        } = proof;
-
+        let BatchLCProof { proof, evals } = proof;
 
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
-        let poly_evals = Evaluations::from_iter(poly_query_set.iter().cloned().zip(evals.clone().unwrap()));
+        let poly_evals =
+            Evaluations::from_iter(poly_query_set.iter().cloned().zip(evals.clone().unwrap()));
 
         for &(ref lc_label, point) in eqn_query_set {
-            if let Some(lc) = lc_s.get(lc_label)  {
-
-                let claimed_rhs = *eqn_evaluations
-                    .get(&(lc_label.clone(), point))
-                    .ok_or(QuerySetError::MissingEvaluation { label: lc_label.to_string() })?;
+            if let Some(lc) = lc_s.get(lc_label) {
+                let claimed_rhs = *eqn_evaluations.get(&(lc_label.clone(), point)).ok_or(
+                    QuerySetError::MissingEvaluation {
+                        label: lc_label.to_string(),
+                    },
+                )?;
 
                 let mut actual_rhs = F::zero();
 
                 for (coeff, label) in lc.iter() {
-                    let eval = poly_evals
-                        .get(&(label.clone().into(), point))
-                        .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
+                    let eval = poly_evals.get(&(label.clone().into(), point)).ok_or(
+                        QuerySetError::MissingEvaluation {
+                            label: label.clone(),
+                        },
+                    )?;
                     actual_rhs += &(*coeff * eval);
                 }
                 if claimed_rhs != actual_rhs {
@@ -357,8 +356,15 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             }
         }
 
-
-        let pc_result = Self::batch_check(vk, commitments, &poly_query_set, &poly_evals, proof, opening_challenge, rng)?;
+        let pc_result = Self::batch_check(
+            vk,
+            commitments,
+            &poly_query_set,
+            &poly_evals,
+            proof,
+            opening_challenge,
+            rng,
+        )?;
         if !pc_result {
             eprintln!("Evaluation proofs failed to verify");
             return Ok(false);
@@ -376,7 +382,9 @@ pub fn evaluate_query_set<'a, F: Field>(
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::new();
     for (label, point) in query_set {
-        let poly = polys.get(label).expect("polynomial in evaluated lc is not found");
+        let poly = polys
+            .get(label)
+            .expect("polynomial in evaluated lc is not found");
         let eval = poly.evaluate(*point);
         evaluations.insert((label.clone(), *point), eval);
     }
@@ -391,7 +399,7 @@ fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
     let lc_s = linear_combinations.into_iter().map(|lc| (lc.label(), lc));
     let linear_combinations = BTreeMap::from_iter(lc_s);
     for (lc_label, point) in query_set {
-        if let Some(lc) = linear_combinations.get(lc_label)  {
+        if let Some(lc) = linear_combinations.get(lc_label) {
             for (_, poly_label) in lc.iter() {
                 poly_query_set.insert((poly_label.into(), *point));
             }
@@ -659,7 +667,7 @@ pub mod tests {
                 }
             }
             if linear_combinations.is_empty() {
-                continue
+                continue;
             }
             println!("Generated query set");
             println!("Linear combinations: {:?}", linear_combinations);
@@ -671,7 +679,7 @@ pub mod tests {
                 &polynomials,
                 &query_set,
                 opening_challenge,
-                &rands
+                &rands,
             )?;
             println!("Generated proof");
             let result = PC::check_combinations(
@@ -694,7 +702,11 @@ pub mod tests {
                     println!("Degree: {:?}", poly.degree());
                 }
             }
-            assert!(result, "proof was incorrect, equations: {:#?}", linear_combinations);
+            assert!(
+                result,
+                "proof was incorrect, equations: {:#?}",
+                linear_combinations
+            );
         }
         Ok(())
     }
