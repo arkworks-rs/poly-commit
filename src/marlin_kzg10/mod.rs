@@ -1,12 +1,12 @@
-use crate::{PCUniversalParams, PCRandomness, Polynomial, PolynomialCommitment};
-use crate::{QuerySetError, EquationError, QuerySet, Evaluations};
-use crate::{LabeledPolynomial, LabeledCommitment, Equation};
 use crate::kzg10;
+use crate::{BTreeMap, BTreeSet, ToString, Vec};
+use crate::{Equation, LabeledCommitment, LabeledPolynomial};
+use crate::{EquationError, Evaluations, QuerySet, QuerySetError};
+use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra::{AffineCurve, Field, PairingEngine, ProjectiveCurve, One, Zero};
+use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
+use core::marker::PhantomData;
 use rand_core::RngCore;
-use std::marker::PhantomData;
-use std::collections::{BTreeMap, BTreeSet};
 
 mod data_structures;
 pub use data_structures::*;
@@ -32,10 +32,14 @@ pub(crate) fn shift_polynomial<E: PairingEngine>(
     if p.is_zero() {
         Polynomial::zero()
     } else {
-        let enforced_degree_bounds = ck.enforced_degree_bounds.as_ref().expect("Polynomial requires degree bounds, but `ck` does not support any");
+        let enforced_degree_bounds = ck
+            .enforced_degree_bounds
+            .as_ref()
+            .expect("Polynomial requires degree bounds, but `ck` does not support any");
         let largest_enforced_degree_bound = enforced_degree_bounds.last().unwrap();
 
-        let mut shifted_polynomial_coeffs = vec![E::Fr::zero(); largest_enforced_degree_bound - degree_bound];
+        let mut shifted_polynomial_coeffs =
+            vec![E::Fr::zero(); largest_enforced_degree_bound - degree_bound];
         shifted_polynomial_coeffs.extend_from_slice(&p.coeffs);
         Polynomial::from_coefficients_vec(shifted_polynomial_coeffs)
     }
@@ -78,11 +82,18 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
             if let Some(degree_bound) = degree_bound {
                 let challenge_i_1 = challenge_i * &opening_challenge;
-                let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_projective();
+                let shifted_comm = commitment
+                    .shifted_comm
+                    .as_ref()
+                    .unwrap()
+                    .0
+                    .into_projective();
 
-                let shift_power = vk.get_shift_power(degree_bound).ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
+                let shift_power = vk
+                    .get_shift_power(degree_bound)
+                    .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
                 let mut adjusted_comm = shifted_comm - &shift_power.mul(value);
-                adjusted_comm.mul_assign(challenge_i_1);
+                adjusted_comm *= challenge_i_1;
                 combined_comm += &adjusted_comm;
             }
             challenge_i *= &opening_challenge.square();
@@ -91,7 +102,6 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         end_timer!(acc_time);
         Ok((combined_comm, combined_value))
     }
-
 }
 
 impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
@@ -123,11 +133,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         let max_degree = pp.max_degree();
         if supported_degree > max_degree {
-            return Err(Error::TrimmingDegreeTooLarge)
+            return Err(Error::TrimmingDegreeTooLarge);
         }
 
         // Construct the KZG10 committer key for committing to unshifted polynomials.
-        let ck_time = start_timer!(|| format!("Constructing `powers` of size {} for unshifted polys", supported_degree));
+        let ck_time = start_timer!(|| format!(
+            "Constructing `powers` of size {} for unshifted polys",
+            supported_degree
+        ));
         let powers = pp.powers_of_g[..=supported_degree].to_vec();
         // We want to support making up to supported_degree queries to committed
         // polynomials.
@@ -157,13 +170,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 if enforced_degree_bounds.is_empty() {
                     (None, None)
                 } else {
-                    let lowest_shifted_power = max_degree - enforced_degree_bounds
-                        .last()
-                        .ok_or(Error::EmptyDegreeBounds)?;
+                    let lowest_shifted_power = max_degree
+                        - enforced_degree_bounds
+                            .last()
+                            .ok_or(Error::EmptyDegreeBounds)?;
 
                     let shifted_ck_time = start_timer!(|| format!(
-                            "Constructing `shifted_powers` of size {}",
-                            max_degree - lowest_shifted_power + 1
+                        "Constructing `shifted_powers` of size {}",
+                        max_degree - lowest_shifted_power + 1
                     ));
 
                     let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
@@ -178,7 +192,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             } else {
                 (None, None)
             };
-
 
         let ck = CommitterKey {
             powers,
@@ -231,9 +244,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 hiding_bound,
             ));
 
-            let (comm, rand) = kzg10::KZG10::commit(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) =
+                kzg10::KZG10::commit(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
-                let shifted_powers = ck.shifted_powers(degree_bound).ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
+                let shifted_powers = ck
+                    .shifted_powers(degree_bound)
+                    .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
                 let (shifted_comm, shifted_rand) =
                     kzg10::KZG10::commit(&shifted_powers, &polynomial, hiding_bound, Some(rng))?;
                 (Some(shifted_comm), Some(shifted_rand))
@@ -243,7 +259,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
             let comm = Commitment { comm, shifted_comm };
             let rand = Randomness { rand, shifted_rand };
-            commitments.push(LabeledCommitment::new(label.to_string(), comm, degree_bound));
+            commitments.push(LabeledCommitment::new(
+                label.to_string(),
+                comm,
+                degree_bound,
+            ));
             randomness.push(rand);
             end_timer!(commit_time);
         }
@@ -260,7 +280,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::Proof, Self::Error>
     where
-        Self::Randomness: 'a
+        Self::Randomness: 'a,
     {
         let mut p = Polynomial::zero();
         let mut r = kzg10::Randomness::empty();
@@ -328,7 +348,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         })
     }
 
-
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
     fn check<'a>(
@@ -340,16 +359,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         opening_challenge: E::Fr,
     ) -> Result<bool, Self::Error>
     where
-        Self::Commitment: 'a
+        Self::Commitment: 'a,
     {
         let check_time = start_timer!(|| "Checking evaluations");
         let (combined_comm, combined_value) =
-            Self::accumulate_commitments_and_values(
-                vk,
-                commitments,
-                values,
-                opening_challenge,
-            )?;
+            Self::accumulate_commitments_and_values(vk, commitments, values, opening_challenge)?;
         let combined_comm = kzg10::Commitment(combined_comm.into());
         let result = kzg10::KZG10::check(&vk.vk, &combined_comm, point, combined_value, proof)?;
         end_timer!(check_time);
@@ -366,7 +380,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
-        Self::Commitment: 'a
+        Self::Commitment: 'a,
     {
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
@@ -386,15 +400,23 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment = commitments
-                    .get(label)
-                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
+                let commitment =
+                    commitments
+                        .get(label)
+                        .ok_or(QuerySetError::MissingPolynomial {
+                            label: label.to_string(),
+                        })?;
                 let degree_bound = commitment.degree_bound();
-                assert_eq!(degree_bound.is_some(), commitment.commitment().shifted_comm.is_some());
+                assert_eq!(
+                    degree_bound.is_some(),
+                    commitment.commitment().shifted_comm.is_some()
+                );
 
-                let v_i = values
-                    .get(&(label.clone(), *query))
-                    .ok_or(QuerySetError::MissingEvaluation { label: label.to_string() })?;
+                let v_i = values.get(&(label.clone(), *query)).ok_or(
+                    QuerySetError::MissingEvaluation {
+                        label: label.to_string(),
+                    },
+                )?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);
@@ -411,7 +433,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             combined_evals.push(v);
         }
         E::G1Projective::batch_normalization(&mut combined_comms);
-        let combined_comms = combined_comms.into_iter().map(|c| kzg10::Commitment(c.into())).collect::<Vec<_>>();
+        let combined_comms = combined_comms
+            .into_iter()
+            .map(|c| kzg10::Commitment(c.into()))
+            .collect::<Vec<_>>();
         let proof_time = start_timer!(|| "Checking SinglePC::Proof");
         let result = kzg10::KZG10::batch_check(
             &vk.vk,
@@ -433,10 +458,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
-        Self::Randomness: 'a
+        Self::Randomness: 'a,
     {
-        let label_poly_rand_map =
-            labeled_polynomials
+        let label_poly_rand_map = labeled_polynomials
             .into_iter()
             .zip(rands)
             .map(|(p, r)| (p.label(), (p, r)))
@@ -456,16 +480,23 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
             let num_polys = equation.lhs.len();
             if equation.lhs_is_empty() {
-                Err(EquationError::MissingLHS { label: equation_label.clone() })?;
+                Err(EquationError::MissingLHS {
+                    label: equation_label.clone(),
+                })?;
             }
 
             for (coeff, label) in &equation.lhs {
-                let &(cur_poly, cur_rand) = label_poly_rand_map
-                    .get(label.as_str())
-                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
+                let &(cur_poly, cur_rand) = label_poly_rand_map.get(label.as_str()).ok_or(
+                    QuerySetError::MissingPolynomial {
+                        label: label.to_string(),
+                    },
+                )?;
 
                 if num_polys == 1 && cur_poly.degree_bound().is_some() {
-                    assert!(coeff.is_one(), "Coefficient must be one for degree-bounded equations");
+                    assert!(
+                        coeff.is_one(),
+                        "Coefficient must be one for degree-bounded equations"
+                    );
                     degree_bound = cur_poly.degree_bound();
                 } else if cur_poly.degree_bound().is_some() {
                     eprintln!("Degree bound when number of equations is non-zero");
@@ -473,7 +504,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 }
 
                 // Some(_) > None, always.
-                hiding_bound = std::cmp::max(hiding_bound, cur_poly.hiding_bound());
+                hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
 
@@ -481,8 +512,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     assert!(randomness.shifted_rand.is_none());
                 }
             }
-            let equation_poly = LabeledPolynomial::new_owned(equation_label, poly, degree_bound, hiding_bound);
-            assert_eq!(equation_poly.evaluate(equation.evaluation_point), equation.rhs);
+            let equation_poly =
+                LabeledPolynomial::new_owned(equation_label, poly, degree_bound, hiding_bound);
+            assert_eq!(
+                equation_poly.evaluate(equation.evaluation_point),
+                equation.rhs
+            );
 
             equation_polynomials.push(equation_poly);
             equation_randomness.push(randomness);
@@ -490,7 +525,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
         }
 
-        Self::batch_open(ck, equation_polynomials.iter(), &query_set, opening_challenge, equation_randomness.iter())
+        Self::batch_open(
+            ck,
+            equation_polynomials.iter(),
+            &query_set,
+            opening_challenge,
+            equation_randomness.iter(),
+        )
     }
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
@@ -505,10 +546,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
-        Self::Commitment: 'a
+        Self::Commitment: 'a,
     {
-        let label_comm_map =
-            commitments
+        let label_comm_map = commitments
             .into_iter()
             .map(|c| (c.label(), c))
             .collect::<BTreeMap<_, _>>();
@@ -525,12 +565,18 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut coeffs_and_comms = Vec::new();
 
             for (coeff, label) in &equation.lhs {
-                let &cur_comm = label_comm_map
-                    .get(label.as_str())
-                    .ok_or(QuerySetError::MissingPolynomial { label: label.to_string() })?;
+                let &cur_comm =
+                    label_comm_map
+                        .get(label.as_str())
+                        .ok_or(QuerySetError::MissingPolynomial {
+                            label: label.to_string(),
+                        })?;
 
                 if num_polys == 1 && cur_comm.degree_bound().is_some() {
-                    assert!(coeff.is_one(), "Coefficient must be one for degree-bounded equations");
+                    assert!(
+                        coeff.is_one(),
+                        "Coefficient must be one for degree-bounded equations"
+                    );
                     degree_bound = cur_comm.degree_bound();
                 } else if cur_comm.degree_bound().is_some() {
                     return Err(Self::Error::EquationHasDegreeBounds(equation_label));
@@ -562,9 +608,17 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 };
                 LabeledCommitment::new(label, commitment, degree_bound)
             })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
-        Self::batch_check(vk, equation_commitments.iter(), &query_set, &evaluations, proof, opening_challenge, rng)
+        Self::batch_check(
+            vk,
+            equation_commitments.iter(),
+            &query_set,
+            &evaluations,
+            proof,
+            opening_challenge,
+            rng,
+        )
     }
 }
 
@@ -573,10 +627,10 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use crate::marlin_kzg10::MarlinKZG10;
-    use algebra::curves::bls12_377::Bls12_377;
-    use algebra::curves::bls12_381::Bls12_381;
-    use algebra::curves::mnt6::MNT6;
-    use algebra::curves::sw6::SW6;
+    use algebra::Bls12_377;
+    use algebra::Bls12_381;
+    use algebra::MNT6;
+    use algebra::SW6;
 
     type PC<E> = MarlinKZG10<E>;
     type PC_Bls12_381 = PC<Bls12_381>;
@@ -593,14 +647,17 @@ mod tests {
         single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
-
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
+            .expect("test failed for bls12-377");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
+            .expect("test failed for bls12-381");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
+            .expect("test failed for MNT6");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
+            .expect("test failed for SW6");
     }
 
     #[test]
@@ -611,7 +668,6 @@ mod tests {
         linear_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
         linear_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
-
 
     #[test]
     fn single_poly_degree_bound_test() {
@@ -631,8 +687,7 @@ mod tests {
             .expect("test failed for bls12-381");
         single_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
             .expect("test failed for MNT6");
-        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
-            .expect("test failed for SW6");
+        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -642,8 +697,7 @@ mod tests {
             .expect("test failed for bls12-377");
         two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        two_polys_degree_bound_single_query_test::<_, PC_MNT6>()
-            .expect("test failed for MNT6");
+        two_polys_degree_bound_single_query_test::<_, PC_MNT6>().expect("test failed for MNT6");
         two_polys_degree_bound_single_query_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -698,8 +752,6 @@ mod tests {
         two_equation_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
-
-
 
     #[test]
     fn full_end_to_end_equation_test() {
