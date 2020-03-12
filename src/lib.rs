@@ -51,6 +51,15 @@ pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
 
+/// A proof of satisfaction of linear combinations.
+pub struct BatchLCProof<'a, F: Field, PC: PolynomialCommitment<F>> {
+    /// Evaluation proof.
+    pub proof: PC::BatchProof,
+    /// Evaluations required to verify the proof.
+    pub evals: Option<Evaluations<'a, F>>,
+}
+
+
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
@@ -250,38 +259,21 @@ pub trait PolynomialCommitment<F: Field> {
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-    ) -> Result<Self::BatchProof, Self::Error>
+    ) -> Result<BatchLCProof<'a, F, Self>, Self::Error>
     where
         Self::Randomness: 'a 
     {
-        let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations, query_set);
-        Self::batch_open(ck, polynomials, query_set, opening_challenge, rands)
+        let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
+        let polynomials: Vec<_> = polynomials.into_iter().collect();
+        let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
+        let poly_evals = evaluate_query_set(polynomials.iter().copied, &poly_query_set);
+        let proof = Self::batch_open(ck, polynomials, query_set, opening_challenge, rands)?;
+        Ok(BatchLCProof {
+            proof, 
+            evals: Some(poly_evals),
+        })
     }
 
-    /// Produce evaluations for the input combinations at `query_set`.
-    fn evaluate_combinations<'a>(
-        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
-        query_set: &QuerySet<F>,
-    ) -> Evaluations<'a, F> {
-        let polys = labeled_polynomials.into_iter().map(|p| (p.label(), p));
-        let polys = BTreeMap::from_iter(polys);
-        let lc_s = linear_combinations.into_iter().map(|lc| (lc.label(), lc));
-        let lc_s = BTreeMap::from_iter(lc_s);
-        let mut evaluations = Evaluations::new();
-        for (label, point) in query_set {
-            if let Some(lc) = lc_s.get(label) {
-                for (_, poly_label) in lc.iter() {
-                    let poly = polys.get(poly_label.as_str()).expect("polynomial in evaluated lc is not found");
-                    let eval = poly.evaluate(*point);
-                    evaluations.insert((poly_label, *point), eval);
-                }
-            }
-        }
-        evaluations
-    }
-
-    // TODO: add back default impl which does straightforward thing.
     /// Checks that `evaluations` are the true evaluations at `query_set` of the 
     /// linear combinations of polynomials committed in `commitments`.
     ///
@@ -293,30 +285,37 @@ pub trait PolynomialCommitment<F: Field> {
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<F>,
-        evaluations: &Evaluations<F>,
-        proof: &Self::BatchProof,
+        eqn_evaluations: &Evaluations<F>,
+        proof: &BatchLCProof<'a, F, Self>,
         opening_challenge: F,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a 
     {
-        let linear_combinations = linear_combinations.into_iter().collect::<Vec<_>>();
-        for &lc in &linear_combinations {
-            let claimed_rhs = eqn.rhs;
+        let BatchLCProof {
+            proof,
+            evals,
+        } = proof;
+        for lc in linear_combinations {
+            let eval_point = query_set.get(lc.label().as_str());
+            let claimed_rhs = eqn_evaluations.get((lc.label().as_str(), eval_point));
             let mut actual_rhs = F::zero();
-            let eval_point = eqn.evaluation_point;
 
-            for (coeff, label) in &eqn.lhs {
-                let eval = evaluations
+            for (coeff, label) in &lc {
+                let eval = evals
                     .get(&(label.as_str(), eval_point))
                     .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
                 actual_rhs += &(*coeff * eval);
             }
+            if claimed_rhs != actual_rhs {
+                eprintln!("Claimed evaluation of {} is incorrect", lc.label());
+                return Ok(false);
+            }
         }
         let query_set = Equation::query_set(equations);
 
-        let pc_result = Self::batch_check(vk, commitments, &query_set, evaluations, proof, opening_challenge, rng)?;
+        let pc_result = Self::batch_check(vk, commitments, &query_set, evals, proof, opening_challenge, rng)?;
         if !pc_result {
             eprintln!("Evaluation proofs failed to verify");
             return Ok(false);
@@ -324,6 +323,22 @@ pub trait PolynomialCommitment<F: Field> {
 
         Ok(true)
     }
+}
+
+/// Evaluate the given polynomials at `query_set`.
+pub fn evaluate_query_set<'a, F: Field>(
+    polynomials: &'a [LabeledPolynomial<'a, F>],
+    query_set: &QuerySet<F>,
+) -> Evaluations<'a, F> {
+    let polys = labeled_polynomials.into_iter().map(|p| (p.label(), p));
+    let polys = BTreeMap::from_iter(polys);
+    let mut evaluations = Evaluations::new();
+    for (label, point) in query_set {
+        let poly = polys.get(label.as_str()).expect("polynomial in evaluated lc is not found");
+        let eval = poly.evaluate(*point);
+        evaluations.insert((poly_label, *point), eval);
+    }
+    evaluations
 }
 
 fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
