@@ -630,8 +630,6 @@ pub mod tests {
                 for j in 0..num_equations.unwrap() {
                     let label = format!("query {} eqn {}", i, j);
                     let mut lc = LinearCombination::empty(label.clone());
-                    // Insert query
-                    query_set.insert((label.clone(), point));
 
                     let mut value = F::zero();
                     let should_have_degree_bounds: bool = rng.gen();
@@ -655,6 +653,8 @@ pub mod tests {
                     values.insert((label.clone(), point), value);
                     if !lc.is_empty() {
                         linear_combinations.push(lc);
+                        // Insert query
+                        query_set.insert((label.clone(), point));
                     }
                 }
             }
