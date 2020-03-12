@@ -225,7 +225,7 @@ impl<F: Field> LinearCombination<F> {
     }
 }
 
-impl<F: Field> std::ops::Deref for LinearCombination<F> {
+impl<F: Field> core::ops::Deref for LinearCombination<F> {
     type Target = [(F, PolynomialLabel)];
 
     fn deref(&self) -> &Self::Target {
