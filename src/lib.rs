@@ -3,7 +3,8 @@
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
-#![deny(unused_attributes, unused_imports, unused_mut, missing_docs)]
+#![deny(unused_attributes, unused_mut, missing_docs)]
+#![warn(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
@@ -16,6 +17,7 @@ extern crate bench_utils;
 use algebra_core::Field;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
+use core::iter::FromIterator;
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -64,20 +66,20 @@ pub mod marlin_kzg10;
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
 /// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
 /// that `p[label]` is to be queried at.
-pub type QuerySet<'a, F> = BTreeSet<(&'a str, F)>;
+pub type QuerySet<'a, F> = BTreeSet<(String, F)>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials or equations
 /// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation. 
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
-pub type Evaluations<'a, F> = BTreeMap<(&'a str, F), F>;
+pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
 
 /// A proof of satisfaction of linear combinations.
-pub struct BatchLCProof<'a, F: Field, PC: PolynomialCommitment<F>> {
+pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
     /// Evaluations required to verify the proof.
-    pub evals: Option<Evaluations<'a, F>>,
+    pub evals: Option<Vec<F>>,
 }
 
 
@@ -85,7 +87,7 @@ pub struct BatchLCProof<'a, F: Field, PC: PolynomialCommitment<F>> {
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
 /// enforcing per-polynomial degree bounds.
-pub trait PolynomialCommitment<F: Field> {
+pub trait PolynomialCommitment<F: Field>: Sized {
     /// The universal parameters for the commitment scheme. These are "trimmed"
     /// down to `Self::CommitterKey` and `Self::VerifierKey` by `Self::trim`.
     type UniversalParams: PCUniversalParams;
@@ -262,7 +264,7 @@ pub trait PolynomialCommitment<F: Field> {
 
                 let v_i =
                     evaluations
-                        .get(&(label, *query))
+                        .get(&(label.clone(), *query))
                         .ok_or(QuerySetError::MissingEvaluation {
                             label: label.to_string(),
                         })?;
@@ -288,18 +290,18 @@ pub trait PolynomialCommitment<F: Field> {
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-    ) -> Result<BatchLCProof<'a, F, Self>, Self::Error>
+    ) -> Result<BatchLCProof<F, Self>, Self::Error>
     where
         Self::Randomness: 'a 
     {
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
         let polynomials: Vec<_> = polynomials.into_iter().collect();
         let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
-        let poly_evals = evaluate_query_set(polynomials.iter().copied, &poly_query_set);
-        let proof = Self::batch_open(ck, polynomials, query_set, opening_challenge, rands)?;
+        let poly_evals = evaluate_query_set(polynomials.iter().copied(), &poly_query_set);
+        let proof = Self::batch_open(ck, polynomials, &poly_query_set, opening_challenge, rands)?;
         Ok(BatchLCProof {
             proof, 
-            evals: Some(poly_evals),
+            evals: Some(poly_evals.values().copied().collect()),
         })
     }
 
@@ -313,9 +315,9 @@ pub trait PolynomialCommitment<F: Field> {
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<F>,
+        eqn_query_set: &QuerySet<F>,
         eqn_evaluations: &Evaluations<F>,
-        proof: &BatchLCProof<'a, F, Self>,
+        proof: &BatchLCProof<F, Self>,
         opening_challenge: F,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -326,25 +328,37 @@ pub trait PolynomialCommitment<F: Field> {
             proof,
             evals,
         } = proof;
-        for lc in linear_combinations {
-            let eval_point = query_set.get(lc.label().as_str());
-            let claimed_rhs = eqn_evaluations.get((lc.label().as_str(), eval_point));
-            let mut actual_rhs = F::zero();
 
-            for (coeff, label) in &lc {
-                let eval = evals
-                    .get(&(label.as_str(), eval_point))
-                    .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
-                actual_rhs += &(*coeff * eval);
-            }
-            if claimed_rhs != actual_rhs {
-                eprintln!("Claimed evaluation of {} is incorrect", lc.label());
-                return Ok(false);
+
+        let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
+
+        let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
+        let poly_evals = Evaluations::from_iter(poly_query_set.iter().cloned().zip(evals.clone().unwrap()));
+
+        for &(ref lc_label, point) in eqn_query_set {
+            if let Some(lc) = lc_s.get(lc_label)  {
+
+                let claimed_rhs = *eqn_evaluations
+                    .get(&(lc_label.clone(), point))
+                    .ok_or(QuerySetError::MissingEvaluation { label: lc_label.to_string() })?;
+
+                let mut actual_rhs = F::zero();
+
+                for (coeff, label) in lc.iter() {
+                    let eval = poly_evals
+                        .get(&(label.clone().into(), point))
+                        .ok_or(QuerySetError::MissingEvaluation { label: label.clone() })?;
+                    actual_rhs += &(*coeff * eval);
+                }
+                if claimed_rhs != actual_rhs {
+                    eprintln!("Claimed evaluation of {} is incorrect", lc.label());
+                    return Ok(false);
+                }
             }
         }
-        let query_set = Equation::query_set(equations);
 
-        let pc_result = Self::batch_check(vk, commitments, &query_set, evals, proof, opening_challenge, rng)?;
+
+        let pc_result = Self::batch_check(vk, commitments, &poly_query_set, &poly_evals, proof, opening_challenge, rng)?;
         if !pc_result {
             eprintln!("Evaluation proofs failed to verify");
             return Ok(false);
@@ -356,16 +370,15 @@ pub trait PolynomialCommitment<F: Field> {
 
 /// Evaluate the given polynomials at `query_set`.
 pub fn evaluate_query_set<'a, F: Field>(
-    polynomials: &'a [LabeledPolynomial<'a, F>],
-    query_set: &QuerySet<F>,
+    polys: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+    query_set: &QuerySet<'a, F>,
 ) -> Evaluations<'a, F> {
-    let polys = labeled_polynomials.into_iter().map(|p| (p.label(), p));
-    let polys = BTreeMap::from_iter(polys);
+    let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::new();
     for (label, point) in query_set {
-        let poly = polys.get(label.as_str()).expect("polynomial in evaluated lc is not found");
+        let poly = polys.get(label).expect("polynomial in evaluated lc is not found");
         let eval = poly.evaluate(*point);
-        evaluations.insert((poly_label, *point), eval);
+        evaluations.insert((label.clone(), *point), eval);
     }
     evaluations
 }
@@ -379,8 +392,8 @@ fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
     let linear_combinations = BTreeMap::from_iter(lc_s);
     for (lc_label, point) in query_set {
         if let Some(lc) = linear_combinations.get(lc_label)  {
-            for (c, poly_label) in lc.iter() {
-                poly_query_set.insert((poly_label, *point));
+            for (_, poly_label) in lc.iter() {
+                poly_query_set.insert((poly_label.into(), *point));
             }
         }
     }
@@ -491,9 +504,9 @@ pub mod tests {
             for _ in 0..num_points_in_query_set {
                 let point = F::rand(rng);
                 for (i, label) in labels.iter().enumerate() {
-                    query_set.insert((label, point));
+                    query_set.insert((label.clone(), point));
                     let value = polynomials[i].evaluate(point);
-                    values.insert((label, point), value);
+                    values.insert((label.clone(), point), value);
                 }
             }
             println!("Generated query set");
@@ -616,9 +629,9 @@ pub mod tests {
                 let point = F::rand(rng);
                 for j in 0..num_equations.unwrap() {
                     let label = format!("query {} eqn {}", i, j);
-                    let mut lc = LinearCombination::empty(label);
+                    let mut lc = LinearCombination::empty(label.clone());
                     // Insert query
-                    query_set.insert((label.as_str(), point));
+                    query_set.insert((label.clone(), point));
 
                     let mut value = F::zero();
                     let should_have_degree_bounds: bool = rng.gen();
@@ -639,7 +652,7 @@ pub mod tests {
                             }
                         }
                     }
-                    values.insert((label.as_str(), point), value);
+                    values.insert((label.clone(), point), value);
                     if !lc.is_empty() {
                         linear_combinations.push(lc);
                     }
@@ -649,6 +662,7 @@ pub mod tests {
                 continue
             }
             println!("Generated query set");
+            println!("Linear combinations: {:?}", linear_combinations);
 
             let opening_challenge = F::rand(rng);
             let proof = PC::open_combinations(
@@ -659,6 +673,7 @@ pub mod tests {
                 opening_challenge,
                 &rands
             )?;
+            println!("Generated proof");
             let result = PC::check_combinations(
                 &vk,
                 &linear_combinations,

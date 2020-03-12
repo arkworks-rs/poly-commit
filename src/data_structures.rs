@@ -119,7 +119,7 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
     }
 
     /// Return the label for `self`.
-    pub fn label(&self) -> &str {
+    pub fn label(&self) -> &String {
         &self.label
     }
 
@@ -168,7 +168,7 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 
     /// Return the label for `self`.
-    pub fn label(&self) -> &str {
+    pub fn label(&self) -> &String {
         &self.label
     }
 
@@ -212,7 +212,8 @@ impl<F: Field> LinearCombination<F> {
         }
     }
 
-    pub fn label(&self) -> &str {
+    /// Returns the label of the linear combination.
+    pub fn label(&self) -> &String {
         &self.label
     }
 

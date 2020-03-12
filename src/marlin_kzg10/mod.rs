@@ -1,6 +1,6 @@
 use crate::kzg10;
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
-use crate::{Equation, LabeledCommitment, LabeledPolynomial};
+use crate::{LabeledCommitment, LabeledPolynomial};
 use crate::{EquationError, Evaluations, QuerySet, QuerySetError};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
@@ -450,176 +450,176 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         Ok(result)
     }
 
-    fn open_equations<'a>(
-        ck: &Self::CommitterKey,
-        equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-    ) -> Result<Self::BatchProof, Self::Error>
-    where
-        Self::Randomness: 'a,
-    {
-        let label_poly_rand_map = labeled_polynomials
-            .into_iter()
-            .zip(rands)
-            .map(|(p, r)| (p.label(), (p, r)))
-            .collect::<BTreeMap<_, _>>();
+    // fn open_equations<'a>(
+    //     ck: &Self::CommitterKey,
+    //     equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
+    //     labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+    //     opening_challenge: E::Fr,
+    //     rands: impl IntoIterator<Item = &'a Self::Randomness>,
+    // ) -> Result<Self::BatchProof, Self::Error>
+    // where
+    //     Self::Randomness: 'a,
+    // {
+    //     let label_poly_rand_map = labeled_polynomials
+    //         .into_iter()
+    //         .zip(rands)
+    //         .map(|(p, r)| (p.label(), (p, r)))
+    //         .collect::<BTreeMap<_, _>>();
 
-        let mut equation_polynomials = Vec::new();
-        let mut equation_randomness = Vec::new();
-        let mut query_set = QuerySet::new();
-        let mut evaluations = Evaluations::new();
-        for equation in equations {
-            let equation_label = equation.label.clone();
-            let mut poly = Polynomial::zero();
-            let mut degree_bound = None;
-            let mut hiding_bound = None;
-            let mut randomness = Self::Randomness::empty();
-            assert!(randomness.shifted_rand.is_none());
+    //     let mut equation_polynomials = Vec::new();
+    //     let mut equation_randomness = Vec::new();
+    //     let mut query_set = QuerySet::new();
+    //     let mut evaluations = Evaluations::new();
+    //     for equation in equations {
+    //         let equation_label = equation.label.clone();
+    //         let mut poly = Polynomial::zero();
+    //         let mut degree_bound = None;
+    //         let mut hiding_bound = None;
+    //         let mut randomness = Self::Randomness::empty();
+    //         assert!(randomness.shifted_rand.is_none());
 
-            let num_polys = equation.lhs.len();
-            if equation.lhs_is_empty() {
-                Err(EquationError::MissingLHS {
-                    label: equation_label.clone(),
-                })?;
-            }
+    //         let num_polys = equation.lhs.len();
+    //         if equation.lhs_is_empty() {
+    //             Err(EquationError::MissingLHS {
+    //                 label: equation_label.clone(),
+    //             })?;
+    //         }
 
-            for (coeff, label) in &equation.lhs {
-                let &(cur_poly, cur_rand) = label_poly_rand_map.get(label.as_str()).ok_or(
-                    QuerySetError::MissingPolynomial {
-                        label: label.to_string(),
-                    },
-                )?;
+    //         for (coeff, label) in &equation.lhs {
+    //             let &(cur_poly, cur_rand) = label_poly_rand_map.get(label.as_str()).ok_or(
+    //                 QuerySetError::MissingPolynomial {
+    //                     label: label.to_string(),
+    //                 },
+    //             )?;
 
-                if num_polys == 1 && cur_poly.degree_bound().is_some() {
-                    assert!(
-                        coeff.is_one(),
-                        "Coefficient must be one for degree-bounded equations"
-                    );
-                    degree_bound = cur_poly.degree_bound();
-                } else if cur_poly.degree_bound().is_some() {
-                    eprintln!("Degree bound when number of equations is non-zero");
-                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
-                }
+    //             if num_polys == 1 && cur_poly.degree_bound().is_some() {
+    //                 assert!(
+    //                     coeff.is_one(),
+    //                     "Coefficient must be one for degree-bounded equations"
+    //                 );
+    //                 degree_bound = cur_poly.degree_bound();
+    //             } else if cur_poly.degree_bound().is_some() {
+    //                 eprintln!("Degree bound when number of equations is non-zero");
+    //                 return Err(Self::Error::EquationHasDegreeBounds(equation_label));
+    //             }
 
-                // Some(_) > None, always.
-                hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial());
-                randomness += (*coeff, cur_rand);
+    //             // Some(_) > None, always.
+    //             hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
+    //             poly += (*coeff, cur_poly.polynomial());
+    //             randomness += (*coeff, cur_rand);
 
-                if degree_bound.is_none() {
-                    assert!(randomness.shifted_rand.is_none());
-                }
-            }
-            let equation_poly =
-                LabeledPolynomial::new_owned(equation_label, poly, degree_bound, hiding_bound);
-            assert_eq!(
-                equation_poly.evaluate(equation.evaluation_point),
-                equation.rhs
-            );
+    //             if degree_bound.is_none() {
+    //                 assert!(randomness.shifted_rand.is_none());
+    //             }
+    //         }
+    //         let equation_poly =
+    //             LabeledPolynomial::new_owned(equation_label, poly, degree_bound, hiding_bound);
+    //         assert_eq!(
+    //             equation_poly.evaluate(equation.evaluation_point),
+    //             equation.rhs
+    //         );
 
-            equation_polynomials.push(equation_poly);
-            equation_randomness.push(randomness);
-            query_set.insert((&equation.label, equation.evaluation_point));
-            evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
-        }
+    //         equation_polynomials.push(equation_poly);
+    //         equation_randomness.push(randomness);
+    //         query_set.insert((&equation.label, equation.evaluation_point));
+    //         evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
+    //     }
 
-        Self::batch_open(
-            ck,
-            equation_polynomials.iter(),
-            &query_set,
-            opening_challenge,
-            equation_randomness.iter(),
-        )
-    }
+    //     Self::batch_open(
+    //         ck,
+    //         equation_polynomials.iter(),
+    //         &query_set,
+    //         opening_challenge,
+    //         equation_randomness.iter(),
+    //     )
+    // }
 
-    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
-    /// committed in `labeled_commitments`.
-    fn check_equations<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        _: Option<&Evaluations<E::Fr>>,
-        proof: &Self::BatchProof,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let label_comm_map = commitments
-            .into_iter()
-            .map(|c| (c.label(), c))
-            .collect::<BTreeMap<_, _>>();
+    // /// Checks that `values` are the true evaluations at `query_set` of the polynomials
+    // /// committed in `labeled_commitments`.
+    // fn check_equations<'a, R: RngCore>(
+    //     vk: &Self::VerifierKey,
+    //     equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
+    //     commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+    //     _: Option<&Evaluations<E::Fr>>,
+    //     proof: &Self::BatchProof,
+    //     opening_challenge: E::Fr,
+    //     rng: &mut R,
+    // ) -> Result<bool, Self::Error>
+    // where
+    //     Self::Commitment: 'a,
+    // {
+    //     let label_comm_map = commitments
+    //         .into_iter()
+    //         .map(|c| (c.label(), c))
+    //         .collect::<BTreeMap<_, _>>();
 
-        let mut commitments = Vec::new();
-        let mut equation_info = Vec::new();
-        let mut query_set = QuerySet::new();
-        let mut evaluations = Evaluations::new();
-        for equation in equations {
-            let equation_label = equation.label.clone();
-            let num_polys = equation.lhs.len();
+    //     let mut commitments = Vec::new();
+    //     let mut equation_info = Vec::new();
+    //     let mut query_set = QuerySet::new();
+    //     let mut evaluations = Evaluations::new();
+    //     for equation in equations {
+    //         let equation_label = equation.label.clone();
+    //         let num_polys = equation.lhs.len();
 
-            let mut degree_bound = None;
-            let mut coeffs_and_comms = Vec::new();
+    //         let mut degree_bound = None;
+    //         let mut coeffs_and_comms = Vec::new();
 
-            for (coeff, label) in &equation.lhs {
-                let &cur_comm =
-                    label_comm_map
-                        .get(label.as_str())
-                        .ok_or(QuerySetError::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+    //         for (coeff, label) in &equation.lhs {
+    //             let &cur_comm =
+    //                 label_comm_map
+    //                     .get(label.as_str())
+    //                     .ok_or(QuerySetError::MissingPolynomial {
+    //                         label: label.to_string(),
+    //                     })?;
 
-                if num_polys == 1 && cur_comm.degree_bound().is_some() {
-                    assert!(
-                        coeff.is_one(),
-                        "Coefficient must be one for degree-bounded equations"
-                    );
-                    degree_bound = cur_comm.degree_bound();
-                } else if cur_comm.degree_bound().is_some() {
-                    return Err(Self::Error::EquationHasDegreeBounds(equation_label));
-                }
-                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
-            }
-            commitments.push(Self::combine_commitments(coeffs_and_comms));
-            equation_info.push((equation_label, degree_bound));
+    //             if num_polys == 1 && cur_comm.degree_bound().is_some() {
+    //                 assert!(
+    //                     coeff.is_one(),
+    //                     "Coefficient must be one for degree-bounded equations"
+    //                 );
+    //                 degree_bound = cur_comm.degree_bound();
+    //             } else if cur_comm.degree_bound().is_some() {
+    //                 return Err(Self::Error::EquationHasDegreeBounds(equation_label));
+    //             }
+    //             coeffs_and_comms.push((*coeff, cur_comm.commitment()));
+    //         }
+    //         commitments.push(Self::combine_commitments(coeffs_and_comms));
+    //         equation_info.push((equation_label, degree_bound));
 
-            query_set.insert((&equation.label, equation.evaluation_point));
-            evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
-        }
-        let (mut comms, mut shifted_comms): (Vec<_>, Vec<_>) = commitments.into_iter().unzip();
-        E::G1Projective::batch_normalization(&mut comms);
-        E::G1Projective::batch_normalization(&mut shifted_comms);
-        let equation_commitments = equation_info
-            .into_iter()
-            .zip(comms)
-            .zip(shifted_comms)
-            .map(|(((label, degree_bound), c), s_c)| {
-                let shifted_comm = if !s_c.is_zero() {
-                    Some(kzg10::Commitment(s_c.into()))
-                } else {
-                    None
-                };
-                let commitment = Commitment {
-                    comm: kzg10::Commitment(c.into()),
-                    shifted_comm: shifted_comm,
-                };
-                LabeledCommitment::new(label, commitment, degree_bound)
-            })
-            .collect::<Vec<_>>();
+    //         query_set.insert((&equation.label, equation.evaluation_point));
+    //         evaluations.insert((&equation.label, equation.evaluation_point), equation.rhs);
+    //     }
+    //     let (mut comms, mut shifted_comms): (Vec<_>, Vec<_>) = commitments.into_iter().unzip();
+    //     E::G1Projective::batch_normalization(&mut comms);
+    //     E::G1Projective::batch_normalization(&mut shifted_comms);
+    //     let equation_commitments = equation_info
+    //         .into_iter()
+    //         .zip(comms)
+    //         .zip(shifted_comms)
+    //         .map(|(((label, degree_bound), c), s_c)| {
+    //             let shifted_comm = if !s_c.is_zero() {
+    //                 Some(kzg10::Commitment(s_c.into()))
+    //             } else {
+    //                 None
+    //             };
+    //             let commitment = Commitment {
+    //                 comm: kzg10::Commitment(c.into()),
+    //                 shifted_comm: shifted_comm,
+    //             };
+    //             LabeledCommitment::new(label, commitment, degree_bound)
+    //         })
+    //         .collect::<Vec<_>>();
 
-        Self::batch_check(
-            vk,
-            equation_commitments.iter(),
-            &query_set,
-            &evaluations,
-            proof,
-            opening_challenge,
-            rng,
-        )
-    }
+    //     Self::batch_check(
+    //         vk,
+    //         equation_commitments.iter(),
+    //         &query_set,
+    //         &evaluations,
+    //         proof,
+    //         opening_challenge,
+    //         rng,
+    //     )
+    // }
 }
 
 #[cfg(test)]
