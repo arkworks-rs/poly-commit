@@ -61,7 +61,7 @@ impl<E: PairingEngine> KZG10<E> {
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
-        let mut powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
+        let powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
             scalar_bits,
             window_size,
             &g_table,
@@ -81,7 +81,7 @@ impl<E: PairingEngine> KZG10<E> {
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
         let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
-        let powers_of_gamma_g = 
+        let powers_of_gamma_g =
             E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
 
         let beta_h = h.mul(beta).into_affine();
