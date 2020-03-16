@@ -1,67 +1,82 @@
+use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec};
+use algebra_core::{PairingEngine, ToBytes};
+use core::ops::{Add, AddAssign};
 use rand_core::RngCore;
-use algebra::{ToBytes, PairingEngine};
-use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey};
-use std::ops::{Add, AddAssign};
 
 use crate::kzg10;
+use std::mem;
 
-pub struct UniversalParams<E: PairingEngine> {
-    // Elements in the form {\beta^i G1} for 0 <= i <= max_degree
-    pub powers_of_g: Vec<E::G1Affine>,
-    pub powers_of_gamma_g: Vec<E::G1Affine>,
+pub type UniversalParams<E> = kzg10::UniversalParams<E>;
+pub type Randomness<E> = kzg10::Randomness<E>;
 
-    // Elements in the form {\beta^i G2} for -max_degree <= i <= 0
-    pub neg_powers_of_h: Vec<E::G2Affine>,
-    pub beta_h: E::G2Affine
-}
-
-impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
-    fn max_degree(&self) -> usize {
-        self.powers_of_g.len() - 1
-    }
-}
-
+/// `ComitterKey` is used to commit to and create evaluation proofs for a given
+/// polynomial.
+#[derive(Derivative)]
+#[derivative(
+Default(bound = ""),
+Hash(bound = ""),
+Clone(bound = ""),
+Debug(bound = "")
+)]
 pub struct CommitterKey<E: PairingEngine> {
+    /// The key used to commit to polynomials.
     pub powers_of_g: Vec<E::G1Affine>,
+
+    /// The key used to commit to hiding polynomials.
     pub powers_of_gamma_g: Vec<E::G1Affine>,
 
+    /// The powers used to commit to shifted polynomials.
+    /// This is `None` if `self` does not support enforcing any degree bounds.
     pub shifted_powers_of_g: Option<Vec<E::G1Affine>>,
+
+    /// The powers used to commit to shifted hiding polynomials.
+    /// This is `None` if `self` does not support enforcing any degree bounds.
     pub shifted_powers_of_gamma_g: Option<Vec<E::G1Affine>>,
+
+    /// The degree bounds that are supported by `self`.
+    /// In ascending order from smallest to largest.
+    /// This is `None` if `self` does not support enforcing any degree bounds.
     pub enforced_degree_bounds: Option<Vec<usize>>,
 
+    /// The maximum degree supported by the `UniversalParams` `self` was derived
     pub max_degree: usize,
 }
 
 impl<E: PairingEngine> CommitterKey<E> {
-    pub fn powers<'a>(&'a self) -> kzg10::Powers<'a, E> {
+    /// Obtain powers for the underlying KZG10 construction
+    pub fn powers(&self) -> kzg10::Powers<E> {
         kzg10::Powers {
             powers_of_g: self.powers_of_g.as_slice().into(),
             powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
         }
     }
 
-    pub fn shifted_powers<'a>(
-        &'a self,
+    /// Obtain powers for committing to shifted polynomials.
+    pub fn shifted_powers(
+        &self,
         degree_bound: impl Into<Option<usize>>
-    ) -> Option<kzg10::Powers<'a, E>> {
-        self.shifted_powers_of_g.as_ref().map(|shifted_powers_of_g| {
-            self.shifted_powers_of_gamma_g.as_ref().map(|shifted_powers_of_gamma_g| {
-                let powers_range = if let Some(degree_bound) = degree_bound.into() {
-                    assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
-                    let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
-                    (max_bound - degree_bound)..
-                } else {
-                    0..
-                };
+    ) -> Option<kzg10::Powers<E>> {
+        match (&self.shifted_powers_of_g, &self.shifted_powers_of_gamma_g) {
+            (Some(shifted_powers_of_g), Some(shifted_powers_of_gamma_g)) => {
+                let powers_range =
+                    if let Some(degree_bound) = degree_bound.into() {
+                        assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
+                        let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
+                        (max_bound - degree_bound)..
+                    } else {
+                        0..
+                    };
 
                 let ck = kzg10::Powers {
-                    powers_of_g: (&shifted_powers_of_g[powers_range]).into(),
-                    powers_of_gamma_g: (&shifted_powers_of_gamma_g[powers_range]).into(),
+                    powers_of_g: shifted_powers_of_g[powers_range.clone()].into(),
+                    powers_of_gamma_g: shifted_powers_of_gamma_g[powers_range].into(),
                 };
 
-                ck
-            })
-        })
+                Some(ck)
+            }
+
+            (_, _) => None,
+        }
     }
 }
 
@@ -75,20 +90,39 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
     }
 }
 
+/// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct VerifierKey<E: PairingEngine> {
+
+    /// The generator of G1.
     pub g: E::G1Affine,
+
+    /// The generator of G1 that is used for making a commitment hiding.
     pub gamma_g: E::G1Affine,
-    pub h: E::G2Affine,
-    pub degree_bounds_and_neg_powers_of_h: Option<Vec<(usize, E::G2Affine)>>,
+
+    /// The generator of G2, prepared for use in pairings.
+    pub prepared_h: E::G2Prepared,
+
+    /// The \beta times the generator of G2, prepared for use in pairings.
+    pub prepared_beta_h: E::G2Prepared,
+
+    /// Pairs a degree_bound with its corresponding G2 element, which has been prepared for use in pairings.
+    /// Each pair is in the form `(degree_bound, \beta^{degree_bound - max_degree} h),` where `h` is the generator of G2 above
+    pub degree_bounds_and_prepared_neg_powers_of_h: Option<Vec<(usize, E::G2Prepared)>>,
 
     pub supported_degree: usize,
     pub max_degree: usize,
 }
 
 impl<E: PairingEngine> VerifierKey<E> {
-
+    pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
+        self.degree_bounds_and_prepared_neg_powers_of_h.as_ref().and_then(|v| {
+            v.binary_search_by(|(d, _)| d.cmp(&degree_bound))
+                .ok()
+                .map(|i| v[i].1.clone())
+        })
+    }
 }
 
 impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
@@ -118,7 +152,10 @@ pub struct Commitment<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
-
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+        self.comm.write(&mut writer)?;
+        self.has_degree_bound.write(&mut writer)
+    }
 }
 
 impl<E: PairingEngine> PCCommitment for Commitment<E> {
@@ -135,72 +172,12 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 
     fn size_in_bytes(&self) -> usize {
+        self.comm.size_in_bytes() + mem::size_of::<bool>()
 
     }
 }
 
-/// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
-#[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = ""),
-    PartialEq(bound = ""),
-    Eq(bound = "")
-)]
-pub struct Randomness<E: PairingEngine> {
-    pub(crate) rand: kzg10::Randomness<E>,
-}
-
-impl<'a, E: PairingEngine> Add<&'a Self> for Randomness<E> {
-    type Output = Self;
-
-    fn add(mut self, other: &'a Self) -> Self {
-        self += other;
-        self
-    }
-}
-
-impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
-    #[inline]
-    fn add_assign(&mut self, other: &'a Self) {
-        self.rand += &other.rand;
-    }
-}
-
-impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
-        self += other;
-        self
-    }
-}
-
-impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
-    #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
-        self.rand += (f, &other.rand);
-    }
-}
-
-impl<E: PairingEngine> PCRandomness for Randomness<E> {
-    fn empty() -> Self {
-        Self {
-            rand: kzg10::Randomness::empty(),
-        }
-    }
-
-    fn rand<R: RngCore>(hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
-        Self {
-            rand: kzg10::Randomness::rand(hiding_bound, false, rng),
-        }
-    }
-}
-
-/// Evaluation proof output by `MultiPCFromSinglePC::batch_open`.
+/// Evaluation proof at a query set.
 #[derive(Derivative)]
 #[derivative(
     Default(bound = ""),
