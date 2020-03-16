@@ -50,6 +50,7 @@ impl<E: PairingEngine> KZG10<E> {
         let h = E::G2Projective::rand(rng);
 
         let mut powers_of_beta = vec![E::Fr::one()];
+
         let mut cur = beta;
         for _ in 0..max_degree {
             powers_of_beta.push(cur);
@@ -61,7 +62,7 @@ impl<E: PairingEngine> KZG10<E> {
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
-        let mut powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
+        let powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
             scalar_bits,
             window_size,
             &g_table,
@@ -80,8 +81,34 @@ impl<E: PairingEngine> KZG10<E> {
         // up to D queries.
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
-        E::G1Projective::batch_normalization(powers_of_g.as_mut_slice());
-        E::G1Projective::batch_normalization(powers_of_gamma_g.as_mut_slice());
+
+        let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_gamma_g = 
+            E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
+
+        // TODO: Add timer for generating negative powers
+        let prepared_neg_powers_of_h =
+            if _produce_g2_powers {
+                let mut neg_powers_of_beta = vec![E::Fr::one()];
+                let mut cur = E::Fr::one()/&beta;
+                for _ in 0..max_degree {
+                    neg_powers_of_beta.push(cur);
+                    cur /= &beta;
+                }
+
+                let neg_h_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, h);
+                let neg_powers_of_h = FixedBaseMSM::multi_scalar_mul::<E::G2Projective>(
+                    scalar_bits,
+                    window_size,
+                    &neg_h_table,
+                    &neg_powers_of_beta,
+                );
+
+                let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
+                Some(affines.into_iter().map(|a| a.into()).collect())
+            }else{
+                None
+            };
 
         let beta_h = h.mul(beta).into_affine();
         let h = h.into_affine();
@@ -89,13 +116,11 @@ impl<E: PairingEngine> KZG10<E> {
         let prepared_beta_h = beta_h.into();
 
         let pp = UniversalParams {
-            powers_of_g: powers_of_g.into_iter().map(|e| e.into_affine()).collect(),
-            powers_of_gamma_g: powers_of_gamma_g
-                .into_iter()
-                .map(|e| e.into_affine())
-                .collect(),
+            powers_of_g,
+            powers_of_gamma_g,
             h,
             beta_h,
+            prepared_neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
         };

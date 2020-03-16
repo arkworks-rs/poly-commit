@@ -1,13 +1,13 @@
-use crate::{PCUniversalParams, PCRandomness, Polynomial, PolynomialCommitment};
-use crate::{QuerySetError, EquationError, QuerySet, Evaluations};
-use crate::{LabeledPolynomial, LabeledCommitment, Equation};
 use crate::kzg10;
+use crate::{BTreeMap, BTreeSet, ToString, Vec};
+use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
+use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
+use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra::{AffineCurve, Field, PairingEngine, ProjectiveCurve, One, Zero};
-use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
+use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero, UniformRand};
+use core::marker::PhantomData;
 use rand_core::RngCore;
-use std::marker::PhantomData;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::HashMap;
 
 mod data_structures;
 pub use data_structures::*;
@@ -20,7 +20,98 @@ pub struct Sonic<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> Sonic<E> {
+    fn accumulate_elems<'a>(
+        combined_comms: &mut HashMap<usize, E::G1Projective>,
+        g1_projective_elems: &mut Vec<E::G1Projective>,
+        g2_prepared_elems: &mut Vec<E::G2Prepared>,
+        vk: &VerifierKey<E>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
+        point: E::Fr,
+        values: impl IntoIterator<Item = E::Fr>,
+        proof: &kzg10::Proof<E>,
+        opening_challenge: E::Fr,
+        randomizer: Option<E::Fr>
+    ){
+        let mut curr_challenge = opening_challenge;
 
+        // Keeps track of running combination of values
+        let mut combined_values = E::Fr::one();
+
+        // Iterates through all of the commitments and accumulates common degree_bound elements in a HashMap
+        for (labeled_comm, value) in commitments.into_iter().zip(values) {
+            combined_values += &(value * &curr_challenge);
+
+            // Gets the degree_bound. If there is none, then use default bound of maximum degree
+            let degree_bound =
+                if let Some(degree_bound) = labeled_comm.degree_bound() {
+                    degree_bound
+                }else{
+                    vk.max_degree
+                };
+
+            let comm = labeled_comm.commitment();
+
+            // Applying opening challenge and randomness (used in batch_checking)
+            let comm_with_challenge: E::G1Projective = comm.comm.0.mul(curr_challenge);
+
+            if let Some(randomizer) = randomizer {
+                comm_with_challenge.mul(randomizer);
+            }
+
+            // Accumulate values in the HashMap
+            if let Some(combined_comm) = combined_comms.get_mut(&degree_bound){
+                *combined_comm += &comm_with_challenge;
+            }else{
+                combined_comms.insert(degree_bound, comm_with_challenge);
+            }
+
+            curr_challenge *= &opening_challenge;
+        }
+
+        // Push expected results into list of elems. Power will be the negative of the expected power
+        if let Some(randomizer) = randomizer {
+            g1_projective_elems.push((proof.w.mul(point) - &vk.g.mul(combined_values) - &vk.gamma_g.mul(proof.random_v)).mul(randomizer));
+            g1_projective_elems.push(proof.w.mul(-randomizer));
+
+        }else{
+            g1_projective_elems.push(proof.w.mul(point) - &vk.g.mul(combined_values) - &vk.gamma_g.mul(proof.random_v));
+            g1_projective_elems.push(proof.w.mul(-E::Fr::one()));
+        }
+
+        g2_prepared_elems.push((&vk.prepared_h).clone());
+        g2_prepared_elems.push((&vk.prepared_beta_h).clone());
+    }
+
+    fn check_elems (
+        combined_comms: HashMap<usize, E::G1Projective>,
+        mut g1_projective_elems: Vec<E::G1Projective>,
+        mut g2_prepared_elems: Vec<E::G2Prepared>,
+        vk: &VerifierKey<E>
+    ) -> Result<bool, Error>{
+        for (degree_bound, comm) in combined_comms.into_iter() {
+            let shift_power =
+                if degree_bound == vk.max_degree {
+                    vk.prepared_h.clone()
+                }else{
+                    vk.get_shift_power(degree_bound)
+                        .ok_or(Error::UnsupportedDegreeBound(degree_bound))?
+                };
+
+            g1_projective_elems.push(comm.clone());
+            g2_prepared_elems.push(shift_power);
+        }
+
+        let g1_prepared_elems_iter =
+            E::G1Projective::batch_normalization_into_affine(g1_projective_elems.as_slice())
+                .into_iter().map(|a| a.into());
+
+        let g1_g2_prepared: Vec<(E::G1Prepared, E::G2Prepared)> = g1_prepared_elems_iter.zip(g2_prepared_elems).collect();
+
+        let eq: bool =
+            E::product_of_pairings(g1_g2_prepared.iter())
+            == E::Fqk::one();
+        Ok(eq)
+    }
 }
 
 impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
@@ -37,65 +128,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         max_degree: usize,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        if max_degree < 1 {
-            return Err(Error::DegreeIsZero);
-        }
-
-        let g = E::G1Projective::rand(rng);
-        let gamma_g = E::G1Projective::rand(rng);
-        let h = E::G2Projective::rand(rng);
-
-        let beta = E::Fr::rand(rng);
-        let mut powers_of_beta = vec![E::Fr::one()];
-        let mut neg_powers_of_beta = vec![E::Fr::one()];
-
-        let mut curr_pos = E::Fr::one();
-        let mut curr_neg = E::Fr::one();
-
-        for _ in 0..=max_degree {
-            curr_pos *= &beta;
-            curr_neg /= &beta;
-            powers_of_beta.push(curr_pos);
-            neg_powers_of_beta.push(curr_neg);
-        }
-
-        let window_size = FixedBaseMSM::get_mul_window_size(max_degree + 1);
-        let neg_window_size = FixedBaseMSM::get_mul_window_size(max_degree + 1);
-        let scalar_bits = E::Fr::size_in_bits();
-
-        let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
-        let powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &powers_of_beta,
-        ).into_iter().map(|e| e.into_affine()).collect();
-        
-        let gamma_g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, gamma_g);
-        let mut powers_of_gamma_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
-            scalar_bits,
-            window_size,
-            &gamma_g_table,
-            &powers_of_beta,
-        ).into_iter().map(|e| e.into_affine()).collect();
-
-        let neg_h_table = FixedBaseMSM::get_window_table(scalar_bits, neg_window_size, h);
-        let mut neg_powers_of_h = FixedBaseMSM::multi_scalar_mul::<E::G2Projective>(
-            scalar_bits,
-            neg_window_size,
-            &neg_h_table,
-            &neg_powers_of_beta,
-        ).into_iter().map(|e| e.into_affine()).collect();
-
-        let beta_h = h.mul(&beta).into_affine();
-        let pp = UniversalParams {
-            powers_of_g,
-            powers_of_gamma_g,
-            neg_powers_of_h,
-            beta_h
-        };
-        
-        Ok(pp);
+        kzg10::KZG10::setup(max_degree, true, rng).map_err(Into::into)
     }
 
     fn trim(
@@ -103,12 +136,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         supported_degree: usize,
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
+        let prepared_neg_powers_of_h = pp.prepared_neg_powers_of_h.as_ref().unwrap();
         let max_degree = pp.max_degree();
         if supported_degree > max_degree {
             return Err(Error::TrimmingDegreeTooLarge);
         }
 
-        let enforced_degree_bounds = enforced_degree_bounds.map(let|bounds| {
+        let enforced_degree_bounds = enforced_degree_bounds.map(|bounds| {
             let mut v = bounds.to_vec();
             v.sort();
             v.dedup();
@@ -117,13 +151,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
 
         let (shifted_powers_of_g, 
              shifted_powers_of_gamma_g, 
-             degree_bounds_and_neg_powers_of_h) = 
+             degree_bounds_and_prepared_neg_powers_of_h) =
 
             if let Some(enforced_degree_bounds) = enforced_degree_bounds.as_ref() {
                 if enforced_degree_bounds.is_empty(){
                     return Err(Error::EmptyDegreeBounds);
                 }else{
-                    let highest_enforced_degree_bound = enforced_degree_bounds.last().unwrap();
+                    let highest_enforced_degree_bound = *enforced_degree_bounds.last().unwrap();
                     if highest_enforced_degree_bound > supported_degree {
                         return Err(Error::UnsupportedDegreeBound(highest_enforced_degree_bound));
                     }
@@ -132,14 +166,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
                     let shifted_powers_of_g = pp.powers_of_g[lowest_shift_degree..].to_vec();
                     let shifted_powers_of_gamma_g = pp.powers_of_gamma_g[lowest_shift_degree..].to_vec();
                     
-                    let degree_bounds_and_neg_powers_of_h = enforced_degree_bounds 
+                    let degree_bounds_and_prepared_neg_powers_of_h = enforced_degree_bounds
                         .iter()
-                        .map(|bound| (*bound, pp.neg_powers_of_h[max_degree - bound]))
+                        .map(|bound| (*bound, prepared_neg_powers_of_h[max_degree - *bound].clone()))
                         .collect();
 
                     (Some(shifted_powers_of_g), 
                      Some(shifted_powers_of_gamma_g), 
-                     Some(degree_bounds_and_neg_powers_of_h))
+                     Some(degree_bounds_and_prepared_neg_powers_of_h))
                 }
             } else{
                 (None, None, None)
@@ -159,13 +193,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
 
         let g = pp.powers_of_g[0];
         let gamma_g = pp.powers_of_gamma_g[0];
-        let h = pp.neg_powers_of_h[0];
+        let prepared_h = (&pp.prepared_h).clone();
+        let prepared_beta_h = (&pp.prepared_beta_h).clone();
 
         let vk = VerifierKey {
             g,
             gamma_g,
-            h,
-            degree_bounds_and_neg_powers_of_h,
+            prepared_h,
+            prepared_beta_h,
+            degree_bounds_and_prepared_neg_powers_of_h,
             supported_degree,
             max_degree,
         };
@@ -185,41 +221,38 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         ),
         Self::Error,
     > {
-        let commitments : Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
-        let randomness : Vec<Self::Randomness> = Vec::new();
+        let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
+        let mut randomness: Vec<Self::Randomness> = Vec::new();
         let rng = &mut kzg10::optional_rng::OptionalRng(rng);
 
-        for p in polynomials {
-            Self::Error::check_degrees_and_bounds(&ck, &p)?;
+        for labeled_polynomial in polynomials {
+            // TODO: Check that error function properly checks
+            Self::Error::check_degrees_and_bounds(&ck, &labeled_polynomial)?;
 
-            let polynomial = p.polynomial();
-            let degree_bound = p.degree_bound();
-            let hiding_bound = p.hiding_bound();
-            let label = p.label();
+            let polynomial = labeled_polynomial.polynomial();
+            let degree_bound = labeled_polynomial.degree_bound();
+            let hiding_bound = labeled_polynomial.hiding_bound();
+            let label = labeled_polynomial.label();
 
             let powers =
-                if let Some(degree_bound) = degree_bound.as_ref(){
-                    &ck.shifted_powers(degree_bound)
+                if let Some(degree_bound) = degree_bound{
+                    ck.shifted_powers(degree_bound).unwrap()
                 }else{
-                    &ck.powers()
-                }
+                    ck.powers()
+                };
 
-            let (comm, rand) = kzg10::KZG10::commit(powers, &polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) = kzg10::KZG10::commit(&powers, &polynomial, hiding_bound, Some(rng))?;
 
-            commitment = Commitment {
+            let commitment = Commitment {
                 comm,
                 has_degree_bound: degree_bound.is_some(), 
             };
 
-            random = Randomness {
-                rand,
-            };
-
-            commitments.push(LabeledCommitment::new(label.to_string(), commitment, degree_bound));
-            randomness.push(random);
+            labeled_comms.push(LabeledCommitment::new(label.to_string(), commitment, degree_bound));
+            randomness.push(rand);
         }
 
-        Ok((commitments, randomness));
+        Ok((labeled_comms, randomness))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -233,26 +266,18 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
     where
         Self::Randomness: 'a
     {
-        let combined_p = Polynomial::zero();
-        let combined_r = kzg10::Randomness::empty();
+        let mut combined_polynomial = Polynomial::zero();
+        let mut combined_rand = kzg10::Randomness::empty();
+        let mut curr_challenge = opening_challenge;
 
-        let curr_challenge = opening_challenge;
-        for (p, rand) in labeled_polynomials.into_iter().zip(rands){
-            let degree_bound = p.degree_bound();
-            Self::Error::check_degrees_and_bounds(&ck, &p)?;
-            combined_p += (curr_challenge, p.polynomial());
-            combined_r += (curr_challenge, &r.rand);
+        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands){
+            Self::Error::check_degrees_and_bounds(&ck, polynomial)?;
+            combined_polynomial += (curr_challenge, polynomial.polynomial());
+            combined_rand += (curr_challenge, rand);
             curr_challenge *= &opening_challenge;
         }
 
-        let powers =
-            if let Some(degree_bound) = degree_bound.as_ref(){
-                &ck.shifted_powers(degree_bound)
-            }else{
-                &ck.powers()
-            }
-
-        let proof = kzg10::KZG10::open(powers, &combined_p, point, &combined_r)?;
+        let proof = kzg10::KZG10::open(&ck.powers(), &combined_polynomial, point, &combined_rand)?;
         Ok(proof)
     }
 
@@ -267,8 +292,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
     where
         Self::Commitment: 'a
     {
+        let mut combined_comms : HashMap<usize, E::G1Projective> = HashMap::new();
+        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
+        let mut g2_prepared_elems: Vec<E::G2Prepared>= Vec::new();
 
+        Self::accumulate_elems(
+            &mut combined_comms, &mut g1_projective_elems, &mut g2_prepared_elems,
+            vk, commitments, point, values, proof, opening_challenge, None
+        );
 
+        Self::check_elems(combined_comms, g1_projective_elems, g2_prepared_elems, vk)
     }
 
     fn batch_check<'a, R: RngCore>(
@@ -283,35 +316,53 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
     where
         Self::Commitment: 'a
     {
+        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
+        let mut query_to_labels_map = BTreeMap::new();
 
-    }
+        for (label, point) in query_set.iter() {
+            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
+            labels.insert(label);
+        }
 
-    fn open_equations<'a>(
-        ck: &Self::CommitterKey,
-        equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-    ) -> Result<Self::BatchProof, Self::Error>
-    where
-        Self::Randomness: 'a
-    {
+        assert_eq!(proof.len(), query_to_labels_map.len());
 
-    }
+        let mut randomizer = E::Fr::one();
 
-    fn check_equations<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        equations: impl IntoIterator<Item = &'a Equation<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        _: Option<&Evaluations<E::Fr>>,
-        proof: &Self::BatchProof,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a
-    {
+        let mut combined_comms : HashMap<usize, E::G1Projective> = HashMap::new();
+        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
+        let mut g2_prepared_elems: Vec<E::G2Prepared>= Vec::new();
 
+        for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
+            let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
+            let mut values_to_combine = Vec::new();
+            for label in labels.into_iter() {
+                let commitment =
+                    commitments
+                        .get(label)
+                        .ok_or(QuerySetError::MissingPolynomial {
+                            label: label.to_string(),
+                        })?;
+
+                let v_i = values.get(&(label.clone(), *query)).ok_or(
+                    QuerySetError::MissingEvaluation {
+                        label: label.to_string(),
+                    },
+                )?;
+
+                comms_to_combine.push(commitment);
+                values_to_combine.push(*v_i);
+            }
+
+            Self::accumulate_elems(
+                &mut combined_comms, &mut g1_projective_elems, &mut g2_prepared_elems,
+                vk, comms_to_combine.into_iter(), *query, values_to_combine.into_iter(), p, opening_challenge,
+                Some(randomizer)
+            );
+
+            randomizer = u128::rand(rng).into();
+        }
+
+        Self::check_elems(combined_comms, g1_projective_elems, g2_prepared_elems, vk)
     }
 }
 
@@ -319,13 +370,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::marlin_kzg10::MarlinKZG10;
+    use crate::sonic::Sonic;
     use algebra::curves::bls12_377::Bls12_377;
     use algebra::curves::bls12_381::Bls12_381;
     use algebra::curves::mnt6::MNT6;
     use algebra::curves::sw6::SW6;
 
-    type PC<E> = MarlinKZG10<E>;
+    type PC<E> = Sonic<E>;
     type PC_Bls12_381 = PC<Bls12_381>;
     type PC_Bls12_377 = PC<Bls12_377>;
     type PC_MNT6 = PC<MNT6>;
