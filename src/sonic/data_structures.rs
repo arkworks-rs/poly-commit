@@ -4,7 +4,7 @@ use core::ops::{Add, AddAssign};
 use rand_core::RngCore;
 
 use crate::kzg10;
-use std::mem;
+use core::mem;
 
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 pub type Randomness<E> = kzg10::Randomness<E>;
