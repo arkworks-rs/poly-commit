@@ -255,15 +255,3 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 }
-
-/// Evaluation proof output by `MultiPCFromSinglePC::batch_open`.
-#[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = ""),
-    PartialEq(bound = ""),
-    Eq(bound = "")
-)]
-pub struct BatchProof<E: PairingEngine>(pub(crate) Vec<kzg10::Proof<E>>);
