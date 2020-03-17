@@ -1,11 +1,11 @@
 use crate::kzg10;
-use crate::{BTreeMap, BTreeSet, ToString, Vec};
+use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
-use core::marker::PhantomData;
+use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -515,7 +515,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             assert!(randomness.shifted_rand.is_none());
 
             let num_polys = lc.len();
-            for (coeff, label) in lc.iter() {
+            for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
+                let label: &String = label.try_into().expect("cannot be one!");
                 let &(cur_poly, cur_rand) =
                     label_poly_rand_map
                         .get(label)
@@ -581,6 +582,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
         let mut lc_commitments = Vec::new();
         let mut lc_info = Vec::new();
+        let mut evaluations = evaluations.clone();
         for lc in lc_s {
             let lc_label = lc.label().clone();
             let num_polys = lc.len();
@@ -589,23 +591,32 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut coeffs_and_comms = Vec::new();
 
             for (coeff, label) in lc.iter() {
-                let &cur_comm =
-                    label_comm_map
-                        .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                if label.is_one() {
+                    for (&(ref label, _), ref mut eval) in evaluations.iter_mut() {
+                        if label == &lc_label {
+                            **eval -= coeff;
+                        }
+                    }
+                } else {
+                    let label: &String = label.try_into().unwrap();
+                    let &cur_comm =
+                        label_comm_map
+                            .get(label)
+                            .ok_or(QuerySetError::MissingPolynomial {
+                                label: label.to_string(),
+                            })?;
 
-                if num_polys == 1 && cur_comm.degree_bound().is_some() {
-                    assert!(
-                        coeff.is_one(),
-                        "Coefficient must be one for degree-bounded equations"
-                    );
-                    degree_bound = cur_comm.degree_bound();
-                } else if cur_comm.degree_bound().is_some() {
-                    return Err(Self::Error::EquationHasDegreeBounds(lc_label));
+                    if num_polys == 1 && cur_comm.degree_bound().is_some() {
+                        assert!(
+                            coeff.is_one(),
+                            "Coefficient must be one for degree-bounded equations"
+                        );
+                        degree_bound = cur_comm.degree_bound();
+                    } else if cur_comm.degree_bound().is_some() {
+                        return Err(Self::Error::EquationHasDegreeBounds(lc_label));
+                    }
+                    coeffs_and_comms.push((*coeff, cur_comm.commitment()));
                 }
-                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
             }
             lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
             lc_info.push((lc_label, degree_bound));
