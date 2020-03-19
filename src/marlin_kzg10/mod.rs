@@ -1,4 +1,4 @@
-use crate::kzg10;
+use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -271,7 +271,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let hiding_bound = p.hiding_bound();
             let polynomial = p.polynomial();
 
-            Self::Error::check_degrees_and_bounds(&ck, &p)?;
+            Self::Error::check_degrees_and_bounds::<E>(
+                ck.supported_degree(),
+                ck.max_degree,
+                (&ck.enforced_degree_bounds).as_ref(),
+                &p)?;
 
             let commit_time = start_timer!(|| format!(
                 "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
@@ -329,7 +333,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         for (j, (polynomial, rand)) in labeled_polynomials.into_iter().zip(rands).enumerate() {
             let degree_bound = polynomial.degree_bound();
 
-            Self::Error::check_degrees_and_bounds(&ck, &polynomial)?;
+            Self::Error::check_degrees_and_bounds::<E>(
+                ck.supported_degree(),
+                ck.max_degree,
+                (&ck.enforced_degree_bounds).as_ref(),
+                &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = opening_challenge.pow([2 * j as u64]);

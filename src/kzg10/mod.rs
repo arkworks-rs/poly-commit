@@ -37,7 +37,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
         max_degree: usize,
-        _produce_g2_powers: bool,
+        produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
@@ -88,7 +88,7 @@ impl<E: PairingEngine> KZG10<E> {
 
         // TODO: Add timer for generating negative powers
         let prepared_neg_powers_of_h =
-            if _produce_g2_powers {
+            if produce_g2_powers {
                 let mut neg_powers_of_beta = vec![E::Fr::one()];
                 let mut cur = E::Fr::one()/&beta;
                 for _ in 0..max_degree {

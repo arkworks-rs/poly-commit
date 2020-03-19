@@ -61,23 +61,24 @@ impl From<EqError> for Error {
 }
 
 impl Error {
-    pub(crate) fn check_degrees_and_bounds<'a, E: algebra_core::PairingEngine>(
-        ck: &super::CommitterKey<E>,
+    pub(crate) fn check_degrees_and_bounds <'a, E: algebra_core::PairingEngine>(
+        supported_degree: usize,
+        max_degree: usize,
+        enforced_degree_bounds: Option<&Vec<usize>>,
         p: &'a LabeledPolynomial<'a, E::Fr>,
     ) -> Result<(), Self> {
         if let Some(bound) = p.degree_bound() {
-            let enforced_degree_bounds = ck
-                .enforced_degree_bounds
-                .as_ref()
+            let enforced_degree_bounds =
+                enforced_degree_bounds
                 .ok_or(Self::UnsupportedDegreeBound(bound))?;
 
             if enforced_degree_bounds.binary_search(&bound).is_err() {
                 Err(Self::UnsupportedDegreeBound(bound))
-            } else if bound < p.degree() || bound > ck.max_degree() {
+            } else if bound < p.degree() || bound > max_degree {
                 return Err(Error::IncorrectDegreeBound {
                     poly_degree: p.degree(),
                     degree_bound: p.degree_bound().unwrap(),
-                    supported_degree: ck.supported_degree(),
+                    supported_degree,
                     label: p.label().to_string(),
                 });
             } else {

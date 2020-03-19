@@ -52,7 +52,6 @@ macro_rules! eprintln {
     () => {};
     ($($arg: tt)*) => {};
 }
-
 /// The core KZG10 construction.
 pub mod kzg10;
 
@@ -61,6 +60,10 @@ pub mod kzg10;
 ///
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod marlin_kzg10;
+
+/// Polynomial commitment based on the construction in the
+/// AuroraLight paper.
+pub mod sonic;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
@@ -472,7 +475,7 @@ pub mod tests {
                 let poly = Polynomial::rand(degree, rng);
 
                 let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
-                    let range = rand::distributions::Uniform::from(degree..=max_degree);
+                    let range = rand::distributions::Uniform::from(degree..=supported_degree);
                     let degree_bound = range.sample(rng);
                     degree_bounds.push(degree_bound);
                     Some(degree_bound)
@@ -593,7 +596,7 @@ pub mod tests {
 
                 let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
                     if rng.gen() {
-                        let range = rand::distributions::Uniform::from(degree..=max_degree);
+                        let range = rand::distributions::Uniform::from(degree..=supported_degree);
                         let degree_bound = range.sample(rng);
                         degree_bounds.push(degree_bound);
                         Some(degree_bound)
@@ -620,6 +623,10 @@ pub mod tests {
             }
             println!("supported degree: {:?}", supported_degree);
             println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+            println!("{:?}", degree_bounds);
+            println!("{}", num_polynomials);
+            println!("{}", enforce_degree_bounds);
+
             let (ck, vk) = PC::trim(
                 &pp,
                 supported_degree,
