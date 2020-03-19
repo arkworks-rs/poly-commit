@@ -6,8 +6,14 @@ use rand_core::RngCore;
 use crate::kzg10;
 use core::mem;
 
+/// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
+
+/// `Randomness` is the randomness for the KZG10 scheme.
 pub type Randomness<E> = kzg10::Randomness<E>;
+
+/// `Commitment` is the commitment for the KZG10 scheme.
+pub type Commitment<E> = kzg10::Commitment<E>;
 
 /// `ComitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
@@ -101,6 +107,12 @@ pub struct VerifierKey<E: PairingEngine> {
     /// The generator of G1 that is used for making a commitment hiding.
     pub gamma_g: E::G1Affine,
 
+    /// The generator of G2.
+    pub h: E::G2Affine,
+
+    /// The \beta times the generator of G2.
+    pub beta_h: E::G2Affine,
+
     /// The generator of G2, prepared for use in pairings.
     pub prepared_h: E::G2Prepared,
 
@@ -111,11 +123,17 @@ pub struct VerifierKey<E: PairingEngine> {
     /// Each pair is in the form `(degree_bound, \beta^{degree_bound - max_degree} h),` where `h` is the generator of G2 above
     pub degree_bounds_and_prepared_neg_powers_of_h: Option<Vec<(usize, E::G2Prepared)>>,
 
+    /// The maximum degree supported by the trimmed parameters that `self` is
+    /// a part of.
     pub supported_degree: usize,
+
+    /// The maximum degree supported by the `UniversalParams` `self` was derived
+    /// from.
     pub max_degree: usize,
 }
 
 impl<E: PairingEngine> VerifierKey<E> {
+    /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
         self.degree_bounds_and_prepared_neg_powers_of_h.as_ref().and_then(|v| {
             v.binary_search_by(|(d, _)| d.cmp(&degree_bound))
@@ -132,48 +150,6 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 
     fn supported_degree(&self) -> usize {
         self.supported_degree
-    }
-}
-
-/// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Copy(bound = ""),
-    Debug(bound = ""),
-    PartialEq(bound = ""),
-    Eq(bound = "")
-)]
-pub struct Commitment<E: PairingEngine> {
-    pub(crate) comm: kzg10::Commitment<E>,
-    pub(crate) has_degree_bound: bool
-}
-
-impl<E: PairingEngine> ToBytes for Commitment<E> {
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
-        self.comm.write(&mut writer)?;
-        self.has_degree_bound.write(&mut writer)
-    }
-}
-
-impl<E: PairingEngine> PCCommitment for Commitment<E> {
-    #[inline]
-    fn empty() -> Self {
-        Self {
-            comm: kzg10::Commitment::empty(),
-            has_degree_bound: false,
-        }
-    }
-
-    fn has_degree_bound(&self) -> bool {
-        self.has_degree_bound
-    }
-
-    fn size_in_bytes(&self) -> usize {
-        self.comm.size_in_bytes() + mem::size_of::<bool>()
-
     }
 }
 

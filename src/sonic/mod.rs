@@ -1,4 +1,5 @@
-use crate::kzg10;
+use crate::{kzg10, PCCommitterKey};
+use crate::marlin_kzg10::Error;
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -12,18 +13,19 @@ use std::collections::HashMap;
 mod data_structures;
 pub use data_structures::*;
 
-mod error;
-pub use error::*;
-
+/// `Sonic` is an implementation of the polynomial commitment scheme of
+/// [Gabizon][AuroraLight]
+///
+/// [AuroraLight]: https://eprint.iacr.org/2019/601.pdf
 pub struct Sonic<E: PairingEngine> {
     _engine: PhantomData<E>,
 }
 
 impl<E: PairingEngine> Sonic<E> {
     fn accumulate_elems<'a>(
-        combined_comms: &mut HashMap<usize, E::G1Projective>,
-        g1_projective_elems: &mut Vec<E::G1Projective>,
-        g2_prepared_elems: &mut Vec<E::G2Prepared>,
+        combined_comms: &mut HashMap<Option<usize>, E::G1Projective>,
+        combined_witness: &mut E::G1Projective,
+        combined_adjusted_witness: &mut E::G1Projective,
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: E::Fr,
@@ -35,71 +37,70 @@ impl<E: PairingEngine> Sonic<E> {
         let mut curr_challenge = opening_challenge;
 
         // Keeps track of running combination of values
-        let mut combined_values = E::Fr::one();
+        let mut combined_values = E::Fr::zero();
 
         // Iterates through all of the commitments and accumulates common degree_bound elements in a HashMap
         for (labeled_comm, value) in commitments.into_iter().zip(values) {
             combined_values += &(value * &curr_challenge);
 
-            // Gets the degree_bound. If there is none, then use default bound of maximum degree
-            let degree_bound =
-                if let Some(degree_bound) = labeled_comm.degree_bound() {
-                    degree_bound
-                }else{
-                    vk.max_degree
-                };
-
             let comm = labeled_comm.commitment();
+            let degree_bound = labeled_comm.degree_bound();
 
             // Applying opening challenge and randomness (used in batch_checking)
-            let comm_with_challenge: E::G1Projective = comm.comm.0.mul(curr_challenge);
+            let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge.mul(randomizer);
+                comm_with_challenge = comm_with_challenge.mul(randomizer);
             }
 
             // Accumulate values in the HashMap
-            if let Some(combined_comm) = combined_comms.get_mut(&degree_bound){
-                *combined_comm += &comm_with_challenge;
-            }else{
-                combined_comms.insert(degree_bound, comm_with_challenge);
-            }
-
+            *combined_comms.entry(degree_bound).or_insert(E::G1Projective::zero()) += &comm_with_challenge;
             curr_challenge *= &opening_challenge;
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
-        if let Some(randomizer) = randomizer {
-            g1_projective_elems.push((proof.w.mul(point) - &vk.g.mul(combined_values) - &vk.gamma_g.mul(proof.random_v)).mul(randomizer));
-            g1_projective_elems.push(proof.w.mul(-randomizer));
+        let mut witness: E::G1Projective = proof.w.into_projective();
+        let mut adjusted_witness: E::G1Projective =
+            vk.g.into_projective().mul(combined_values)
+                + &vk.gamma_g.into_projective().mul(proof.random_v)
+                - &proof.w.into_projective().mul(point);
 
-        }else{
-            g1_projective_elems.push(proof.w.mul(point) - &vk.g.mul(combined_values) - &vk.gamma_g.mul(proof.random_v));
-            g1_projective_elems.push(proof.w.mul(-E::Fr::one()));
+        if let Some(randomizer) = randomizer {
+            witness = witness.mul(randomizer);
+            adjusted_witness = adjusted_witness.mul(randomizer);
         }
 
-        g2_prepared_elems.push((&vk.prepared_h).clone());
-        g2_prepared_elems.push((&vk.prepared_beta_h).clone());
+        *combined_witness += &witness;
+        *combined_adjusted_witness += &adjusted_witness;
     }
 
     fn check_elems (
-        combined_comms: HashMap<usize, E::G1Projective>,
-        mut g1_projective_elems: Vec<E::G1Projective>,
-        mut g2_prepared_elems: Vec<E::G2Prepared>,
+        combined_comms: HashMap<Option<usize>, E::G1Projective>,
+        combined_witness: E::G1Projective,
+        combined_adjusted_witness: E::G1Projective,
         vk: &VerifierKey<E>
     ) -> Result<bool, Error>{
+        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
+        let mut g2_prepared_elems: Vec<E::G2Prepared> = Vec::new();
+
         for (degree_bound, comm) in combined_comms.into_iter() {
             let shift_power =
-                if degree_bound == vk.max_degree {
-                    vk.prepared_h.clone()
-                }else{
+                if let Some(degree_bound) = degree_bound {
                     vk.get_shift_power(degree_bound)
                         .ok_or(Error::UnsupportedDegreeBound(degree_bound))?
+                }else{
+                    vk.prepared_h.clone()
                 };
 
-            g1_projective_elems.push(comm.clone());
+            g1_projective_elems.push(comm);
             g2_prepared_elems.push(shift_power);
         }
+
+        g1_projective_elems.push(-combined_adjusted_witness);
+        g2_prepared_elems.push(vk.prepared_h.clone());
+
+        g1_projective_elems.push(-combined_witness);
+        g2_prepared_elems.push(vk.prepared_beta_h.clone());
 
         let g1_prepared_elems_iter =
             E::G1Projective::batch_normalization_into_affine(g1_projective_elems.as_slice())
@@ -107,10 +108,7 @@ impl<E: PairingEngine> Sonic<E> {
 
         let g1_g2_prepared: Vec<(E::G1Prepared, E::G2Prepared)> = g1_prepared_elems_iter.zip(g2_prepared_elems).collect();
 
-        let eq: bool =
-            E::product_of_pairings(g1_g2_prepared.iter())
-            == E::Fqk::one();
-        Ok(eq)
+        Ok(E::product_of_pairings(g1_g2_prepared.iter()).is_one())
     }
 }
 
@@ -150,12 +148,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         });
 
         let (shifted_powers_of_g, 
-             shifted_powers_of_gamma_g, 
+             shifted_powers_of_gamma_g,
              degree_bounds_and_prepared_neg_powers_of_h) =
 
             if let Some(enforced_degree_bounds) = enforced_degree_bounds.as_ref() {
                 if enforced_degree_bounds.is_empty(){
-                    return Err(Error::EmptyDegreeBounds);
+                    (None, None, None)
                 }else{
                     let highest_enforced_degree_bound = *enforced_degree_bounds.last().unwrap();
                     if highest_enforced_degree_bound > supported_degree {
@@ -165,14 +163,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
                     let lowest_shift_degree = max_degree - highest_enforced_degree_bound;
                     let shifted_powers_of_g = pp.powers_of_g[lowest_shift_degree..].to_vec();
                     let shifted_powers_of_gamma_g = pp.powers_of_gamma_g[lowest_shift_degree..].to_vec();
-                    
+
                     let degree_bounds_and_prepared_neg_powers_of_h = enforced_degree_bounds
                         .iter()
                         .map(|bound| (*bound, prepared_neg_powers_of_h[max_degree - *bound].clone()))
                         .collect();
 
                     (Some(shifted_powers_of_g), 
-                     Some(shifted_powers_of_gamma_g), 
+                     Some(shifted_powers_of_gamma_g),
                      Some(degree_bounds_and_prepared_neg_powers_of_h))
                 }
             } else{
@@ -180,7 +178,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
             };
 
         let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
-        let powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
+        let powers_of_gamma_g = pp.powers_of_gamma_g[..=(supported_degree + 1)].to_vec();
 
         let ck = CommitterKey {
             powers_of_g,
@@ -192,6 +190,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         };
 
         let g = pp.powers_of_g[0];
+        let h = pp.h;
+        let beta_h = pp.beta_h;
         let gamma_g = pp.powers_of_gamma_g[0];
         let prepared_h = (&pp.prepared_h).clone();
         let prepared_beta_h = (&pp.prepared_beta_h).clone();
@@ -199,13 +199,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         let vk = VerifierKey {
             g,
             gamma_g,
+            h,
+            beta_h,
             prepared_h,
             prepared_beta_h,
             degree_bounds_and_prepared_neg_powers_of_h,
             supported_degree,
             max_degree,
         };
-        
+
         Ok((ck, vk))
     }
 
@@ -226,8 +228,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         let rng = &mut kzg10::optional_rng::OptionalRng(rng);
 
         for labeled_polynomial in polynomials {
-            // TODO: Check that error function properly checks
-            Self::Error::check_degrees_and_bounds(&ck, &labeled_polynomial)?;
+            Self::Error::check_degrees_and_bounds::<E>(
+                ck.supported_degree(),
+                ck.max_degree,
+                (&ck.enforced_degree_bounds).as_ref(),
+                &labeled_polynomial)?;
 
             let polynomial = labeled_polynomial.polynomial();
             let degree_bound = labeled_polynomial.degree_bound();
@@ -243,12 +248,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
 
             let (comm, rand) = kzg10::KZG10::commit(&powers, &polynomial, hiding_bound, Some(rng))?;
 
-            let commitment = Commitment {
-                comm,
-                has_degree_bound: degree_bound.is_some(), 
-            };
-
-            labeled_comms.push(LabeledCommitment::new(label.to_string(), commitment, degree_bound));
+            labeled_comms.push(LabeledCommitment::new(label.to_string(), comm, degree_bound));
             randomness.push(rand);
         }
 
@@ -271,7 +271,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
         let mut curr_challenge = opening_challenge;
 
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands){
-            Self::Error::check_degrees_and_bounds(&ck, polynomial)?;
+            Self::Error::check_degrees_and_bounds::<E>(
+                ck.supported_degree(),
+                ck.max_degree,
+                (&ck.enforced_degree_bounds).as_ref(),
+                &polynomial)?;
             combined_polynomial += (curr_challenge, polynomial.polynomial());
             combined_rand += (curr_challenge, rand);
             curr_challenge *= &opening_challenge;
@@ -292,16 +296,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
     where
         Self::Commitment: 'a
     {
-        let mut combined_comms : HashMap<usize, E::G1Projective> = HashMap::new();
-        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
-        let mut g2_prepared_elems: Vec<E::G2Prepared>= Vec::new();
+        let mut combined_comms: HashMap<Option<usize>, E::G1Projective> = HashMap::new();
+        let mut combined_witness: E::G1Projective = E::G1Projective::zero();
+        let mut combined_adjusted_witness: E::G1Projective = E::G1Projective::zero();
 
         Self::accumulate_elems(
-            &mut combined_comms, &mut g1_projective_elems, &mut g2_prepared_elems,
+            &mut combined_comms, &mut combined_witness, &mut combined_adjusted_witness,
             vk, commitments, point, values, proof, opening_challenge, None
         );
 
-        Self::check_elems(combined_comms, g1_projective_elems, g2_prepared_elems, vk)
+        Self::check_elems(combined_comms, combined_witness, combined_adjusted_witness, vk)
     }
 
     fn batch_check<'a, R: RngCore>(
@@ -328,9 +332,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
 
         let mut randomizer = E::Fr::one();
 
-        let mut combined_comms : HashMap<usize, E::G1Projective> = HashMap::new();
-        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
-        let mut g2_prepared_elems: Vec<E::G2Prepared>= Vec::new();
+        let mut combined_comms: HashMap<Option<usize>, E::G1Projective> = HashMap::new();
+        let mut combined_witness: E::G1Projective = E::G1Projective::zero();
+        let mut combined_adjusted_witness: E::G1Projective = E::G1Projective::zero();
 
         for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
@@ -354,7 +358,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
             }
 
             Self::accumulate_elems(
-                &mut combined_comms, &mut g1_projective_elems, &mut g2_prepared_elems,
+                &mut combined_comms, &mut combined_witness, &mut combined_adjusted_witness,
                 vk, comms_to_combine.into_iter(), *query, values_to_combine.into_iter(), p, opening_challenge,
                 Some(randomizer)
             );
@@ -362,7 +366,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for Sonic<E> {
             randomizer = u128::rand(rng).into();
         }
 
-        Self::check_elems(combined_comms, g1_projective_elems, g2_prepared_elems, vk)
+        Self::check_elems(combined_comms, combined_witness, combined_adjusted_witness, vk)
     }
 }
 
@@ -371,10 +375,11 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use crate::sonic::Sonic;
-    use algebra::curves::bls12_377::Bls12_377;
-    use algebra::curves::bls12_381::Bls12_381;
-    use algebra::curves::mnt6::MNT6;
-    use algebra::curves::sw6::SW6;
+    use algebra::Bls12_377;
+    use algebra::Bls12_381;
+    use algebra::MNT6;
+    use algebra::SW6;
+    use crate::Polynomial;
 
     type PC<E> = Sonic<E>;
     type PC_Bls12_381 = PC<Bls12_381>;
@@ -382,10 +387,12 @@ mod tests {
     type PC_MNT6 = PC<MNT6>;
     type PC_SW6 = PC<SW6>;
 
+    type PC_E = PC_Bls12_381;
+
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_poly_test::<_, PC_E>().expect("test failed for bls12-377");
         /*
         single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         single_poly_test::<_, PC_MNT6>().expect("test failed for MNT6");
@@ -397,7 +404,7 @@ mod tests {
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_E>().expect("test failed for bls12-377");
         /*
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>().expect("test failed for MNT6");
@@ -408,7 +415,7 @@ mod tests {
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        linear_poly_degree_bound_test::<_, PC_E>().expect("test failed for bls12-377");
         /*
         linear_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         linear_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
@@ -420,7 +427,7 @@ mod tests {
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_poly_degree_bound_test::<_, PC_E>().expect("test failed for bls12-377");
         /*
         single_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         single_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
@@ -431,7 +438,7 @@ mod tests {
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
+        single_poly_degree_bound_multiple_queries_test::<_, PC_E>()
             .expect("test failed for bls12-377");
         /*
         single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
@@ -446,7 +453,7 @@ mod tests {
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, PC_Bls12_377>()
+        two_polys_degree_bound_single_query_test::<_, PC_E>()
             .expect("test failed for bls12-377");
         /*
         two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
@@ -460,7 +467,7 @@ mod tests {
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_test::<_, PC_E>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         /*
         full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
@@ -475,7 +482,7 @@ mod tests {
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_equation_test::<_, PC_E>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         /*
         single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
@@ -490,7 +497,7 @@ mod tests {
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_test::<_, PC_E>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         /*
         two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
@@ -505,7 +512,7 @@ mod tests {
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_degree_bound_test::<_, PC_E>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         /*
         two_equation_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
@@ -520,7 +527,7 @@ mod tests {
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_equation_test::<_, PC_E>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         /*
         full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
