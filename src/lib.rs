@@ -62,8 +62,15 @@ pub mod kzg10;
 pub mod marlin_kzg10;
 
 /// Polynomial commitment based on the construction in the
-/// AuroraLight paper.
-pub mod sonic;
+/// [Sonic paper][sonic].
+/// Closely follows the commitment approach shown in
+/// the [AuroraLight paper][auroralight].
+/// Implementation additionally includes extra options
+/// to support hiding polynomials.
+///
+/// [sonic]: https://eprint.iacr.org/2019/099.pdf
+/// [auroralight]: https://eprint.iacr.org/2019/601.pdf
+pub mod sonic_kzg10;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`

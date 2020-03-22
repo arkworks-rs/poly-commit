@@ -15,7 +15,7 @@ pub use data_structures::*;
 
 /// `SonicKZG` is an implementation of the polynomial commitment scheme based off of scheme in
 /// the [Sonic paper][sonic].
-/// The exact commitment scheme used in the implementation closely follows the approach taken by
+/// The exact commitment scheme used in this implementation closely follows the approach taken by
 /// [Gabizon][auroralight].
 /// Additional changes were made to include the option of hiding polynomials in the commitments.
 ///
@@ -467,7 +467,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::sonic::SonicKZG10;
+    use crate::sonic_kzg10::SonicKZG10;
     use crate::Polynomial;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
