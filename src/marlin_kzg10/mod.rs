@@ -1,6 +1,6 @@
 use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
-use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet, QuerySetError};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
@@ -8,11 +8,10 @@ use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero
 use core::marker::PhantomData;
 use rand_core::RngCore;
 
+use crate::kzg10::check;
+
 mod data_structures;
 pub use data_structures::*;
-
-mod error;
-pub use error::*;
 
 /// `MarlinKZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10], with degree bound enforcement as
@@ -271,11 +270,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let hiding_bound = p.hiding_bound();
             let polynomial = p.polynomial();
 
-            Self::Error::check_degrees_and_bounds::<E>(
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
+            check::check_degrees_and_bounds::<E>(
                 ck.supported_degree(),
                 ck.max_degree,
-                (&ck.enforced_degree_bounds).as_ref(),
-                &p)?;
+                enforced_degree_bounds,
+                &p,
+            )?;
 
             let commit_time = start_timer!(|| format!(
                 "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
@@ -333,11 +337,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         for (j, (polynomial, rand)) in labeled_polynomials.into_iter().zip(rands).enumerate() {
             let degree_bound = polynomial.degree_bound();
 
-            Self::Error::check_degrees_and_bounds::<E>(
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
+            check::check_degrees_and_bounds::<E>(
                 ck.supported_degree(),
                 ck.max_degree,
-                (&ck.enforced_degree_bounds).as_ref(),
-                &polynomial)?;
+                enforced_degree_bounds,
+                &polynomial,
+            )?;
 
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = opening_challenge.pow([2 * j as u64]);

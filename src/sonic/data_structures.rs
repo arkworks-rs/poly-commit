@@ -19,10 +19,10 @@ pub type Commitment<E> = kzg10::Commitment<E>;
 /// polynomial.
 #[derive(Derivative)]
 #[derivative(
-Default(bound = ""),
-Hash(bound = ""),
-Clone(bound = ""),
-Debug(bound = "")
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = "")
 )]
 pub struct CommitterKey<E: PairingEngine> {
     /// The key used to commit to polynomials.
@@ -60,18 +60,26 @@ impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for committing to shifted polynomials.
     pub fn shifted_powers(
         &self,
-        degree_bound: impl Into<Option<usize>>
+        degree_bound: impl Into<Option<usize>>,
     ) -> Option<kzg10::Powers<E>> {
         match (&self.shifted_powers_of_g, &self.shifted_powers_of_gamma_g) {
             (Some(shifted_powers_of_g), Some(shifted_powers_of_gamma_g)) => {
-                let powers_range =
-                    if let Some(degree_bound) = degree_bound.into() {
-                        assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
-                        let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
-                        (max_bound - degree_bound)..
-                    } else {
-                        0..
-                    };
+                let powers_range = if let Some(degree_bound) = degree_bound.into() {
+                    assert!(self
+                        .enforced_degree_bounds
+                        .as_ref()
+                        .unwrap()
+                        .contains(&degree_bound));
+                    let max_bound = self
+                        .enforced_degree_bounds
+                        .as_ref()
+                        .unwrap()
+                        .last()
+                        .unwrap();
+                    (max_bound - degree_bound)..
+                } else {
+                    0..
+                };
 
                 let ck = kzg10::Powers {
                     powers_of_g: shifted_powers_of_g[powers_range.clone()].into(),
@@ -100,7 +108,6 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct VerifierKey<E: PairingEngine> {
-
     /// The generator of G1.
     pub g: E::G1Affine,
 
@@ -135,11 +142,13 @@ pub struct VerifierKey<E: PairingEngine> {
 impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
-        self.degree_bounds_and_prepared_neg_powers_of_h.as_ref().and_then(|v| {
-            v.binary_search_by(|(d, _)| d.cmp(&degree_bound))
-                .ok()
-                .map(|i| v[i].1.clone())
-        })
+        self.degree_bounds_and_prepared_neg_powers_of_h
+            .as_ref()
+            .and_then(|v| {
+                v.binary_search_by(|(d, _)| d.cmp(&degree_bound))
+                    .ok()
+                    .map(|i| v[i].1.clone())
+            })
     }
 }
 
