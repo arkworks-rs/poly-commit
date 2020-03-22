@@ -8,6 +8,8 @@ use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
+use crate::kzg10::check;
+
 mod data_structures;
 pub use data_structures::*;
 
