@@ -117,7 +117,7 @@ pub struct VerifierKey<E: PairingEngine> {
     /// The generator of G2.
     pub h: E::G2Affine,
 
-    /// The \beta times the generator of G2.
+    /// \beta times the generator of G2.
     pub beta_h: E::G2Affine,
 
     /// The generator of G2, prepared for use in pairings.
