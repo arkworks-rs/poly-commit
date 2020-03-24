@@ -62,14 +62,14 @@ pub mod kzg10;
 pub mod marlin_kzg10;
 
 /// Polynomial commitment based on the construction in the
-/// [Sonic paper][sonic].
-/// Closely follows the commitment approach shown in
-/// the [AuroraLight paper][auroralight].
-/// Implementation additionally includes extra options
-/// to support hiding polynomials.
+/// [Sonic][sonic] paper, with modifications from the 
+/// [AuroraLight][auroralight] paper.
+/// The implemented scheme additionally supports creating hiding 
+/// commitments by following the approach of [Marlin][marlin].
 ///
-/// [sonic]: https://eprint.iacr.org/2019/099.pdf
-/// [auroralight]: https://eprint.iacr.org/2019/601.pdf
+/// [sonic]: https://eprint.iacr.org/2019/099
+/// [auroralight]: https://eprint.iacr.org/2019/601
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod sonic_kzg10;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
