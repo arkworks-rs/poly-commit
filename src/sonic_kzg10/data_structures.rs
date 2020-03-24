@@ -40,7 +40,7 @@ pub struct CommitterKey<E: PairingEngine> {
     pub shifted_powers_of_gamma_g: Option<Vec<E::G1Affine>>,
 
     /// The degree bounds that are supported by `self`.
-    /// In ascending order from smallest to largest.
+    /// Sorted in ascending order from smallest bound to largest bound.
     /// This is `None` if `self` does not support enforcing any degree bounds.
     pub enforced_degree_bounds: Option<Vec<usize>>,
 
