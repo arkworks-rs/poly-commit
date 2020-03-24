@@ -452,23 +452,20 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment =
-                    commitments
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
                 let degree_bound = commitment.degree_bound();
                 assert_eq!(
                     degree_bound.is_some(),
                     commitment.commitment().shifted_comm.is_some()
                 );
 
-                let v_i = values.get(&(label.clone(), *query)).ok_or(
-                    Error::MissingEvaluation {
+                let v_i = values
+                    .get(&(label.clone(), *query))
+                    .ok_or(Error::MissingEvaluation {
                         label: label.to_string(),
-                    },
-                )?;
+                    })?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);
@@ -604,12 +601,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut coeffs_and_comms = Vec::new();
 
             for (coeff, label) in lc.iter() {
-                let &cur_comm =
-                    label_comm_map
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
 
                 if num_polys == 1 && cur_comm.degree_bound().is_some() {
                     assert!(

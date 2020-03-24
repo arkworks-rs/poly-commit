@@ -3,7 +3,6 @@ use crate::String;
 /// The error type for `PolynomialCommitment`.
 #[derive(Debug)]
 pub enum Error {
-
     /// The query set contains a label for a polynomial that was not provided as
     /// input to the `PC::open`.
     MissingPolynomial {

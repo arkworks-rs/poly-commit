@@ -5,7 +5,7 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{Error, PCRandomness, LabeledPolynomial, Polynomial, Vec};
+use crate::{Error, LabeledPolynomial, PCRandomness, Polynomial, Vec};
 use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra_core::{
     AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
@@ -83,7 +83,8 @@ impl<E: PairingEngine> KZG10<E> {
         let powers_of_gamma_g =
             E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
 
-        let prepared_neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
+        let prepared_neg_powers_of_h_time =
+            start_timer!(|| "Generating negative powers of h in G2");
         let prepared_neg_powers_of_h = if produce_g2_powers {
             let mut neg_powers_of_beta = vec![E::Fr::one()];
             let mut cur = E::Fr::one() / &beta;

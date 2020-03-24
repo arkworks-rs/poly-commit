@@ -62,9 +62,9 @@ pub mod kzg10;
 pub mod marlin_kzg10;
 
 /// Polynomial commitment based on the construction in the
-/// [Sonic][sonic] paper, with modifications from the 
+/// [Sonic][sonic] paper, with modifications from the
 /// [AuroraLight][auroralight] paper.
-/// The implemented scheme additionally supports creating hiding 
+/// The implemented scheme additionally supports creating hiding
 /// commitments by following the approach of [Marlin][marlin].
 ///
 /// [sonic]: https://eprint.iacr.org/2019/099
@@ -264,18 +264,16 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values = Vec::new();
             for label in labels.into_iter() {
-                let commitment =
-                    commitments
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
+                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
+
+                let v_i =
+                    evaluations
+                        .get(&(label.clone(), *query))
+                        .ok_or(Error::MissingEvaluation {
                             label: label.to_string(),
                         })?;
-
-                let v_i = evaluations.get(&(label.clone(), *query)).ok_or(
-                    Error::MissingEvaluation {
-                        label: label.to_string(),
-                    },
-                )?;
 
                 comms.push(commitment);
                 values.push(*v_i);

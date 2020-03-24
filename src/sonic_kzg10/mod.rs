@@ -12,9 +12,9 @@ mod data_structures;
 pub use data_structures::*;
 
 /// Polynomial commitment based on the construction in the
-/// [Sonic][sonic] paper, with modifications from the 
+/// [Sonic][sonic] paper, with modifications from the
 /// [AuroraLight][auroralight] paper.
-/// The implemented scheme additionally supports creating hiding 
+/// The implemented scheme additionally supports creating hiding
 /// commitments by following the approach of [Marlin][marlin].
 ///
 /// [sonic]: https://eprint.iacr.org/2019/099
@@ -174,7 +174,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
                 let shifted_ck_time = start_timer!(|| format!(
                     "Constructing `shifted_powers` of size {}",
-                    max_degree - lowest_shifted_power + 1
+                    max_degree - lowest_shift_degree + 1
                 ));
 
                 let shifted_powers_of_g = pp.powers_of_g[lowest_shift_degree..].to_vec();
@@ -419,18 +419,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment =
-                    commitments
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
 
-                let v_i = values.get(&(label.clone(), *query)).ok_or(
-                    Error::MissingEvaluation {
+                let v_i = values
+                    .get(&(label.clone(), *query))
+                    .ok_or(Error::MissingEvaluation {
                         label: label.to_string(),
-                    },
-                )?;
+                    })?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);
@@ -466,7 +463,6 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use crate::sonic_kzg10::SonicKZG10;
-    use crate::Polynomial;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
     use algebra::MNT6;
@@ -492,9 +488,12 @@ mod tests {
         use crate::tests::*;
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
             .expect("test failed for bls12-377");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
+            .expect("test failed for bls12-381");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
+            .expect("test failed for MNT6");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
+            .expect("test failed for SW6");
     }
 
     #[test]
@@ -524,18 +523,17 @@ mod tests {
             .expect("test failed for bls12-381");
         single_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
             .expect("test failed for MNT6");
-        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
-            .expect("test failed for SW6");
+        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_polys_degree_bound_single_query_test::<_, PC_Bls12_377>()
+            .expect("test failed for bls12-377");
         two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        two_polys_degree_bound_single_query_test::<_, PC_MNT6>()
-            .expect("test failed for MNT6");
+        two_polys_degree_bound_single_query_test::<_, PC_MNT6>().expect("test failed for MNT6");
         two_polys_degree_bound_single_query_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
