@@ -614,7 +614,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     let &cur_comm =
                         label_comm_map
                             .get(label)
-                            .ok_or(QuerySetError::MissingPolynomial {
+                            .ok_or(Error::MissingPolynomial {
                                 label: label.to_string(),
                             })?;
 
