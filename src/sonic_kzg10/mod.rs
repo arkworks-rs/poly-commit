@@ -13,14 +13,15 @@ use crate::kzg10::check;
 mod data_structures;
 pub use data_structures::*;
 
-/// `SonicKZG` is an implementation of the polynomial commitment scheme based off of scheme in
-/// the [Sonic paper][sonic].
-/// The exact commitment scheme used in this implementation closely follows the approach taken by
-/// [Gabizon][auroralight].
-/// Additional changes were made to include the option of hiding polynomials in the commitments.
+/// Polynomial commitment based on the construction in the
+/// [Sonic][sonic] paper, with modifications from the 
+/// [AuroraLight][auroralight] paper.
+/// The implemented scheme additionally supports creating hiding 
+/// commitments by following the approach of [Marlin][marlin].
 ///
-/// [sonic]: https://eprint.iacr.org/2019/099.pdf
-/// [auroralight]: https://eprint.iacr.org/2019/601.pdf
+/// [sonic]: https://eprint.iacr.org/2019/099
+/// [auroralight]: https://eprint.iacr.org/2019/601
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct SonicKZG10<E: PairingEngine> {
     _engine: PhantomData<E>,
 }
