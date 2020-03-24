@@ -350,7 +350,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
                             .get(&(l.clone().into(), point))
-                            .ok_or(QuerySetError::MissingEvaluation { label: l.clone() })?,
+                            .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 
                     actual_rhs += &(*coeff * eval);
