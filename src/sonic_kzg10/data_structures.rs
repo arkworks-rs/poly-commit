@@ -15,7 +15,7 @@ pub type Randomness<E> = kzg10::Randomness<E>;
 /// `Commitment` is the commitment for the KZG10 scheme.
 pub type Commitment<E> = kzg10::Commitment<E>;
 
-/// `ComitterKey` is used to commit to and create evaluation proofs for a given
+/// `ComitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
 #[derive(Derivative)]
 #[derivative(
