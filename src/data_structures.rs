@@ -1,5 +1,6 @@
 use crate::{Cow, String, Vec};
 use algebra_core::Field;
+use core::borrow::Borrow;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
@@ -190,13 +191,70 @@ impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
     }
 }
 
+/// A term in a linear combination.
+#[derive(Hash, Ord, PartialOrd, Clone, Eq, PartialEq, Debug)]
+pub enum LCTerm {
+    /// The constant term representing `one`.
+    One,
+    /// Label for a polynomial.
+    PolyLabel(String),
+}
+
+impl LCTerm {
+    /// Returns `true` if `self == LCTerm::One`
+    #[inline]
+    pub fn is_one(&self) -> bool {
+        if let LCTerm::One = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl From<PolynomialLabel> for LCTerm {
+    fn from(other: PolynomialLabel) -> Self {
+        Self::PolyLabel(other)
+    }
+}
+
+impl core::convert::TryInto<PolynomialLabel> for LCTerm {
+    type Error = ();
+    fn try_into(self) -> Result<PolynomialLabel, ()> {
+        match self {
+            Self::One => Err(()),
+            Self::PolyLabel(l) => Ok(l),
+        }
+    }
+}
+
+impl<'a> core::convert::TryInto<&'a PolynomialLabel> for &'a LCTerm {
+    type Error = ();
+
+    fn try_into(self) -> Result<&'a PolynomialLabel, ()> {
+        match self {
+            LCTerm::One => Err(()),
+            LCTerm::PolyLabel(l) => Ok(l),
+        }
+    }
+}
+
+impl<B: Borrow<String>> PartialEq<B> for LCTerm {
+    fn eq(&self, other: &B) -> bool {
+        match self {
+            Self::One => false,
+            Self::PolyLabel(l) => l == other.borrow(),
+        }
+    }
+}
+
 /// A labeled linear combinations of polynomials.
 #[derive(Clone, Debug)]
 pub struct LinearCombination<F> {
     /// The label.
     pub label: String,
     /// The linear combination of `(coeff, poly_label)` pairs.
-    inner: Vec<(F, PolynomialLabel)>,
+    inner: Vec<(F, LCTerm)>,
 }
 
 impl<F: Field> LinearCombination<F> {
@@ -219,14 +277,18 @@ impl<F: Field> LinearCombination<F> {
     }
 
     /// Add a term to the linear combination.
-    pub fn push(&mut self, term: (F, PolynomialLabel)) -> &mut Self {
+    pub fn push(&mut self, term: (F, LCTerm)) -> &mut Self {
         self.inner.push(term);
         self
     }
 }
 
+impl<'a, F: Field> core::ops::AddAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
+    fn add_assign(&mut self, _other: (F, &'a LinearCombination<F>)) {}
+}
+
 impl<F: Field> core::ops::Deref for LinearCombination<F> {
-    type Target = [(F, PolynomialLabel)];
+    type Target = [(F, LCTerm)];
 
     fn deref(&self) -> &Self::Target {
         &self.inner

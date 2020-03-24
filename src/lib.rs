@@ -286,7 +286,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         Ok(result)
     }
 
-    /// On input a list of polynomials, labeled linear combinations of those polynomials,
+    /// On input a list of polynomials, linear combinations of those polynomials,
     /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
     fn open_combinations<'a>(
@@ -314,10 +314,6 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
     /// Checks that `evaluations` are the true evaluations at `query_set` of the
     /// linear combinations of polynomials committed in `commitments`.
-    ///
-    /// # Note
-    ///
-    /// `evaluations` must have been produced by invoking `Self::evaluate_combinations`.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -350,11 +346,13 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                 let mut actual_rhs = F::zero();
 
                 for (coeff, label) in lc.iter() {
-                    let eval = poly_evals.get(&(label.clone().into(), point)).ok_or(
-                        Error::MissingEvaluation {
-                            label: label.clone(),
-                        },
-                    )?;
+                    let eval = match label {
+                        LCTerm::One => F::one(),
+                        LCTerm::PolyLabel(l) => *poly_evals
+                            .get(&(l.clone().into(), point))
+                            .ok_or(QuerySetError::MissingEvaluation { label: l.clone() })?,
+                    };
+
                     actual_rhs += &(*coeff * eval);
                 }
                 if claimed_rhs != actual_rhs {
@@ -408,8 +406,10 @@ fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
     let linear_combinations = BTreeMap::from_iter(lc_s);
     for (lc_label, point) in query_set {
         if let Some(lc) = linear_combinations.get(lc_label) {
-            for (_, poly_label) in lc.iter() {
-                poly_query_set.insert((poly_label.into(), *point));
+            for (_, poly_label) in lc.iter().filter(|(_, l)| !l.is_one()) {
+                if let LCTerm::PolyLabel(l) = poly_label {
+                    poly_query_set.insert((l.into(), *point));
+                }
             }
         }
     }
@@ -656,7 +656,7 @@ pub mod tests {
                     for (k, label) in labels.iter().enumerate() {
                         if should_have_degree_bounds {
                             value += &polynomials[k].evaluate(point);
-                            lc.push((F::one(), label.to_string()));
+                            lc.push((F::one(), label.to_string().into()));
                             break;
                         } else {
                             let poly = &polynomials[k];
@@ -666,7 +666,7 @@ pub mod tests {
                                 assert!(poly.degree_bound().is_none());
                                 let coeff = F::rand(rng);
                                 value += &(coeff * poly.evaluate(point));
-                                lc.push((coeff, label.to_string()));
+                                lc.push((coeff, label.to_string().into()));
                             }
                         }
                     }
