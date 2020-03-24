@@ -4,7 +4,7 @@
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut, missing_docs)]
-#![warn(unused_imports)]
+#![deny(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
@@ -114,7 +114,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: algebra_core::Error + From<QuerySetError> + From<EquationError>;
+    type Error: algebra_core::Error + From<Error>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
@@ -203,7 +203,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                 let (polynomial, rand) =
                     polynomials_with_rands
                         .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                        .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
                 query_polys.push(polynomial);
@@ -267,12 +267,12 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                 let commitment =
                     commitments
                         .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                        .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
 
                 let v_i = evaluations.get(&(label.clone(), *query)).ok_or(
-                    QuerySetError::MissingEvaluation {
+                    Error::MissingEvaluation {
                         label: label.to_string(),
                     },
                 )?;
@@ -344,7 +344,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         for &(ref lc_label, point) in eqn_query_set {
             if let Some(lc) = lc_s.get(lc_label) {
                 let claimed_rhs = *eqn_evaluations.get(&(lc_label.clone(), point)).ok_or(
-                    QuerySetError::MissingEvaluation {
+                    Error::MissingEvaluation {
                         label: lc_label.to_string(),
                     },
                 )?;
@@ -353,7 +353,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
                 for (coeff, label) in lc.iter() {
                     let eval = poly_evals.get(&(label.clone().into(), point)).ok_or(
-                        QuerySetError::MissingEvaluation {
+                        Error::MissingEvaluation {
                             label: label.clone(),
                         },
                     )?;

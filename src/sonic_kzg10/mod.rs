@@ -1,14 +1,12 @@
 use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet, QuerySetError};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
+use crate::{Error, Evaluations, QuerySet};
+use crate::{LabeledCommitment, LabeledPolynomial};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, UniformRand, Zero};
+use algebra_core::{AffineCurve, One, PairingEngine, ProjectiveCurve, UniformRand, Zero};
 use core::marker::PhantomData;
 use rand_core::RngCore;
-
-use crate::kzg10::check;
 
 mod data_structures;
 pub use data_structures::*;
@@ -270,7 +268,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 .as_ref()
                 .map(|bounds| bounds.as_slice());
 
-            check::check_degrees_and_bounds::<E>(
+            kzg10::KZG10::<E>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
@@ -331,7 +329,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 .as_ref()
                 .map(|bounds| bounds.as_slice());
 
-            check::check_degrees_and_bounds::<E>(
+            kzg10::KZG10::<E>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
@@ -424,12 +422,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 let commitment =
                     commitments
                         .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                        .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
 
                 let v_i = values.get(&(label.clone(), *query)).ok_or(
-                    QuerySetError::MissingEvaluation {
+                    Error::MissingEvaluation {
                         label: label.to_string(),
                     },
                 )?;
