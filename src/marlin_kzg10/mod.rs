@@ -611,12 +611,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     }
                 } else {
                     let label: &String = label.try_into().unwrap();
-                    let &cur_comm =
-                        label_comm_map
-                            .get(label)
-                            .ok_or(Error::MissingPolynomial {
-                                label: label.to_string(),
-                            })?;
+                    let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
 
                     if num_polys == 1 && cur_comm.degree_bound().is_some() {
                         assert!(
