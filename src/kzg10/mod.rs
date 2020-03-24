@@ -85,7 +85,7 @@ impl<E: PairingEngine> KZG10<E> {
         let powers_of_gamma_g =
             E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
 
-        let prepared_neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h");
+        let prepared_neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
         let prepared_neg_powers_of_h = if produce_g2_powers {
             let mut neg_powers_of_beta = vec![E::Fr::one()];
             let mut cur = E::Fr::one() / &beta;
