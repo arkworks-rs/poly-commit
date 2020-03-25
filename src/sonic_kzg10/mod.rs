@@ -11,14 +11,16 @@ use rand_core::RngCore;
 mod data_structures;
 pub use data_structures::*;
 
-/// Polynomial commitment based on the construction in the
-/// [Sonic][sonic] paper, with modifications from the
-/// [AuroraLight][auroralight] paper.
-/// The implemented scheme additionally supports creating hiding
-/// commitments by following the approach of [Marlin][marlin].
+
+/// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement and
+/// batching taken from [[MBKM19, “Sonic”]][sonic] (more precisely, their
+/// counterparts in [[Gabizon19, “AuroraLight”]][al] that avoid negative G1 powers).
+/// The (optional) hiding property of the commitment scheme follows the approach
+/// described in [[CHMMVW20, “Marlin”]][marlin].
 ///
+/// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [sonic]: https://eprint.iacr.org/2019/099
-/// [auroralight]: https://eprint.iacr.org/2019/601
+/// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct SonicKZG10<E: PairingEngine> {
     _engine: PhantomData<E>,

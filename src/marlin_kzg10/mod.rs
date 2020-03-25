@@ -11,12 +11,12 @@ use rand_core::RngCore;
 mod data_structures;
 pub use data_structures::*;
 
-/// `MarlinKZG10` is an implementation of the polynomial commitment scheme of
-/// [Kate, Zaverucha and Goldbgerg][kzg10], with degree bound enforcement as
-/// described in the [Marlin paper][marlin]
+
+/// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
+/// and (optional) hiding property taken from [[CHMMVW20, “Marlin”]][marlin].
 ///
-/// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-/// [marlin]: https://eprint.iacr.org/2019/1047
+/// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
+/// [marlin]: https://eprint.iacr.org/2019/104
 pub struct MarlinKZG10<E: PairingEngine> {
     _engine: PhantomData<E>,
 }
