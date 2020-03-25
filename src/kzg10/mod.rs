@@ -5,7 +5,7 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{PCRandomness, Polynomial, Vec};
+use crate::{Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};
 use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra_core::{
     AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
@@ -18,9 +18,6 @@ use core::marker::PhantomData;
 
 mod data_structures;
 pub use data_structures::*;
-
-mod error;
-pub use error::*;
 
 pub(crate) mod optional_rng;
 
@@ -37,7 +34,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// for the polynomial commitment scheme.
     pub fn setup<R: RngCore>(
         max_degree: usize,
-        _produce_g2_powers: bool,
+        produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
         if max_degree < 1 {
@@ -50,6 +47,7 @@ impl<E: PairingEngine> KZG10<E> {
         let h = E::G2Projective::rand(rng);
 
         let mut powers_of_beta = vec![E::Fr::one()];
+
         let mut cur = beta;
         for _ in 0..max_degree {
             powers_of_beta.push(cur);
@@ -80,9 +78,36 @@ impl<E: PairingEngine> KZG10<E> {
         // up to D queries.
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
+
         let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
         let powers_of_gamma_g =
             E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
+
+        let prepared_neg_powers_of_h_time =
+            start_timer!(|| "Generating negative powers of h in G2");
+        let prepared_neg_powers_of_h = if produce_g2_powers {
+            let mut neg_powers_of_beta = vec![E::Fr::one()];
+            let mut cur = E::Fr::one() / &beta;
+            for _ in 0..max_degree {
+                neg_powers_of_beta.push(cur);
+                cur /= &beta;
+            }
+
+            let neg_h_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, h);
+            let neg_powers_of_h = FixedBaseMSM::multi_scalar_mul::<E::G2Projective>(
+                scalar_bits,
+                window_size,
+                &neg_h_table,
+                &neg_powers_of_beta,
+            );
+
+            let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
+            Some(affines.into_iter().map(|a| a.into()).collect())
+        } else {
+            None
+        };
+
+        end_timer!(prepared_neg_powers_of_h_time);
 
         let beta_h = h.mul(beta).into_affine();
         let h = h.into_affine();
@@ -94,6 +119,7 @@ impl<E: PairingEngine> KZG10<E> {
             powers_of_gamma_g,
             h,
             beta_h,
+            prepared_neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
         };
@@ -108,7 +134,7 @@ impl<E: PairingEngine> KZG10<E> {
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<(Commitment<E>, Randomness<E>), Error> {
-        Error::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
+        Self::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
             "Committing to polynomial of degree {} with hiding_bound: {:?}",
@@ -135,7 +161,7 @@ impl<E: PairingEngine> KZG10<E> {
             ));
 
             randomness = Randomness::rand(hiding_degree, false, &mut rng);
-            Error::check_hiding_bound(
+            Self::check_hiding_bound(
                 randomness.blinding_polynomial.degree(),
                 powers.powers_of_gamma_g.len(),
             )?;
@@ -192,7 +218,7 @@ impl<E: PairingEngine> KZG10<E> {
         witness_polynomial: &Polynomial<E::Fr>,
         hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
     ) -> Result<Proof<E>, Error> {
-        Error::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
+        Self::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
         let (num_leading_zeros, witness_coeffs) =
             skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
 
@@ -234,7 +260,7 @@ impl<E: PairingEngine> KZG10<E> {
         point: E::Fr,
         rand: &Randomness<E>,
     ) -> Result<Proof<E>, Error> {
-        Error::check_degree_is_within_bounds(p.degree(), powers.size())?;
+        Self::check_degree_is_within_bounds(p.degree(), powers.size())?;
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
 
         let witness_time = start_timer!(|| "Computing witness polynomials");
@@ -331,6 +357,78 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
+    }
+
+    // Functions for checking errors
+    pub(crate) fn check_degree_is_within_bounds(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Error> {
+        if num_coefficients < 1 {
+            Err(Error::DegreeIsZero)
+        } else {
+            Self::check_degree_is_too_large(num_coefficients, num_powers)
+        }
+    }
+
+    pub(crate) fn check_degree_is_too_large(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Error> {
+        if num_coefficients > num_powers {
+            Err(Error::TooManyCoefficients {
+                num_coefficients,
+                num_powers,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn check_hiding_bound(
+        hiding_poly_degree: usize,
+        num_powers: usize,
+    ) -> Result<(), Error> {
+        if hiding_poly_degree == 0 {
+            Err(Error::HidingBoundIsZero)
+        } else if hiding_poly_degree >= num_powers {
+            // The above check uses `>=` because committing to a hiding poly with
+            // degree `hiding_poly_degree` requires `hiding_poly_degree + 1`
+            // powers.
+            Err(Error::HidingBoundToolarge {
+                hiding_poly_degree,
+                num_powers,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn check_degrees_and_bounds<'a>(
+        supported_degree: usize,
+        max_degree: usize,
+        enforced_degree_bounds: Option<&[usize]>,
+        p: &'a LabeledPolynomial<'a, E::Fr>,
+    ) -> Result<(), Error> {
+        if let Some(bound) = p.degree_bound() {
+            let enforced_degree_bounds =
+                enforced_degree_bounds.ok_or(Error::UnsupportedDegreeBound(bound))?;
+
+            if enforced_degree_bounds.binary_search(&bound).is_err() {
+                Err(Error::UnsupportedDegreeBound(bound))
+            } else if bound < p.degree() || bound > max_degree {
+                return Err(Error::IncorrectDegreeBound {
+                    poly_degree: p.degree(),
+                    degree_bound: p.degree_bound().unwrap(),
+                    supported_degree,
+                    label: p.label().to_string(),
+                });
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 

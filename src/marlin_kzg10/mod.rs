@@ -1,6 +1,6 @@
-use crate::kzg10;
+use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Evaluations, QuerySet, QuerySetError};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
@@ -10,9 +10,6 @@ use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
-
-mod error;
-pub use error::*;
 
 /// `MarlinKZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10], with degree bound enforcement as
@@ -271,7 +268,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let hiding_bound = p.hiding_bound();
             let polynomial = p.polynomial();
 
-            Self::Error::check_degrees_and_bounds(&ck, &p)?;
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
+            kzg10::KZG10::<E>::check_degrees_and_bounds(
+                ck.supported_degree(),
+                ck.max_degree,
+                enforced_degree_bounds,
+                &p,
+            )?;
 
             let commit_time = start_timer!(|| format!(
                 "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
@@ -329,7 +335,16 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         for (j, (polynomial, rand)) in labeled_polynomials.into_iter().zip(rands).enumerate() {
             let degree_bound = polynomial.degree_bound();
 
-            Self::Error::check_degrees_and_bounds(&ck, &polynomial)?;
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
+            kzg10::KZG10::<E>::check_degrees_and_bounds(
+                ck.supported_degree(),
+                ck.max_degree,
+                enforced_degree_bounds,
+                &polynomial,
+            )?;
 
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = opening_challenge.pow([2 * j as u64]);
@@ -437,23 +452,20 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment =
-                    commitments
-                        .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
                 let degree_bound = commitment.degree_bound();
                 assert_eq!(
                     degree_bound.is_some(),
                     commitment.commitment().shifted_comm.is_some()
                 );
 
-                let v_i = values.get(&(label.clone(), *query)).ok_or(
-                    QuerySetError::MissingEvaluation {
+                let v_i = values
+                    .get(&(label.clone(), *query))
+                    .ok_or(Error::MissingEvaluation {
                         label: label.to_string(),
-                    },
-                )?;
+                    })?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);
@@ -520,7 +532,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 let &(cur_poly, cur_rand) =
                     label_poly_rand_map
                         .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                        .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
 
@@ -599,12 +611,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     }
                 } else {
                     let label: &String = label.try_into().unwrap();
-                    let &cur_comm =
-                        label_comm_map
-                            .get(label)
-                            .ok_or(QuerySetError::MissingPolynomial {
-                                label: label.to_string(),
-                            })?;
+                    let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
 
                     if num_polys == 1 && cur_comm.degree_bound().is_some() {
                         assert!(

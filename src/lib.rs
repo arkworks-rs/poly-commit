@@ -4,7 +4,7 @@
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut, missing_docs)]
-#![warn(unused_imports)]
+#![deny(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
@@ -52,7 +52,6 @@ macro_rules! eprintln {
     () => {};
     ($($arg: tt)*) => {};
 }
-
 /// The core KZG10 construction.
 pub mod kzg10;
 
@@ -61,6 +60,17 @@ pub mod kzg10;
 ///
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod marlin_kzg10;
+
+/// Polynomial commitment based on the construction in the
+/// [Sonic][sonic] paper, with modifications from the
+/// [AuroraLight][auroralight] paper.
+/// The implemented scheme additionally supports creating hiding
+/// commitments by following the approach of [Marlin][marlin].
+///
+/// [sonic]: https://eprint.iacr.org/2019/099
+/// [auroralight]: https://eprint.iacr.org/2019/601
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod sonic_kzg10;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
@@ -104,7 +114,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: algebra_core::Error + From<QuerySetError> + From<EquationError>;
+    type Error: algebra_core::Error + From<Error>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
@@ -193,7 +203,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                 let (polynomial, rand) =
                     polynomials_with_rands
                         .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                        .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
                 query_polys.push(polynomial);
@@ -254,18 +264,16 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values = Vec::new();
             for label in labels.into_iter() {
-                let commitment =
-                    commitments
-                        .get(label)
-                        .ok_or(QuerySetError::MissingPolynomial {
+                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
+
+                let v_i =
+                    evaluations
+                        .get(&(label.clone(), *query))
+                        .ok_or(Error::MissingEvaluation {
                             label: label.to_string(),
                         })?;
-
-                let v_i = evaluations.get(&(label.clone(), *query)).ok_or(
-                    QuerySetError::MissingEvaluation {
-                        label: label.to_string(),
-                    },
-                )?;
 
                 comms.push(commitment);
                 values.push(*v_i);
@@ -330,7 +338,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         for &(ref lc_label, point) in eqn_query_set {
             if let Some(lc) = lc_s.get(lc_label) {
                 let claimed_rhs = *eqn_evaluations.get(&(lc_label.clone(), point)).ok_or(
-                    QuerySetError::MissingEvaluation {
+                    Error::MissingEvaluation {
                         label: lc_label.to_string(),
                     },
                 )?;
@@ -342,7 +350,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
                             .get(&(l.clone().into(), point))
-                            .ok_or(QuerySetError::MissingEvaluation { label: l.clone() })?,
+                            .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 
                     actual_rhs += &(*coeff * eval);
@@ -472,7 +480,7 @@ pub mod tests {
                 let poly = Polynomial::rand(degree, rng);
 
                 let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
-                    let range = rand::distributions::Uniform::from(degree..=max_degree);
+                    let range = rand::distributions::Uniform::from(degree..=supported_degree);
                     let degree_bound = range.sample(rng);
                     degree_bounds.push(degree_bound);
                     Some(degree_bound)
@@ -593,7 +601,7 @@ pub mod tests {
 
                 let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
                     if rng.gen() {
-                        let range = rand::distributions::Uniform::from(degree..=max_degree);
+                        let range = rand::distributions::Uniform::from(degree..=supported_degree);
                         let degree_bound = range.sample(rng);
                         degree_bounds.push(degree_bound);
                         Some(degree_bound)
@@ -620,6 +628,10 @@ pub mod tests {
             }
             println!("supported degree: {:?}", supported_degree);
             println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+            println!("{:?}", degree_bounds);
+            println!("{}", num_polynomials);
+            println!("{}", enforce_degree_bounds);
+
             let (ck, vk) = PC::trim(
                 &pp,
                 supported_degree,
