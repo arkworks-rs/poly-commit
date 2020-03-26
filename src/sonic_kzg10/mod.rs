@@ -68,8 +68,7 @@ impl<E: PairingEngine> SonicKZG10<E> {
 
         // Push expected results into list of elems. Power will be the negative of the expected power
         let mut witness: E::G1Projective = proof.w.into_projective();
-        let mut adjusted_witness: E::G1Projective =
-            vk.g.into_projective().mul(combined_values)
+        let mut adjusted_witness = vk.g.into_projective().mul(combined_values)
             + &vk.gamma_g.into_projective().mul(proof.random_v)
             - &proof.w.into_projective().mul(point);
 
