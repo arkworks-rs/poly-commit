@@ -11,7 +11,6 @@ use rand_core::RngCore;
 mod data_structures;
 pub use data_structures::*;
 
-
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement and
 /// batching taken from [[MBKM19, “Sonic”]][sonic] (more precisely, their
 /// counterparts in [[Gabizon19, “AuroraLight”]][al] that avoid negative G1 powers).
