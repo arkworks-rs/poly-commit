@@ -4,7 +4,7 @@
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut, missing_docs)]
-#![deny(unused_imports)]
+//#![deny(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
@@ -52,6 +52,8 @@ macro_rules! eprintln {
     () => {};
     ($($arg: tt)*) => {};
 }
+
+/*
 /// The core [[KZG10]][kzg] construction.
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
@@ -76,6 +78,8 @@ pub mod marlin_kzg10;
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod sonic_kzg10;
+*/
+pub mod inner_product_arg;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
@@ -162,11 +166,13 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: F,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::Proof, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a;
 
     /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
@@ -174,22 +180,25 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     fn batch_open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a,
     {
-        let polynomials_with_rands: BTreeMap<_, _> = labeled_polynomials
+        let polynomials_with_comms_rands: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
+            .zip(commitments)
             .zip(rands)
-            .map(|(poly, r)| (poly.label(), (poly, r)))
+            .map(|((poly, c), r)| (poly.label(), (poly, c, r)))
             .collect();
 
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
-            polynomials_with_rands.len(),
+            polynomials_with_comms_rands.len(),
             query_set.len(),
         ));
 
@@ -203,19 +212,21 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         let mut proofs = Vec::new();
         for (query, labels) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
+            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
             let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
             for label in labels {
-                let (polynomial, rand) =
-                    polynomials_with_rands
+                let (polynomial, comm, rand) =
+                    polynomials_with_comms_rands
                         .get(label)
                         .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
                 query_polys.push(polynomial);
+                query_comms.push(comm);
                 query_rands.push(rand);
             }
             let proof_time = start_timer!(|| "Creating proof");
-            let proof = Self::open(ck, query_polys, *query, opening_challenge, query_rands)?;
+            let proof = Self::open(ck, query_polys, query_comms, *query, opening_challenge, query_rands)?;
             end_timer!(proof_time);
 
             proofs.push(proof);
@@ -298,11 +309,13 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<BatchLCProof<F, Self>, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a,
     {
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
@@ -310,7 +323,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         let poly_query_set =
             lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
         let poly_evals = evaluate_query_set(polynomials.iter().copied(), &poly_query_set);
-        let proof = Self::batch_open(ck, polynomials, &poly_query_set, opening_challenge, rands)?;
+        let proof = Self::batch_open(ck, polynomials, commitments, &poly_query_set, opening_challenge, rands)?;
         Ok(BatchLCProof {
             proof,
             evals: Some(poly_evals.values().copied().collect()),
@@ -533,7 +546,7 @@ pub mod tests {
             println!("Generated query set");
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands)?;
+            let proof = PC::batch_open(&ck, &polynomials, &comms, &query_set, opening_challenge, &rands)?;
             let result = PC::batch_check(
                 &vk,
                 &comms,
@@ -694,6 +707,7 @@ pub mod tests {
                 &ck,
                 &linear_combinations,
                 &polynomials,
+                &comms,
                 &query_set,
                 opening_challenge,
                 &rands,

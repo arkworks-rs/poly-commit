@@ -317,11 +317,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::Proof, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a,
     {
         let mut p = Polynomial::zero();
@@ -502,17 +504,20 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a,
     {
         let label_poly_rand_map = polynomials
             .into_iter()
+            .zip(commitments)
             .zip(rands)
-            .map(|(p, r)| (p.label(), (p, r)))
+            .map(|(p, c, r)| (p.label(), (p, c, r)))
             .collect::<BTreeMap<_, _>>();
 
         let mut lc_polynomials = Vec::new();
@@ -655,7 +660,7 @@ mod tests {
     use crate::marlin_kzg10::MarlinKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::MNT6;
+    use algebra::MNT6_753 as MNT6;
     use algebra::SW6;
 
     type PC<E> = MarlinKZG10<E>;

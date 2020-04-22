@@ -313,11 +313,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
     ) -> Result<Self::Proof, Self::Error>
     where
+        Self::Commitment: 'a,
         Self::Randomness: 'a,
     {
         let mut combined_polynomial = Polynomial::zero();
@@ -617,7 +619,7 @@ mod tests {
     use crate::sonic_kzg10::SonicKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::MNT6;
+    use algebra::MNT6_753 as MNT6;
     use algebra::SW6;
 
     type PC<E> = SonicKZG10<E>;
