@@ -26,6 +26,9 @@ pub enum Error {
     /// The provided polynomial was meant to be hiding, but `rng` was `None`.
     MissingRng,
 
+    /// The provided scheme requires commitments, but `commitments` was `None`.
+    MissingCommitment,
+
     /// The degree provided in setup was too small; degree 0 polynomials
     /// are not supported.
     DegreeIsZero,
@@ -98,6 +101,7 @@ impl core::fmt::Display for Error {
                 write!(f, "Equation \"{}\" does not have a LHS.", label)
             },
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
+            Error::MissingCommitment => write!(f, "this scheme requires `Some(commitments)`"),
             Error::DegreeIsZero => write!(
                 f,
                 "this scheme does not support committing to degree 0 polynomials"

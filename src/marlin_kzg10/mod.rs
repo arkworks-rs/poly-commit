@@ -317,14 +317,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        _commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>
     ) -> Result<Self::Proof, Self::Error>
     where
-        Self::Commitment: 'a,
         Self::Randomness: 'a,
+        Self::Commitment: 'a,
     {
         let mut p = Polynomial::zero();
         let mut r = kzg10::Randomness::empty();
@@ -504,20 +504,19 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        _commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
-        Self::Commitment: 'a,
         Self::Randomness: 'a,
+        Self::Commitment: 'a,
     {
         let label_poly_rand_map = polynomials
             .into_iter()
-            .zip(commitments)
             .zip(rands)
-            .map(|(p, c, r)| (p.label(), (p, c, r)))
+            .map(|(p, r)| (p.label(), (p, r)))
             .collect::<BTreeMap<_, _>>();
 
         let mut lc_polynomials = Vec::new();
@@ -571,6 +570,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
+            None::<Vec <&'a LabeledCommitment<Self::Commitment>>>
         )?;
         Ok(BatchLCProof { proof, evals: None })
     }

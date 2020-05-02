@@ -464,7 +464,6 @@ mod tests {
     use algebra::Bls12_381;
     use algebra::MNT6_753 as MNT6;
     use algebra::SW6;
-    use algebra_core::PairingEngine;
 
     type KZG_Bls12_381 = KZG10<Bls12_381>;
 
