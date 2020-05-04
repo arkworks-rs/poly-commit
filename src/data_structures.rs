@@ -259,18 +259,19 @@ pub struct LinearCombination<F> {
 
 impl<F: Field> LinearCombination<F> {
     /// Construct an empty labeled linear combination.
-    pub fn empty(label: String) -> Self {
+    pub fn empty(label: impl Into<String>) -> Self {
         Self {
-            label,
+            label: label.into(),
             inner: Vec::new(),
         }
     }
 
     /// Construct a new labeled linear combination.
     /// with the terms specified in `term`.
-    pub fn new(label: String, terms: Vec<(F, LCTerm)>) -> Self {
+    pub fn new(label: impl Into<String>, terms: Vec<(F, impl Into<LCTerm>)>) -> Self {
+        let terms = terms.into_iter().map(|(c, t)| (c, t.into())).collect();
         Self {
-            label,
+            label: label.into(),
             inner: terms,
         }
     }

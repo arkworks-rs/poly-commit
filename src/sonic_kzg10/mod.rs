@@ -617,13 +617,11 @@ mod tests {
     use crate::sonic_kzg10::SonicKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::MNT6;
     use algebra::SW6;
 
     type PC<E> = SonicKZG10<E>;
     type PC_Bls12_377 = PC<Bls12_377>;
     type PC_Bls12_381 = PC<Bls12_381>;
-    type PC_MNT6 = PC<MNT6>;
     type PC_SW6 = PC<SW6>;
 
     #[test]
@@ -631,7 +629,6 @@ mod tests {
         use crate::tests::*;
         single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        single_poly_test::<_, PC_MNT6>().expect("test failed for MNT6");
         single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -642,8 +639,6 @@ mod tests {
             .expect("test failed for bls12-377");
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
-            .expect("test failed for MNT6");
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
             .expect("test failed for SW6");
     }
@@ -653,7 +648,6 @@ mod tests {
         use crate::tests::*;
         linear_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         linear_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        linear_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
         linear_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -662,7 +656,6 @@ mod tests {
         use crate::tests::*;
         single_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         single_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        single_poly_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
         single_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -673,8 +666,6 @@ mod tests {
             .expect("test failed for bls12-377");
         single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        single_poly_degree_bound_multiple_queries_test::<_, PC_MNT6>()
-            .expect("test failed for MNT6");
         single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -685,7 +676,6 @@ mod tests {
             .expect("test failed for bls12-377");
         two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        two_polys_degree_bound_single_query_test::<_, PC_MNT6>().expect("test failed for MNT6");
         two_polys_degree_bound_single_query_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
@@ -696,8 +686,6 @@ mod tests {
         println!("Finished bls12-377");
         full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        full_end_to_end_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        println!("Finished mnt6");
         full_end_to_end_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
@@ -709,8 +697,6 @@ mod tests {
         println!("Finished bls12-377");
         single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        single_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        println!("Finished mnt6");
         single_equation_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
@@ -722,8 +708,6 @@ mod tests {
         println!("Finished bls12-377");
         two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        two_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        println!("Finished mnt6");
         two_equation_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
@@ -735,8 +719,6 @@ mod tests {
         println!("Finished bls12-377");
         two_equation_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        two_equation_degree_bound_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        println!("Finished mnt6");
         two_equation_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
@@ -748,8 +730,6 @@ mod tests {
         println!("Finished bls12-377");
         full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        full_end_to_end_equation_test::<_, PC_MNT6>().expect("test failed for MNT6");
-        println!("Finished mnt6");
         full_end_to_end_equation_test::<_, PC_SW6>().expect("test failed for SW6");
         println!("Finished sw6");
     }
