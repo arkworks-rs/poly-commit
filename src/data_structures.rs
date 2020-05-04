@@ -3,6 +3,7 @@ use algebra_core::Field;
 use core::borrow::Borrow;
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
+use core::ops::{AddAssign, SubAssign, MulAssign};
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
@@ -260,7 +261,7 @@ pub struct LinearCombination<F> {
     /// The label.
     pub label: String,
     /// The linear combination of `(coeff, poly_label)` pairs.
-    inner: Vec<(F, LCTerm)>,
+    terms: Vec<(F, LCTerm)>,
 }
 
 impl<F: Field> LinearCombination<F> {
@@ -268,7 +269,7 @@ impl<F: Field> LinearCombination<F> {
     pub fn empty(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
-            inner: Vec::new(),
+            terms: Vec::new(),
         }
     }
 
@@ -278,7 +279,7 @@ impl<F: Field> LinearCombination<F> {
         let terms = terms.into_iter().map(|(c, t)| (c, t.into())).collect();
         Self {
             label: label.into(),
-            inner: terms,
+            terms: terms,
         }
     }
 
@@ -289,13 +290,43 @@ impl<F: Field> LinearCombination<F> {
 
     /// Returns `true` if the linear combination has no terms.
     pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        self.terms.is_empty()
     }
 
     /// Add a term to the linear combination.
     pub fn push(&mut self, term: (F, LCTerm)) -> &mut Self {
-        self.inner.push(term);
+        self.terms.push(term);
         self
+    }
+}
+
+impl<'a, F: Field> AddAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
+    fn add_assign(&mut self, (coeff, other): (F, &'a LinearCombination<F>)) {
+        self.terms.extend(other.terms.iter().map(|(c, t)| (coeff * c, t.clone())));
+    }
+}
+
+impl<'a, F: Field> SubAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
+    fn sub_assign(&mut self, (coeff, other): (F, &'a LinearCombination<F>)) {
+        self.terms.extend(other.terms.iter().map(|(c, t)| (-coeff * c, t.clone())));
+    }
+}
+
+impl<F: Field> AddAssign<F> for LinearCombination<F> {
+    fn add_assign(&mut self, coeff: F) {
+        self.terms.push((coeff, LCTerm::One));
+    }
+}
+
+impl<F: Field> SubAssign<F> for LinearCombination<F> {
+    fn sub_assign(&mut self, coeff: F) {
+        self.terms.push((-coeff, LCTerm::One));
+    }
+}
+
+impl<F: Field> MulAssign<F> for LinearCombination<F> {
+    fn mul_assign(&mut self, coeff: F) {
+        self.terms.iter_mut().for_each(|(c, _)| *c *= coeff);
     }
 }
 
@@ -303,6 +334,6 @@ impl<F: Field> core::ops::Deref for LinearCombination<F> {
     type Target = [(F, LCTerm)];
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.terms
     }
 }
