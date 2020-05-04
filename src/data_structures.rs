@@ -266,6 +266,15 @@ impl<F: Field> LinearCombination<F> {
         }
     }
 
+    /// Construct a new labeled linear combination.
+    /// with the terms specified in `term`.
+    pub fn new(label: String, terms: Vec<(F, LCTerm)>) -> Self {
+        Self {
+            label,
+            inner: terms,
+        }
+    }
+
     /// Returns the label of the linear combination.
     pub fn label(&self) -> &String {
         &self.label
@@ -281,10 +290,6 @@ impl<F: Field> LinearCombination<F> {
         self.inner.push(term);
         self
     }
-}
-
-impl<'a, F: Field> core::ops::AddAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
-    fn add_assign(&mut self, _other: (F, &'a LinearCombination<F>)) {}
 }
 
 impl<F: Field> core::ops::Deref for LinearCombination<F> {
