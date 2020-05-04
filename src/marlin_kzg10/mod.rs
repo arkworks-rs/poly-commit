@@ -485,7 +485,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             combined_queries.push(*query);
             combined_evals.push(v);
         }
-        let norm_time = start_timer!(|| "Normalizaing KZG10::Proof");
+        let norm_time = start_timer!(|| "Normalizaing combined commitments");
         E::G1Projective::batch_normalization(&mut combined_comms);
         let combined_comms = combined_comms
             .into_iter()
@@ -601,6 +601,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         let mut lc_commitments = Vec::new();
         let mut lc_info = Vec::new();
         let mut evaluations = evaluations.clone();
+
+        let lc_processing_time = start_timer!(|| "Combining commitments");
         for lc in lc_s {
             let lc_label = lc.label().clone();
             let num_polys = lc.len();
@@ -639,12 +641,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             end_timer!(lc_time);
             lc_info.push((lc_label, degree_bound));
         }
+        end_timer!(lc_processing_time);
+        let combined_comms_norm_time = start_timer!(|| "Normalizing commitments");
         let comms = Self::normalize_commitments(lc_commitments);
         let lc_commitments = lc_info
             .into_iter()
             .zip(comms)
             .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
             .collect::<Vec<_>>();
+        end_timer!(combined_comms_norm_time);
 
         Self::batch_check(
             vk,
