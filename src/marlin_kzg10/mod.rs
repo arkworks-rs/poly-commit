@@ -626,7 +626,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                     coeffs_and_comms.push((*coeff, cur_comm.commitment()));
                 }
             }
+            let lc_time =
+                start_timer!(|| format!("Combining {} commitments for {}", num_polys, lc_label));
             lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
+            end_timer!(lc_time);
             lc_info.push((lc_label, degree_bound));
         }
         let comms = Self::normalize_commitments(lc_commitments);

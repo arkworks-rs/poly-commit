@@ -326,9 +326,10 @@ impl<E: PairingEngine> KZG10<E> {
         let mut g_multiplier = E::Fr::zero();
         let mut gamma_g_multiplier = E::Fr::zero();
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
-            let mut c = c.0.into_projective();
-            let w = proof.w.into_projective();
-            c += &w.mul(*z);
+            let w = proof.w;
+            let mut temp = w.mul(*z);
+            temp.add_assign_mixed(&c.0);
+            let c = temp;
             g_multiplier += &(randomizer * &v);
             gamma_g_multiplier += &(randomizer * &proof.random_v);
             total_c += &c.mul(randomizer);
@@ -342,18 +343,15 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let mut to_affine = [-total_w, total_c];
-        E::G1Projective::batch_normalization(&mut to_affine);
-        let [total_w, total_c] = to_affine;
-        let total_w = total_w.into_affine();
-        let total_c = total_c.into_affine();
+        let affine_points = E::G1Projective::batch_normalization_into_affine(&[-total_w, total_c]);
+        let (total_w, total_c) = (affine_points[0], affine_points[1]);
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&[
             (total_w.into(), vk.prepared_beta_h.clone()),
             (total_c.into(), vk.prepared_h.clone()),
-        ]) == E::Fqk::one();
+        ]).is_one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
