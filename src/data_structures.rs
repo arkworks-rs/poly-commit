@@ -312,6 +312,18 @@ impl<'a, F: Field> SubAssign<(F, &'a LinearCombination<F>)> for LinearCombinatio
     }
 }
 
+impl<'a, F: Field> AddAssign<&'a LinearCombination<F>> for LinearCombination<F> {
+    fn add_assign(&mut self, other: &'a LinearCombination<F>) {
+        self.terms.extend(other.terms.iter().cloned());
+    }
+}
+
+impl<'a, F: Field> SubAssign<&'a LinearCombination<F>> for LinearCombination<F> {
+    fn sub_assign(&mut self, other: &'a LinearCombination<F>) {
+        self.terms.extend(other.terms.iter().map(|(c, t)| (- *c, t.clone())));
+    }
+}
+
 impl<F: Field> AddAssign<F> for LinearCombination<F> {
     fn add_assign(&mut self, coeff: F) {
         self.terms.push((coeff, LCTerm::One));
