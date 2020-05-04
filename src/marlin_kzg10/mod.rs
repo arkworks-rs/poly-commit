@@ -49,7 +49,12 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         let mut combined_comm = E::G1Projective::zero();
         let mut combined_shifted_comm = None;
         for (coeff, comm) in coeffs_and_comms {
-            combined_comm += &comm.comm.0.mul(coeff);
+            if coeff.is_one() {
+                combined_comm.add_assign_mixed(&comm.comm.0);
+            } else {
+                combined_comm += &comm.comm.0.mul(coeff);
+            }
+            
             if let Some(shifted_comm) = &comm.shifted_comm {
                 let cur = shifted_comm.0.mul(coeff);
                 combined_shifted_comm = Some(combined_shifted_comm.map_or(cur, |c| c + cur));
@@ -480,12 +485,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             combined_queries.push(*query);
             combined_evals.push(v);
         }
+        let norm_time = start_timer!(|| "Normalizaing KZG10::Proof");
         E::G1Projective::batch_normalization(&mut combined_comms);
         let combined_comms = combined_comms
             .into_iter()
             .map(|c| kzg10::Commitment(c.into()))
             .collect::<Vec<_>>();
-        let proof_time = start_timer!(|| "Checking SinglePC::Proof");
+        end_timer!(norm_time);
+        let proof_time = start_timer!(|| "Checking KZG10::Proof");
         let result = kzg10::KZG10::batch_check(
             &vk.vk,
             &combined_comms,
