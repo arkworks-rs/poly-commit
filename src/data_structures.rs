@@ -218,6 +218,12 @@ impl From<PolynomialLabel> for LCTerm {
     }
 }
 
+impl<'a> From<&'a str> for LCTerm {
+    fn from(other: &str) -> Self {
+        Self::PolyLabel(other.into())
+    }
+}
+
 impl core::convert::TryInto<PolynomialLabel> for LCTerm {
     type Error = ();
     fn try_into(self) -> Result<PolynomialLabel, ()> {
