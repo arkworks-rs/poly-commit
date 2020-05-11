@@ -395,7 +395,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             end_timer!(proof_time);
 
             w += &shifted_proof.w.into_projective();
-            random_v += &shifted_proof.random_v;
+            if let Some(shifted_random_v) = shifted_proof.random_v {
+                random_v = random_v.map(|v| v + &shifted_random_v);
+            }
         }
 
         Ok(kzg10::Proof {
