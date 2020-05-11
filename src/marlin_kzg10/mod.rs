@@ -54,7 +54,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             } else {
                 combined_comm += &comm.comm.0.mul(coeff);
             }
-            
+
             if let Some(shifted_comm) = &comm.shifted_comm {
                 let cur = shifted_comm.0.mul(coeff);
                 combined_shifted_comm = Some(combined_shifted_comm.map_or(cur, |c| c + cur));

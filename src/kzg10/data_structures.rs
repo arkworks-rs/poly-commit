@@ -220,10 +220,10 @@ pub struct Proof<E: PairingEngine> {
 
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
-        let hiding_size = if self.random_v.is_some() { 
-            algebra_core::to_bytes![E::Fr::zero()].unwrap().len() 
-        } else { 
-            0 
+        let hiding_size = if self.random_v.is_some() {
+            algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+        } else {
+            0
         };
         algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
     }

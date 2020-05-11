@@ -1,9 +1,9 @@
 use crate::{Cow, String, Vec};
 use algebra_core::Field;
 use core::borrow::Borrow;
+use core::ops::{AddAssign, MulAssign, SubAssign};
 pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
-use core::ops::{AddAssign, SubAssign, MulAssign};
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
@@ -302,13 +302,15 @@ impl<F: Field> LinearCombination<F> {
 
 impl<'a, F: Field> AddAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
     fn add_assign(&mut self, (coeff, other): (F, &'a LinearCombination<F>)) {
-        self.terms.extend(other.terms.iter().map(|(c, t)| (coeff * c, t.clone())));
+        self.terms
+            .extend(other.terms.iter().map(|(c, t)| (coeff * c, t.clone())));
     }
 }
 
 impl<'a, F: Field> SubAssign<(F, &'a LinearCombination<F>)> for LinearCombination<F> {
     fn sub_assign(&mut self, (coeff, other): (F, &'a LinearCombination<F>)) {
-        self.terms.extend(other.terms.iter().map(|(c, t)| (-coeff * c, t.clone())));
+        self.terms
+            .extend(other.terms.iter().map(|(c, t)| (-coeff * c, t.clone())));
     }
 }
 
@@ -320,7 +322,8 @@ impl<'a, F: Field> AddAssign<&'a LinearCombination<F>> for LinearCombination<F> 
 
 impl<'a, F: Field> SubAssign<&'a LinearCombination<F>> for LinearCombination<F> {
     fn sub_assign(&mut self, other: &'a LinearCombination<F>) {
-        self.terms.extend(other.terms.iter().map(|(c, t)| (- *c, t.clone())));
+        self.terms
+            .extend(other.terms.iter().map(|(c, t)| (-*c, t.clone())));
     }
 }
 

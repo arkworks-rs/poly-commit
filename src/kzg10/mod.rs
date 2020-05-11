@@ -290,8 +290,7 @@ impl<E: PairingEngine> KZG10<E> {
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let mut inner = comm.0.into_projective()
-            - &vk.g.into_projective().mul(value);
+        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
@@ -356,7 +355,8 @@ impl<E: PairingEngine> KZG10<E> {
         let result = E::product_of_pairings(&[
             (total_w.into(), vk.prepared_beta_h.clone()),
             (total_c.into(), vk.prepared_h.clone()),
-        ]).is_one();
+        ])
+        .is_one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
