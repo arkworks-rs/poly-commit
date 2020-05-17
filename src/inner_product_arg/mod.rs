@@ -95,6 +95,33 @@ impl<G: ProjectiveCurve, D: Digest> InnerProductArg<G, D> {
 
         Polynomial::from_coefficients_vec(coeffs)
     }
+
+    fn check_degrees_and_bounds (
+        supported_degree: usize,
+        p: &LabeledPolynomial<G::ScalarField>,
+    ) -> Result<(), Error> {
+        if p.degree() < 1 {
+            return Err(Error::DegreeIsZero);
+        } else if p.degree() > supported_degree {
+            return Err(Error::TooManyCoefficients {
+                num_coefficients: p.degree() + 1,
+                num_powers: supported_degree + 1
+            });
+        }
+
+        if let Some(bound) = p.degree_bound() {
+            if bound < p.degree() || bound > supported_degree {
+                return Err(Error::IncorrectDegreeBound {
+                    poly_degree: p.degree(),
+                    degree_bound: bound,
+                    supported_degree,
+                    label: p.label().to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerProductArg<G, D> {
@@ -111,11 +138,8 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
         max_degree: usize,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        // TODO: Should we error if max_degree+1 isn't a power of 2 or should we just adjust it be fit the specification like this:
         let max_degree = (1 << ((max_degree + 1) as f32).log2().ceil() as usize) - 1;
 
-        /*
-        // TODO: This doesn't work
         let mut affines = Vec::new();
         let mut hash_input = Vec::new();
 
@@ -134,7 +158,7 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
             let hash = D::digest(hash_input.as_slice());
             let affine = G::Affine::from_random_bytes (&hash);
             if affine.is_some() {
-                affines.push (affine.unwrap());
+                affines.push (affine.unwrap().mul_by_cofactor());
             }
         }
 
@@ -142,22 +166,6 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
 
         let pp = UniversalParams {
             comm_key: affines,
-            h
-        };
-
-        */
-
-        // TODO: But this does work?
-        let mut projectives: Vec<G> = Vec::new();
-        while projectives.len() < max_degree + 2 {
-            projectives.push(G::rand(rng));
-        }
-
-        let h: G = projectives.pop().unwrap();
-        let comm_key = G::batch_normalization_into_affine(projectives.as_slice());
-
-        let pp = UniversalParams {
-            comm_key,
             h
         };
 
@@ -169,7 +177,6 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
         supported_degree: usize,
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        //TODO: Same question as above with supported degree
         let supported_degree = (1 << ((supported_degree + 1) as f32).log2().ceil() as usize) - 1;
         if supported_degree > pp.max_degree () {
             return Err(Error::TrimmingDegreeTooLarge);
@@ -208,16 +215,7 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
             let label = labeled_polynomial.label();
             let degree_bound = labeled_polynomial.degree_bound();
 
-            // TODO: Do I need to check degree bounds? We never use degree bounds in this scheme.
-            if polynomial.degree() < 1 {
-                return Err(Error::DegreeIsZero);
-            } else if polynomial.degree() > ck.supported_degree() {
-                // TODO: Should this be supported_degree or number of keys (supported_degree + 1)? In a previous use case, it was number of keys, but that doesn't make too much sense because num_coefficients was in terms of degree.
-                return Err(Error::TooManyCoefficients {
-                    num_coefficients: polynomial.degree(),
-                    num_powers: ck.supported_degree()
-                });
-            }
+            Self::check_degrees_and_bounds (ck.supported_degree(), labeled_polynomial)?;
 
             let comm = Self::dh_commit(&ck.comm_key[..(polynomial.degree() + 1)], &polynomial.coeffs);
             let labeled_comm = LabeledCommitment::new(
@@ -255,19 +253,9 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
 
         let mut curr_challenge = opening_challenge;
         for (labeled_polynomial, labeled_commitment) in labeled_polynomials.zip(labeled_commitments) {
+            Self::check_degrees_and_bounds (ck.supported_degree(), labeled_polynomial)?;
+
             let polynomial = labeled_polynomial.polynomial();
-
-            // TODO: Check degree bounds too?
-            if polynomial.degree() < 1 {
-                return Err(Error::DegreeIsZero);
-            } else if polynomial.degree() > ck.supported_degree() {
-                // TODO: Same question as before with num_coefficients and num_powers
-                return Err(Error::TooManyCoefficients {
-                    num_coefficients: polynomial.degree(),
-                    num_powers: ck.supported_degree()
-                });
-            }
-
             combined_polynomial += (curr_challenge, labeled_polynomial.polynomial());
             combined_commitment += (curr_challenge, labeled_commitment.commitment());
             curr_challenge *= &opening_challenge;
@@ -333,7 +321,6 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
             round_challenge = Self::rand_oracle (round_challenge, l, r);
             let (key_proj_l, key_proj_r) = key_proj.split_at_mut(n/2);
 
-            // TODO: When can unwrap fail? Is it safe to just unwrap the inverse?
             for i in 0..n/2 {
                 coeffs_l[i] += &(round_challenge.inverse().unwrap() * &coeffs_r[i]);
                 z_l[i] += &(round_challenge * &z_r[i]);
@@ -370,7 +357,6 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
         let log_d = ((d + 1) as f32).log2() as usize;
 
         //TODO: Do we need to check that the number of commitments is equal to the number of values? Similarly, should we check that the proof size is log_(d+1)
-        //TODO: In the other implementations, we never explicitly check that the number of commitments or values are the same
 
         let mut combined_commitment = Commitment::empty();
         let mut combined_v = G::ScalarField::zero();
@@ -398,7 +384,6 @@ impl<G: ProjectiveCurve, D: Digest> PolynomialCommitment<G::ScalarField> for Inn
         for (l, r) in l_iter.zip(r_iter) {
             round_challenge = Self::rand_oracle(round_challenge, l, r);
             round_challenges.push(round_challenge);
-            // TODO: When can unwrap fail? Is it safe to just unwrap the inverse?
             round_commitment += l.mul(round_challenge.inverse().unwrap()) + r.mul(round_challenge);
         }
 
