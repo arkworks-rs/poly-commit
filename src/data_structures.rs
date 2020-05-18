@@ -100,6 +100,7 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
             label,
             polynomial: Cow::Owned(polynomial),
             degree_bound,
+
             hiding_bound,
         }
     }
