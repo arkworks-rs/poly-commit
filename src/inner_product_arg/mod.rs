@@ -23,7 +23,9 @@ pub struct InnerProductArg<G: AffineCurve, D: Digest> {
 }
 
 impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
-    fn dh_commit (
+    pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
+
+    fn cm_commit(
         comm_key: &[G],
         scalars: &[G::ScalarField]
     ) -> G::Projective {
@@ -132,14 +134,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let mut affines = Vec::with_capacity(max_degree + 2);
 
-        // TODO: Is the seed necessary?
-        // Some random 32-bit seed
-        let seed = [0xb, 0x9, 0xc, 0xd, 0x3, 0x0, 0xf, 0x7];
-
         let mut i = G::ScalarField::zero();
         while affines.len() < max_degree + 2 {
-            let mut bytes: Vec<u8> = algebra_core::to_bytes!(i).unwrap();
-            bytes.extend_from_slice(&seed);
+            let bytes: Vec<u8> = algebra_core::to_bytes![&Self::PROTOCOL_NAME, i].unwrap();
 
             let hash = D::digest(bytes.as_slice());
             let affine = G::from_random_bytes (&hash);
@@ -205,7 +202,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let label = labeled_polynomial.label();
             let degree_bound = labeled_polynomial.degree_bound();
 
-            let comm = Self::dh_commit(&ck.comm_key[..(polynomial.degree() + 1)], &polynomial.coeffs).into();
+            let comm = Self::cm_commit(&ck.comm_key[..(polynomial.degree() + 1)], &polynomial.coeffs).into();
             let labeled_comm = LabeledCommitment::new(
                 label.to_string(),
                 Commitment(comm),
@@ -288,8 +285,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 .collect::<Vec<G::Projective>>();
         let mut key_proj = key_proj.as_mut_slice();
 
-        let mut l_proj_vec = Vec::with_capacity(log_d);
-        let mut r_proj_vec = Vec::with_capacity(log_d);
+        let mut l_vec = Vec::with_capacity(log_d);
+        let mut r_vec = Vec::with_capacity(log_d);
 
         let mut n = d + 1;
         while n > 1 {
@@ -304,19 +301,17 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let (key_proj_l, key_proj_r) = key_proj.split_at_mut(n/2);
 
             let l =
-                Self::dh_commit(key_l, coeffs_r)
+                Self::cm_commit(key_l, coeffs_r)
                 + &h_prime.mul(Self::inner_product(coeffs_r, z_l));
 
             let r =
-                Self::dh_commit(key_r, coeffs_l)
+                Self::cm_commit(key_r, coeffs_l)
                 + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
 
-            // TODO: Any other possible ways to do this?
-            let mut lr = [l, r];
-            G::Projective::batch_normalization(lr.as_mut());
+            let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
 
-            l_proj_vec.push(lr[0]);
-            r_proj_vec.push(lr[1]);
+            l_vec.push(lr[0]);
+            r_vec.push(lr[1]);
 
             round_challenge = Self::rand_oracle (round_challenge, lr[0], lr[1]);
 
@@ -334,9 +329,6 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
             n /= 2;
         }
-
-        let l_vec = l_proj_vec.into_iter().map(|p| p.into()).collect();
-        let r_vec = r_proj_vec.into_iter().map(|p| p.into()).collect();
 
         Ok(Proof {
             l_vec,
@@ -399,7 +391,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let r_iter = proof.r_vec.iter();
 
         for (l, r) in l_iter.zip(r_iter) {
-            round_challenge = Self::rand_oracle(round_challenge, l.into_projective(), r.into_projective());
+            round_challenge = Self::rand_oracle(round_challenge, l, r);
             round_challenges.push(round_challenge);
             round_commitment_proj += &(l.mul(round_challenge.inverse().unwrap()) + &r.mul(round_challenge));
         }
@@ -409,7 +401,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let h_prime = G::Projective::batch_normalization_into_affine(&[h_prime]).pop().unwrap();
 
         let check_commitment_elem: G::Projective =
-            Self::dh_commit(
+            Self::cm_commit(
                 &[proof.final_comm_key.clone(), h_prime],
                 &[proof.c.clone(), v_prime]
             );
@@ -418,7 +410,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             return Ok(false);
         }
 
-        let final_key = Self::dh_commit(vk.comm_key.as_slice(), rep_poly.coeffs.as_slice());
+        let final_key = Self::cm_commit(vk.comm_key.as_slice(), rep_poly.coeffs.as_slice());
         if !(final_key - &proof.final_comm_key.into()).is_zero() {
             return Ok(false);
         }
@@ -609,7 +601,6 @@ mod tests {
     use algebra::jubjub;
     use blake2::Blake2s;
 
-    // TODO: Add more curves
     type PC<E, D> = InnerProductArg<E, D>;
     type PC_JJB2S = PC <jubjub::JubJubAffine, Blake2s>;
 
