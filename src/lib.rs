@@ -168,7 +168,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         point: F,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
@@ -182,35 +182,23 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let has_commitments = commitments.is_some();
-
-        let polynomials_with_rands: BTreeMap<_, _> = {
-            let poly_rand_zip = labeled_polynomials
-                .into_iter()
-                .zip(rands);
-
-            if let Some(commitments) = commitments {
-                poly_rand_zip
-                    .zip(commitments.into_iter())
-                    .map(|((poly, r), comm)| (poly.label(), (poly, r, Some(comm))))
-                    .collect()
-            } else {
-                poly_rand_zip
-                    .map(|(poly, r)| (poly.label(), (poly, r, None)))
-                    .collect()
-            }
-
-        };
+        let poly_rand_comm: BTreeMap<_, _> =
+            labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .zip(commitments.into_iter())
+            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
+            .collect();
 
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
-            polynomials_with_rands.len(),
+            poly_rand_comm.len(),
             query_set.len(),
         ));
 
@@ -225,27 +213,22 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         for (query, labels) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
             let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
-            let mut query_comms: Option<Vec<&'a LabeledCommitment<Self::Commitment>>> =
-                if has_commitments {
-                    Some(Vec::new())
-                } else {
-                    None
-                };
+            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             for label in labels {
                 let (polynomial, rand, comm) =
-                    polynomials_with_rands
+                   poly_rand_comm
                         .get(label)
                         .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
                         })?;
+
                 query_polys.push(polynomial);
                 query_rands.push(rand);
+                query_comms.push (comm);
 
-                if let Some(query_comms) = query_comms.as_mut() {
-                    query_comms.push (comm.unwrap());
-                }
             }
+
             let proof_time = start_timer!(|| "Creating proof");
             let proof = Self::open(ck, query_polys, *query, opening_challenge, query_rands, query_comms)?;
 
@@ -334,7 +317,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         query_set: &QuerySet<F>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
     ) -> Result<BatchLCProof<F, Self>, Self::Error>
     where
         Self::Randomness: 'a,
@@ -568,7 +551,7 @@ pub mod tests {
             println!("Generated query set");
 
             let opening_challenge = F::rand(rng);
-            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands, Some(&comms))?;
+            let proof = PC::batch_open(&ck, &polynomials, &query_set, opening_challenge, &rands, &comms)?;
             let result = PC::batch_check(
                 &vk,
                 &comms,
@@ -732,7 +715,7 @@ pub mod tests {
                 &query_set,
                 opening_challenge,
                 &rands,
-                Some(&comms)
+                &comms
             )?;
             println!("Generated proof");
             let result = PC::check_combinations(

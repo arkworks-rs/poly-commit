@@ -320,7 +320,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        _commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
@@ -507,33 +507,40 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        _commitments: Option <impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>>
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
+        where
+            Self::Randomness: 'a,
+            Self::Commitment: 'a,
     {
-        let label_poly_rand_map = polynomials
+        let label_map = polynomials
             .into_iter()
             .zip(rands)
-            .map(|(p, r)| (p.label(), (p, r)))
+            .zip(commitments)
+            .map(|((p, r), c)| (p.label(), (p, r, c)))
             .collect::<BTreeMap<_, _>>();
 
         let mut lc_polynomials = Vec::new();
         let mut lc_randomness = Vec::new();
+        let mut lc_commitments = Vec::new();
+        let mut lc_info = Vec::new();
+
         for lc in lc_s {
             let lc_label = lc.label().clone();
             let mut poly = Polynomial::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
+
             let mut randomness = Self::Randomness::empty();
             assert!(randomness.shifted_rand.is_none());
+
+            let mut coeffs_and_comms = Vec::new();
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
                 let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand) =
-                    label_poly_rand_map
+                let &(cur_poly, cur_rand, curr_comm) =
+                    label_map
                         .get(label)
                         .ok_or(Error::MissingPolynomial {
                             label: label.to_string(),
@@ -554,15 +561,26 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
+                coeffs_and_comms.push((*coeff, curr_comm.commitment()));
 
                 if degree_bound.is_none() {
                     assert!(randomness.shifted_rand.is_none());
                 }
             }
-            let lc_poly = LabeledPolynomial::new_owned(lc_label, poly, degree_bound, hiding_bound);
+
+            let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
+            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
+            lc_info.push((lc_label, degree_bound));
         }
+
+        let comms = Self::normalize_commitments(lc_commitments);
+        let lc_commitments = lc_info
+            .into_iter()
+            .zip(comms)
+            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
+            .collect::<Vec<_>>();
 
         let proof = Self::batch_open(
             ck,
@@ -570,8 +588,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
-            None::<Vec <&'a LabeledCommitment<Self::Commitment>>>
+            lc_commitments.iter()
         )?;
+
         Ok(BatchLCProof { proof, evals: None })
     }
 
