@@ -26,9 +26,6 @@ pub enum Error {
     /// The provided polynomial was meant to be hiding, but `rng` was `None`.
     MissingRng,
 
-    /// The provided scheme requires commitments, but `commitments` was `None`.
-    MissingCommitment,
-
     /// The degree provided in setup was too small; degree 0 polynomials
     /// are not supported.
     DegreeIsZero,
@@ -82,6 +79,9 @@ pub enum Error {
 
     /// The inputs to `commit`, `open` or `verify` had incorrect lengths.
     IncorrectInputLength(String),
+
+    /// The commitment was generated incorrectly, tampered with, or doesn't support the polynomial.
+    MalformedCommitment(String),
 }
 
 impl core::fmt::Display for Error {
@@ -101,7 +101,6 @@ impl core::fmt::Display for Error {
                 write!(f, "Equation \"{}\" does not have a LHS.", label)
             },
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
-            Error::MissingCommitment => write!(f, "this scheme requires `Some(commitments)`"),
             Error::DegreeIsZero => write!(
                 f,
                 "this scheme does not support committing to degree 0 polynomials"
@@ -155,7 +154,8 @@ impl core::fmt::Display for Error {
                  supported degree ({:?})",
                 degree_bound, label, poly_degree, supported_degree
             ),
-            Error::IncorrectInputLength(err) => write!(f, "{}", err)
+            Error::IncorrectInputLength(err) => write!(f, "{}", err),
+            Error::MalformedCommitment(err) => write!(f, "{}", err)
         }
     }
 }

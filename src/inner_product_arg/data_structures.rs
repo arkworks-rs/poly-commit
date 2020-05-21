@@ -71,12 +71,18 @@ Debug(bound = ""),
 PartialEq(bound = ""),
 Eq(bound = "")
 )]
-pub struct Commitment<G: AffineCurve> (pub G);
+pub struct Commitment<G: AffineCurve> {
+    pub comm: G,
+    pub shifted_comm: Option<G>
+}
 
 impl<G: AffineCurve> PCCommitment for Commitment<G> {
     #[inline]
     fn empty() -> Self {
-        Commitment(G::zero())
+        Commitment{
+            comm: G::zero(),
+            shifted_comm: None
+        }
     }
 
     fn has_degree_bound(&self) -> bool {
@@ -90,8 +96,14 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
-        self.0.write(writer)
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+        self.comm.write(&mut writer)?;
+        let shifted_exists = self.shifted_comm.is_some();
+        shifted_exists.write(&mut writer)?;
+        self.shifted_comm
+            .as_ref()
+            .unwrap_or(&G::zero())
+            .write(&mut writer)
     }
 }
 

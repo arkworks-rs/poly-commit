@@ -16,7 +16,6 @@ use rayon::prelude::*;
 
 use std::iter::Iterator;
 use digest::Digest;
-use ff_fft::DensePolynomial;
 
 pub struct InnerProductArg<G: AffineCurve, D: Digest> {
     _projective: PhantomData<G>,
@@ -73,6 +72,8 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         log_d: usize,
         challenges: &Vec<G::ScalarField>
     ) -> Polynomial<G::ScalarField> {
+        assert_eq!(log_d, challenges.len());
+
         // Representative polynomial is degree 2^log_d
         let mut coeffs = vec![G::ScalarField::one(); 1 << log_d];
 
@@ -96,7 +97,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
         opening_challenge: G::ScalarField,
-    ) -> Option <DensePolynomial<G::ScalarField>> {
+    ) -> Option <Polynomial<G::ScalarField>> {
         let d = vk.supported_degree();
         let log_d = ((d + 1) as f32).log2() as usize;
 
@@ -104,21 +105,35 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         let mut combined_v = G::ScalarField::zero();
 
         let mut curr_challenge = opening_challenge;
-        let labeled_commitment = commitments.into_iter();
+        let labeled_commitments = commitments.into_iter();
         let values = values.into_iter();
-        for (labeled_commitment, value) in labeled_commitment.zip(values) {
+
+        for (labeled_commitment, value) in labeled_commitments.zip(values) {
+            let commitment = labeled_commitment.commitment();
             combined_v += &(curr_challenge * &value);
-            combined_commitment_proj += &labeled_commitment.commitment().0.mul(curr_challenge);
+            combined_commitment_proj += &labeled_commitment.commitment().comm.mul(curr_challenge);
+            curr_challenge *= &opening_challenge;
+
+            let degree_bound = labeled_commitment.degree_bound();
+            // TODO: When to assert vs throw error?
+            assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
+
+            if let Some(degree_bound) = degree_bound {
+                let shift = point.pow([(vk.supported_degree() - degree_bound) as u64]);
+                combined_v += &(curr_challenge * &value * &shift);
+                combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(curr_challenge);
+            }
+
             curr_challenge *= &opening_challenge;
         }
 
         let mut wrapper = [combined_commitment_proj];
-        G::Projective::batch_normalization(wrapper.as_mut());
-        let combined_commitment_proj = wrapper[0];
+        G::Projective::batch_normalization_into_affine(wrapper.as_mut());
+        let combined_commitment = wrapper[0];
 
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
-        let mut round_challenge = Self::rand_oracle(combined_commitment_proj, point, combined_v);
+        let mut round_challenge = Self::rand_oracle(combined_commitment, point, combined_v);
 
         let h_prime = vk.h.mul(round_challenge);
 
@@ -175,6 +190,69 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         }
 
         Ok(())
+    }
+
+    fn shift_polynomial (
+        ck: &CommitterKey<G>,
+        p: &Polynomial<G::ScalarField>,
+        degree_bound: usize,
+    ) -> Polynomial<G::ScalarField> {
+        if p.is_zero() {
+            Polynomial::zero()
+        } else {
+            let mut shifted_polynomial_coeffs =
+                vec![G::ScalarField::zero(); ck.supported_degree() - degree_bound];
+            shifted_polynomial_coeffs.extend_from_slice(&p.coeffs);
+            Polynomial::from_coefficients_vec(shifted_polynomial_coeffs)
+        }
+    }
+
+    fn combine_shifted_comm (
+        combined_comm: Option<G::Projective>,
+        new_comm: Option<G>,
+        coeff: G::ScalarField
+    ) -> Option<G::Projective> {
+        if let Some(new_comm) = new_comm {
+            let coeff_new_comm = new_comm.mul (coeff);
+            return Some(combined_comm.map_or(coeff_new_comm, |c| c + &coeff_new_comm));
+        };
+
+        combined_comm
+    }
+
+    fn projectives_to_labeled_commitments (
+        lc_info: &Vec<(String, Option<usize>)>,
+        projectives: &Vec<G::Projective>
+    ) -> Vec<LabeledCommitment<Commitment<G>>> {
+        let comms = G::Projective::batch_normalization_into_affine(projectives.as_slice());
+        let mut commitments = Vec::new();
+
+        let mut i = 0;
+        for info in lc_info.into_iter() {
+            let commitment;
+            let label = info.0.clone();
+            let degree_bound = info.1;
+
+            if degree_bound.is_some() {
+                commitment = Commitment {
+                    comm: comms[i].clone(),
+                    shifted_comm: Some(comms[i + 1].clone())
+                };
+
+                i += 2;
+            } else {
+                commitment = Commitment {
+                    comm: comms[i].clone(),
+                    shifted_comm: None
+                };
+
+                i += 1;
+            }
+
+            commitments.push(LabeledCommitment::new(label, commitment, degree_bound));
+        };
+
+        return commitments;
     }
 }
 
@@ -265,9 +343,21 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let degree_bound = labeled_polynomial.degree_bound();
 
             let comm = Self::cm_commit(&ck.comm_key[..(polynomial.degree() + 1)], &polynomial.coeffs).into();
+            let shifted_comm =
+                if let Some(degree_bound) = degree_bound {
+                    Some(Self::cm_commit(&ck.comm_key[(ck.supported_degree() - degree_bound)..], &polynomial.coeffs).into())
+                } else {
+                    None
+                };
+
+            let commitment = Commitment {
+                comm,
+                shifted_comm
+            };
+
             let labeled_comm = LabeledCommitment::new(
                 label.to_string(),
-                Commitment(comm),
+                commitment,
                 degree_bound
             );
 
@@ -298,20 +388,38 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let mut curr_challenge = opening_challenge;
         for (labeled_polynomial, labeled_commitment) in labeled_polynomials.zip(labeled_commitments) {
+
             Self::check_degrees_and_bounds (ck.supported_degree(), labeled_polynomial)?;
-            combined_polynomial += (curr_challenge, labeled_polynomial.polynomial());
-            combined_commitment_proj += &labeled_commitment.commitment().0.mul(curr_challenge);
+
+            let polynomial = labeled_polynomial.polynomial();
+            let degree_bound = labeled_polynomial.degree_bound();
+            let commitment = labeled_commitment.commitment();
+
+            combined_polynomial += (curr_challenge, polynomial);
+            combined_commitment_proj += &commitment.comm.mul(curr_challenge);
+            curr_challenge *= &opening_challenge;
+
+            assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
+            if let Some(degree_bound) = labeled_polynomial.degree_bound() {
+                assert!(labeled_commitment.degree_bound().is_some());
+                assert_eq!(labeled_commitment.degree_bound().unwrap(), degree_bound);
+
+                let shifted_polynomial = Self::shift_polynomial(ck, polynomial, degree_bound);
+                combined_polynomial += (curr_challenge, &shifted_polynomial);
+                combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(curr_challenge);
+            }
+
             curr_challenge *= &opening_challenge;
         }
 
         let combined_v = combined_polynomial.evaluate(point);
 
         let mut wrapper = [combined_commitment_proj];
-        G::Projective::batch_normalization(wrapper.as_mut());
-        let combined_commitment_proj = wrapper[0];
+        G::Projective::batch_normalization_into_affine(wrapper.as_mut());
+        let combined_commitment = wrapper[0];
 
         // ith challenge
-        let mut round_challenge = Self::rand_oracle(combined_commitment_proj, point, combined_v);
+        let mut round_challenge = Self::rand_oracle(combined_commitment, point, combined_v);
         let h_prime = ck.h.mul(round_challenge);
         let h_prime = G::Projective::batch_normalization_into_affine(&[h_prime]).pop().unwrap();
 
@@ -541,7 +649,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let mut poly = Polynomial::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
-            let mut commitment = G::Projective::zero();
+            let mut combined_comm = G::Projective::zero();
+            let mut combined_shifted_comm: Option<G::Projective> = None;
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
@@ -567,26 +676,29 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
-                commitment += &cur_comm.commitment().0.mul(*coeff);
+
+                let commitment = cur_comm.commitment();
+                combined_comm += &commitment.comm.mul(*coeff);
+                combined_shifted_comm = Self::combine_shifted_comm(
+                    combined_shifted_comm,
+                   commitment.shifted_comm,
+                    *coeff
+                );
+
             }
 
             let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
-            lc_commitments.push(commitment);
+
+            lc_commitments.push(combined_comm);
+            if let Some(combined_shifted_comm) = combined_shifted_comm {
+                lc_commitments.push (combined_shifted_comm);
+            }
+
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> =
-            G::Projective::batch_normalization_into_affine(&lc_commitments)
-                .into_iter()
-                .map(|c| Commitment(c))
-                .collect();
-
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
+        let lc_commitments = Self::projectives_to_labeled_commitments(&lc_info, &lc_commitments);
 
         let randomness = vec![Randomness(); lc_polynomials.len()];
         let proof = Self::batch_open(
@@ -630,6 +742,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
             let mut degree_bound = None;
             let mut combined_comm = G::Projective::zero();
+            let mut combined_shifted_comm: Option<G::Projective> = None;
 
             for (coeff, label) in lc.iter() {
                 if label.is_one() {
@@ -653,25 +766,27 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                     } else if cur_comm.degree_bound().is_some() {
                         return Err(Self::Error::EquationHasDegreeBounds(lc_label));
                     }
-                    combined_comm += &cur_comm.commitment().0.mul(*coeff);
+
+                    let commitment = cur_comm.commitment();
+                    combined_comm += &commitment.comm.mul(*coeff);
+                    combined_shifted_comm = Self::combine_shifted_comm(
+                        combined_shifted_comm,
+                        commitment.shifted_comm,
+                        *coeff
+                    );
                 }
             }
 
             lc_commitments.push(combined_comm);
+
+            if let Some(combined_shifted_comm) = combined_shifted_comm {
+                lc_commitments.push (combined_shifted_comm);
+            }
+
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> =
-            G::Projective::batch_normalization_into_affine(&lc_commitments)
-                .into_iter()
-                .map(|c| Commitment(c))
-                .collect();
-
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
+        let lc_commitments = Self::projectives_to_labeled_commitments(&lc_info, &lc_commitments);
 
         Self::batch_check(
             vk,
