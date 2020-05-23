@@ -2,7 +2,7 @@
 //! single polynomial `p`, and then later provide an evaluation proof that
 //! convinces verifiers that a claimed value `v` is the true evaluation of `p`
 //! at a chosen point `x`. Our construction follows the template of the construction
-//! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
+//! proposed by Kate, Zaverucha, and Goldberg ([KZG11](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};

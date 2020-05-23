@@ -1,6 +1,6 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::{ToBytes, PrimeField, AffineCurve, ProjectiveCurve};
+use algebra_core::{One, ToBytes, PrimeField, AffineCurve, ProjectiveCurve};
 use std::ops::{AddAssign, Add, Sub};
 
 #[derive(Derivative)]
@@ -107,44 +107,6 @@ impl<G: AffineCurve> ToBytes for Commitment<G> {
     }
 }
 
-/*
-
-impl<G: AffineCurve> Add<G> for Commitment<G> {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, other: G) -> Self {
-        self.0 += other;
-        self
-    }
-}
-
-impl<G: AffineCurve> Sub<G> for Commitment<G> {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, other: G) -> Self {
-        self.0 -= other;
-        self
-    }
-}
-
-impl<G: AffineCurve> AddAssign<G> for Commitment<G> {
-    #[inline]
-    fn add_assign(&mut self, g: G) {
-        self.0 = self.0.into_projective().add_mixed(&g).into();
-    }
-}
-
-impl<G: AffineCurve> AddAssign<(G::ScalarField, &Commitment<G>)> for Commitment<G> {
-    #[inline]
-    fn add_assign(&mut self, (f, other): (G::ScalarField, &Commitment<G>)) {
-        let other_mul = other.0.mul(f.into_repr());
-        self.0 = other_mul.add_mixed(&self.0).into();
-    }
-}
-*/
-
 #[derive(Derivative)]
 #[derivative(
 Default(bound = ""),
@@ -193,4 +155,42 @@ impl<G: AffineCurve> ToBytes for Proof<G> {
         self.final_comm_key.write(&mut writer)?;
         self.c.write(&mut writer)
     }
+}
+
+pub struct SuccinctCheckPolynomial<F: Field> (pub Vec<F>);
+
+impl<F: Field> SuccinctCheckPolynomial<F> {
+    pub fn compute_coeffs (&self) -> Vec<F> {
+        let challenges = &self.0;
+        let log_d = challenges.len();
+
+        let mut coeffs = vec![F::one(); 1 << log_d];
+        for (i, challenge) in challenges.iter().enumerate() {
+            let i = i + 1;
+            let elem_degree = 1 << (log_d - i);
+            for start in (elem_degree..coeffs.len()).step_by(elem_degree * 2) {
+                for offset in 0..elem_degree {
+                    coeffs[start + offset] *= challenge;
+                }
+            }
+        }
+
+        coeffs
+    }
+
+    pub fn evaluate (&self, point: F) -> F {
+        let challenges = &self.0;
+        let log_d = challenges.len();
+
+        let mut product = F::one();
+        for (i, challenge) in challenges.iter().enumerate() {
+            let i = i + 1;
+            let elem_degree: u64 = (1 << (log_d - i)) as u64;
+            let elem = point.pow([elem_degree]);
+            product *= &(F::one() + &(elem * challenge));
+        }
+
+        product
+    }
+
 }

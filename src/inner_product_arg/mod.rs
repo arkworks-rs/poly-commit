@@ -23,6 +23,7 @@ pub struct InnerProductArg<G: AffineCurve, D: Digest> {
 }
 
 impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
+    // TODO: add timers around expensive parts of the code
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
 
     fn cm_commit(
@@ -39,6 +40,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         )
     }
 
+    // Eventually abstract out
     // Takes three ToByte elements and converts them into a scalar field element
     fn rand_oracle (
         a: impl ToBytes,
@@ -97,7 +99,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
         opening_challenge: G::ScalarField,
-    ) -> Option <Polynomial<G::ScalarField>> {
+    ) -> Option <SuccinctCheckPolynomial<G::ScalarField>> {
         let d = vk.supported_degree();
         let log_d = ((d + 1) as f32).log2() as usize;
 
@@ -115,7 +117,6 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
             curr_challenge *= &opening_challenge;
 
             let degree_bound = labeled_commitment.degree_bound();
-            // TODO: When to assert vs throw error?
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
 
             if let Some(degree_bound) = degree_bound {
@@ -148,8 +149,8 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
             round_commitment_proj += &(l.mul(round_challenge.inverse().unwrap()) + &r.mul(round_challenge));
         }
 
-        let rep_poly = Self::rep_poly(log_d, &round_challenges);
-        let v_prime = rep_poly.evaluate (point) * &proof.c;
+        let check_poly = SuccinctCheckPolynomial::<G::ScalarField>(round_challenges);
+        let v_prime = check_poly.evaluate (point) * &proof.c;
         let h_prime = G::Projective::batch_normalization_into_affine(&[h_prime]).pop().unwrap();
 
         let check_commitment_elem: G::Projective =
@@ -162,7 +163,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
             return None;
         }
 
-        Some (rep_poly)
+        Some (check_poly)
     }
 
     fn check_degrees_and_bounds (
@@ -368,6 +369,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok((comms, vec![Randomness(); num_comms]))
     }
 
+    // Requires that the point is random
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
@@ -433,8 +435,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 coeffs.push(G::ScalarField::zero());
             }
         }
-        // This extra index will be used for storing an inner product
-        coeffs.push(G::ScalarField::zero());
+        let mut coeffs = coeffs.as_mut_slice();
 
         // Powers of z
         let mut z: Vec<G::ScalarField> = Vec::with_capacity(d + 1);
@@ -443,38 +444,41 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             z.push(curr_z);
             curr_z *= &point;
         }
+        let mut z = z.as_mut_slice();
 
         // Key for MSM
-        let mut key: Vec<G> = ck.comm_key.iter().map(|x| (*x)).collect();
-        // This extra index will be used for storing h_prime
-        key.push(G::zero());
+        // We initialize this to 0 initially because we want to use the key slice first
+        let mut key: Vec<G> = Vec::with_capacity(0);
 
         // This will be used for transforming the key in each step
         let mut key_proj =
             ck.comm_key.iter()
                 .map(|x| (*x).into())
                 .collect::<Vec<G::Projective>>();
+        let mut key_proj = key_proj.as_mut_slice();
 
         let mut l_vec = Vec::with_capacity(log_d);
         let mut r_vec = Vec::with_capacity(log_d);
 
         let mut n = d + 1;
         while n > 1 {
-            // TODO: This implementation or previous one? This implementation merges things into the same cm commitment
-            let rl_inner_prod = Self::inner_product (&coeffs[n/2..n], &z[..n/2]);
-            let lr_inner_prod = Self::inner_product (&coeffs[..n/2], &z[n/2..n]);
+            let (coeffs_l, coeffs_r) = coeffs.split_at_mut(n/2);
+            let (z_l, z_r) = z.split_at_mut(n/2);
+            let (key_l, key_r) =
+                if n != d+1 {
+                    key.split_at(n/2)
+                } else {
+                    ck.comm_key.split_at(n/2)
+                };
+            let (key_proj_l, key_proj_r) = key_proj.split_at_mut(n/2);
 
-            let tmp_key = key[n/2].clone();
-            key[n/2] = h_prime.clone();
-            coeffs[n] = rl_inner_prod;
-            let l = Self::cm_commit (&key[..(n/2 + 1)], &coeffs[n/2..(n+1)]);
-            key[n/2] = tmp_key;
+            let l =
+                Self::cm_commit(key_l, coeffs_r)
+                + &h_prime.mul(Self::inner_product(coeffs_r, z_l));
 
-            let tmp_coeff = coeffs[n/2].clone();
-            key[n] = h_prime.clone();
-            coeffs[n/2] = lr_inner_prod;
-            let r = Self::cm_commit (&key[n/2..(n+1)], &coeffs[..(n/2+1)]);
-            coeffs[n/2] = tmp_coeff;
+            let r =
+                Self::cm_commit(key_r, coeffs_l)
+                + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
 
             let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
             l_vec.push(lr[0]);
@@ -484,18 +488,16 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
             for i in 0..n/2 {
-                let coeffs_update = &(round_challenge_inv * &coeffs[n/2 + i]);
-                let z_update = &(round_challenge * &z[n/2 + i]);
-                let key_update = &(key_proj[n/2 + i].mul(round_challenge));
-
-                coeffs[i] += coeffs_update;
-                z[i] += z_update;
-                key_proj[i] += key_update;
+                coeffs_l[i] += &(round_challenge.inverse().unwrap() * &coeffs_r[i]);
+                z_l[i] += &(round_challenge * &z_r[i]);
+                key_proj_l[i] += &(key_proj_r[i].mul(round_challenge));
             }
 
-            key = G::Projective::batch_normalization_into_affine(&key_proj[..n/2]);
-            // This extra index will be used for storing h_prime
-            key.push(G::zero());
+            coeffs = coeffs_l;
+            z = z_l;
+
+            key_proj = key_proj_l;
+            key = G::Projective::batch_normalization_into_affine(key_proj);
 
             n /= 2;
         }
@@ -533,13 +535,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             ));
         }
 
-        let rep_poly = Self::succinct_check(vk, commitments, point, values, proof, opening_challenge);
-        if rep_poly.is_none() {
+        let check_poly  = Self::succinct_check(vk, commitments, point, values, proof, opening_challenge);
+        if check_poly.is_none() {
             return Ok(false);
         }
 
-        let rep_poly = rep_poly.unwrap();
-        let final_key = Self::cm_commit(vk.comm_key.as_slice(), rep_poly.coeffs.as_slice());
+        let check_poly_coeffs = check_poly.unwrap().compute_coeffs();
+        let final_key = Self::cm_commit(vk.comm_key.as_slice(), check_poly_coeffs.as_slice());
         if !(final_key - &proof.final_comm_key.into()).is_zero() {
             return Ok(false);
         }
@@ -592,7 +594,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 vals.push(*v_i);
             }
 
-            let rep_poly= Self::succinct_check(
+            let check_poly = Self::succinct_check(
                 vk,
                 comms.into_iter(),
                 *query,
@@ -601,12 +603,12 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 opening_challenge
             );
 
-            if (rep_poly.is_none()) {
+            if (check_poly.is_none()) {
                 return Ok(false);
             }
 
-            let rep_poly = rep_poly.unwrap();
-            combined_rep_poly += (randomizer, &rep_poly);
+            let check_poly = Polynomial::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
+            combined_rep_poly += (randomizer, &check_poly);
             combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
 
             randomizer = u128::rand(rng).into();
