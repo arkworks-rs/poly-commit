@@ -244,10 +244,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     }
 
     /// Outputs a commitment to `polynomial`.
-    fn commit<'a>(
+    fn commit<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        rng: Option<&mut dyn RngCore>,
+        rng: &mut R,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -260,7 +260,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         let mut commitments = Vec::new();
         let mut randomness = Vec::new();
 
-        let rng = &mut kzg10::optional_rng::OptionalRng(rng);
         for p in polynomials {
             let label = p.label();
             let degree_bound = p.degree_bound();
@@ -314,13 +313,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open<'a>(
+    fn open<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        _rng: &mut R,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
@@ -403,13 +403,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
+        _rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -500,18 +501,19 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         Ok(result)
     }
 
-    fn open_combinations<'a>(
+    fn open_combinations<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        rng: &mut R,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
-        where
-            Self::Randomness: 'a,
-            Self::Commitment: 'a,
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
     {
         let label_map = polynomials
             .into_iter()
@@ -539,12 +541,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
                 let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand, curr_comm) =
-                    label_map
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let &(cur_poly, cur_rand, cur_comm) =
+                    label_map.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
 
                 if num_polys == 1 && cur_poly.degree_bound().is_some() {
                     assert!(
@@ -561,14 +561,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
-                coeffs_and_comms.push((*coeff, curr_comm.commitment()));
+                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
 
                 if degree_bound.is_none() {
                     assert!(randomness.shifted_rand.is_none());
                 }
             }
 
-            let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
+            let lc_poly =
+                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
             lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
@@ -588,7 +589,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
-            lc_commitments.iter()
+            lc_commitments.iter(),
+            rng,
         )?;
 
         Ok(BatchLCProof { proof, evals: None })

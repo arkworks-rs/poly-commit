@@ -1,13 +1,20 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::{One, ToBytes, PrimeField, AffineCurve, ProjectiveCurve};
-use std::ops::{AddAssign, Add, Sub};
+use algebra_core::{AffineCurve, Field, ToBytes, UniformRand, Zero};
+use rand_core::RngCore;
 
+/// `UniversalParams` are the universal parameters for the inner product arg scheme.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<G: AffineCurve> {
+    /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
-    pub h: G
+
+    /// Some group generator.
+    pub h: G,
+
+    /// Some group generator specifically used for hiding.
+    pub s: G,
 }
 
 impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
@@ -16,6 +23,8 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
     }
 }
 
+/// `CommitterKey` is used to commit to, and create evaluation proofs for, a given
+/// polynomial.
 #[derive(Derivative)]
 #[derivative(
     Default(bound = ""),
@@ -24,8 +33,16 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
     Debug(bound = "")
 )]
 pub struct CommitterKey<G: AffineCurve> {
+    /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
+
+    /// Some group generator.
     pub h: G,
+
+    /// Some group generator specifically used for hiding.
+    pub s: G,
+
+    /// Max degree supported by the universal parameters.
     pub max_degree: usize,
 }
 
@@ -38,16 +55,25 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
     }
 }
 
+/// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(
-Default(bound = ""),
-Hash(bound = ""),
-Clone(bound = ""),
-Debug(bound = "")
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = "")
 )]
 pub struct VerifierKey<G: AffineCurve> {
+    /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
+
+    /// Some group generator.
     pub h: G,
+
+    /// Some group generator specifically used for hiding.
+    pub s: G,
+
+    /// Max degree supported by the universal parameters.
     pub max_degree: usize,
 }
 
@@ -61,27 +87,32 @@ impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     }
 }
 
+/// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(
-Default(bound = ""),
-Hash(bound = ""),
-Clone(bound = ""),
-Copy(bound = ""),
-Debug(bound = ""),
-PartialEq(bound = ""),
-Eq(bound = "")
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Copy(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
 )]
 pub struct Commitment<G: AffineCurve> {
+    /// Commitment is some group element.
     pub comm: G,
-    pub shifted_comm: Option<G>
+
+    /// Commitment to the shifted polynomial is some group element.
+    /// Is `none` if polynomial has no degree bound.
+    pub shifted_comm: Option<G>,
 }
 
 impl<G: AffineCurve> PCCommitment for Commitment<G> {
     #[inline]
     fn empty() -> Self {
-        Commitment{
+        Commitment {
             comm: G::zero(),
-            shifted_comm: None
+            shifted_comm: None,
         }
     }
 
@@ -107,38 +138,70 @@ impl<G: AffineCurve> ToBytes for Commitment<G> {
     }
 }
 
+/// `Randomness` hides the polynomial inside a commitment and is outputted by `InnerProductArg::commit`.
 #[derive(Derivative)]
 #[derivative(
-Default(bound = ""),
-Hash(bound = ""),
-Clone(bound = ""),
-Debug(bound = ""),
-PartialEq(bound = ""),
-Eq(bound = "")
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
 )]
-// TODO: Placeholder randomness
-pub struct Randomness();
-impl PCRandomness for Randomness {
+pub struct Randomness<G: AffineCurve> {
+    /// Randomness is some scalar field element.
+    pub rand: G::ScalarField,
+
+    /// Randomness applied to the shifted commitment is some scalar field element.
+    pub shifted_rand: Option<G::ScalarField>,
+}
+
+impl<G: AffineCurve> PCRandomness for Randomness<G> {
     fn empty() -> Self {
-        Randomness ()
+        Self {
+            rand: G::ScalarField::zero(),
+            shifted_rand: None,
+        }
     }
-    fn rand <R: RngCore> (_: usize, _: bool, _: &mut R) -> Self {
-        Randomness()
+
+    fn rand<R: RngCore>(_hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
+        let rand = G::ScalarField::rand(rng);
+        let shifted_rand = if has_degree_bound {
+            Some(G::ScalarField::rand(rng))
+        } else {
+            None
+        };
+
+        Self { rand, shifted_rand }
     }
 }
 
+/// `Proof` is an evaluation proof that is output by `InnerProductArg::open`.
 #[derive(Derivative)]
 #[derivative(
-Default(bound = ""),
-Hash(bound = ""),
-Clone(bound = ""),
-Debug(bound = "")
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = "")
 )]
 pub struct Proof<G: AffineCurve> {
+    /// Vector of left elements from each of the log_d sub-procedures in `open`
     pub l_vec: Vec<G>,
+
+    /// Vector of right elements from each of the log_d sub-procedures of `open`
     pub r_vec: Vec<G>,
+
+    /// Last committer key from the last of the log_d sub-procedures of `open`
     pub final_comm_key: G,
-    pub c: G::ScalarField
+
+    /// Last coefficient from the last of the log_d sub-procedures of `open`
+    pub c: G::ScalarField,
+
+    /// Commitment to the hiding polynomial
+    pub hiding_comm: Option<G>,
+
+    /// Sum of all randomness in commitments and hiding polynomial
+    pub rand: Option<G::ScalarField>,
 }
 
 impl<G: AffineCurve> PCProof for Proof<G> {
@@ -153,14 +216,26 @@ impl<G: AffineCurve> ToBytes for Proof<G> {
         self.l_vec.write(&mut writer)?;
         self.r_vec.write(&mut writer)?;
         self.final_comm_key.write(&mut writer)?;
-        self.c.write(&mut writer)
+        self.c.write(&mut writer)?;
+        self.hiding_comm
+            .as_ref()
+            .unwrap_or(&G::zero())
+            .write(&mut writer)?;
+        self.rand
+            .as_ref()
+            .unwrap_or(&G::ScalarField::zero())
+            .write(&mut writer)
     }
 }
 
-pub struct SuccinctCheckPolynomial<F: Field> (pub Vec<F>);
+/// `SuccinctCheckPolynomial` is a special check polynomial generated
+/// from a size `log_d` vector of scalar field elements.
+/// Can be evaluated in `O(log_d)` but can optionally be represented as a degree `d` polynomial.
+pub struct SuccinctCheckPolynomial<F: Field>(pub Vec<F>);
 
 impl<F: Field> SuccinctCheckPolynomial<F> {
-    pub fn compute_coeffs (&self) -> Vec<F> {
+    /// Computes the underlying degree `d` polynomial coefficients
+    pub fn compute_coeffs(&self) -> Vec<F> {
         let challenges = &self.0;
         let log_d = challenges.len();
 
@@ -178,7 +253,8 @@ impl<F: Field> SuccinctCheckPolynomial<F> {
         coeffs
     }
 
-    pub fn evaluate (&self, point: F) -> F {
+    /// Evaluates the underlying degree `d` polynomial coefficients in `O(log_d)`
+    pub fn evaluate(&self, point: F) -> F {
         let challenges = &self.0;
         let log_d = challenges.len();
 
@@ -192,5 +268,4 @@ impl<F: Field> SuccinctCheckPolynomial<F> {
 
         product
     }
-
 }

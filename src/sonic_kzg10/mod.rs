@@ -247,10 +247,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     }
 
     /// Outputs a commitment to `polynomial`.
-    fn commit<'a>(
+    fn commit<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        rng: Option<&mut dyn RngCore>,
+        rng: &mut R,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -261,7 +261,6 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
         let mut randomness: Vec<Self::Randomness> = Vec::new();
-        let rng = &mut kzg10::optional_rng::OptionalRng(rng);
 
         for labeled_polynomial in polynomials {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -310,13 +309,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Ok((labeled_comms, randomness))
     }
 
-    fn open<'a>(
+    fn open<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        _rng: &mut R,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
@@ -351,13 +351,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Ok(proof)
     }
 
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
+        _rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -460,14 +461,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         )
     }
 
-    fn open_combinations<'a>(
+    fn open_combinations<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        rng: &mut R,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
         Self::Randomness: 'a,
@@ -497,11 +499,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
                 let label: &String = label.try_into().expect("cannot be one!");
                 let &(cur_poly, cur_rand, curr_comm) =
-                   label_map
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                    label_map.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
 
                 if num_polys == 1 && cur_poly.degree_bound().is_some() {
                     assert!(
@@ -518,10 +518,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
-                comm += &curr_comm.commitment().0.into_projective().mul (*coeff);
+                comm += &curr_comm.commitment().0.into_projective().mul(*coeff);
             }
 
-            let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
+            let lc_poly =
+                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
             lc_commitments.push(comm);
@@ -546,7 +547,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
-            lc_commitments.iter()
+            lc_commitments.iter(),
+            rng,
         )?;
         Ok(BatchLCProof { proof, evals: None })
     }
