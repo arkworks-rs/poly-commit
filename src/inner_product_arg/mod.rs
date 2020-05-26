@@ -23,6 +23,9 @@ use std::iter::Iterator;
 /// Polynomial commitment scheme based on the discrete log problem.
 /// The specific construction is detailed in
 /// [[BCMS20, "Proof-Carrying Data from Accumulation Schemes"]][pcdas].
+/// If degree bounds are used, this implementation requires that points
+/// are sufficiently random or previously unknown such that the opening party cannot
+/// construct a commitment specialized to the point to replace shifted commitments.
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub struct InnerProductArg<G: AffineCurve, D: Digest> {
@@ -38,7 +41,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         comm_key: &[G],
         scalars: &[G::ScalarField],
         hiding_elem: Option<G>,
-        hiding_power: Option<G::ScalarField>,
+        randomizer: Option<G::ScalarField>,
     ) -> G::Projective {
         let scalars_bigint = ff_fft::cfg_iter!(scalars)
             .map(|s| s.into_repr())
@@ -46,16 +49,14 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
 
         let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, scalars_bigint.as_slice());
 
-        if hiding_power.is_some() {
+        if randomizer.is_some() {
             assert!(hiding_elem.is_some());
-            comm += &hiding_elem.unwrap().mul(hiding_power.unwrap());
+            comm += &hiding_elem.unwrap().mul(randomizer.unwrap());
         }
 
         comm
     }
 
-    // Eventually abstract out
-    // Takes three ToByte elements and converts them into a scalar field element
     fn rand_oracle(bytes: &Vec<u8>) -> G::ScalarField {
         let mut i = G::ScalarField::zero();
         let mut point = None;
@@ -86,6 +87,8 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         let check_time = start_timer!(|| "Succinct checking");
 
         let d = vk.supported_degree();
+
+        // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ((d + 1) as f32).log2() as usize;
 
         let mut combined_commitment_proj = G::Projective::zero();
@@ -294,7 +297,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         max_degree: usize,
         _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        let max_degree = (1 << ((max_degree + 1) as f32).log2().ceil() as usize) - 1;
+        // Ensure that max_degree + 1 is a power of 2
+        let max_degree = (max_degree + 1).next_power_of_two() - 1;
 
         let mut affines = Vec::with_capacity(max_degree + 3);
 
@@ -331,7 +335,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         supported_degree: usize,
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        let supported_degree = (1 << ((supported_degree + 1) as f32).log2().ceil() as usize) - 1;
+        // Ensure that supported_degree + 1 is a power of two
+        let supported_degree = (supported_degree + 1).next_power_of_two() - 1;
         if supported_degree > pp.max_degree() {
             return Err(Error::TrimmingDegreeTooLarge);
         }
@@ -431,7 +436,6 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok((comms, rands))
     }
 
-    // Requires that the point is random
     fn open<'a, R: RngCore>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
@@ -502,6 +506,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         // Pad the coefficients to the appropriate vector size
         let d = ck.supported_degree();
+
+        // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ((d + 1) as f32).log2() as usize;
 
         let mut combined_commitment;
@@ -569,6 +575,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             .pop()
             .unwrap();
 
+        // Pads the coefficients with zeroes to get the number of coeff to be d+1
         let mut coeffs = combined_polynomial.coeffs;
         if coeffs.len() < d + 1 {
             for _ in coeffs.len()..(d + 1) {
@@ -667,6 +674,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     {
         let check_time = start_timer!(|| "Checking evaluations");
         let d = vk.supported_degree();
+
+        // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ((d + 1) as f32).log2() as usize;
 
         if proof.l_vec.len() != proof.r_vec.len() || proof.l_vec.len() != log_d {
