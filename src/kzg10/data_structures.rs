@@ -215,13 +215,17 @@ pub struct Proof<E: PairingEngine> {
     pub w: E::G1Affine,
     /// This is the evaluation of the random polynomial at the point for which
     /// the evaluation proof was produced.
-    pub random_v: E::Fr,
+    pub random_v: Option<E::Fr>,
 }
 
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
-            + algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+        let hiding_size = if self.random_v.is_some() {
+            algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+        } else {
+            0
+        };
+        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
     }
 }
 
@@ -229,6 +233,9 @@ impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
     fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
         self.w.write(&mut writer)?;
-        self.random_v.write(&mut writer)
+        self.random_v
+            .as_ref()
+            .unwrap_or(&E::Fr::zero())
+            .write(&mut writer)
     }
 }

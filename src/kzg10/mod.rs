@@ -229,8 +229,7 @@ impl<E: PairingEngine> KZG10<E> {
         );
         end_timer!(witness_comm_time);
 
-        let mut random_v = E::Fr::zero();
-        if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
+        let random_v = if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
             let blinding_p = &randomness.blinding_polynomial;
             let blinding_eval_time = start_timer!(|| "Evaluating random polynomial");
             let blinding_evaluation = blinding_p.evaluate(point);
@@ -244,8 +243,10 @@ impl<E: PairingEngine> KZG10<E> {
                 &random_witness_coeffs,
             );
             end_timer!(witness_comm_time);
-            random_v = blinding_evaluation;
-        }
+            Some(blinding_evaluation)
+        } else {
+            None
+        };
 
         Ok(Proof {
             w: w.into_affine(),
@@ -289,12 +290,13 @@ impl<E: PairingEngine> KZG10<E> {
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let inner = comm.0.into_projective()
-            - &vk.g.into_projective().mul(value)
-            - &vk.gamma_g.into_projective().mul(proof.random_v);
+        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(value);
+        if let Some(random_v) = proof.random_v {
+            inner -= &vk.gamma_g.mul(random_v);
+        }
         let lhs = E::pairing(inner, vk.h);
 
-        let inner = vk.beta_h.into_projective() - &vk.h.into_projective().mul(point);
+        let inner = vk.beta_h.into_projective() - &vk.h.mul(point);
         let rhs = E::pairing(proof.w, inner);
 
         end_timer!(check_time, || format!("Result: {}", lhs == rhs));
@@ -326,11 +328,14 @@ impl<E: PairingEngine> KZG10<E> {
         let mut g_multiplier = E::Fr::zero();
         let mut gamma_g_multiplier = E::Fr::zero();
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
-            let mut c = c.0.into_projective();
-            let w = proof.w.into_projective();
-            c += &w.mul(*z);
+            let w = proof.w;
+            let mut temp = w.mul(*z);
+            temp.add_assign_mixed(&c.0);
+            let c = temp;
             g_multiplier += &(randomizer * &v);
-            gamma_g_multiplier += &(randomizer * &proof.random_v);
+            if let Some(random_v) = proof.random_v {
+                gamma_g_multiplier += &(randomizer * &random_v);
+            }
             total_c += &c.mul(randomizer);
             total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
@@ -342,18 +347,16 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let mut to_affine = [-total_w, total_c];
-        E::G1Projective::batch_normalization(&mut to_affine);
-        let [total_w, total_c] = to_affine;
-        let total_w = total_w.into_affine();
-        let total_c = total_c.into_affine();
+        let affine_points = E::G1Projective::batch_normalization_into_affine(&[-total_w, total_c]);
+        let (total_w, total_c) = (affine_points[0], affine_points[1]);
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&[
             (total_w.into(), vk.prepared_beta_h.clone()),
             (total_c.into(), vk.prepared_h.clone()),
-        ]) == E::Fqk::one();
+        ])
+        .is_one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
         Ok(result)
@@ -462,7 +465,6 @@ mod tests {
     use algebra::test_rng;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::MNT6_753 as MNT6;
     use algebra::SW6;
 
     type KZG_Bls12_381 = KZG10<Bls12_381>;
@@ -610,7 +612,6 @@ mod tests {
     fn end_to_end_test() {
         end_to_end_test_template::<Bls12_377>().expect("test failed for bls12-377");
         end_to_end_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        end_to_end_test_template::<MNT6>().expect("test failed for MNT6");
         end_to_end_test_template::<SW6>().expect("test failed for SW6");
     }
 
@@ -618,14 +619,12 @@ mod tests {
     fn linear_polynomial_test() {
         linear_polynomial_test_template::<Bls12_377>().expect("test failed for bls12-377");
         linear_polynomial_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        linear_polynomial_test_template::<MNT6>().expect("test failed for MNT6");
         linear_polynomial_test_template::<SW6>().expect("test failed for SW6");
     }
     #[test]
     fn batch_check_test() {
         batch_check_test_template::<Bls12_377>().expect("test failed for bls12-377");
         batch_check_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        batch_check_test_template::<MNT6>().expect("test failed for MNT6");
         batch_check_test_template::<SW6>().expect("test failed for SW6");
     }
 }
