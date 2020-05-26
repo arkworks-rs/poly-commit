@@ -735,7 +735,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let mut randomizer = G::ScalarField::one();
 
-        let mut combined_rep_poly = Polynomial::zero();
+        let mut combined_check_poly = Polynomial::zero();
         let mut combined_final_key = G::Projective::zero();
 
         for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
@@ -773,7 +773,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
             let check_poly =
                 Polynomial::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
-            combined_rep_poly += (randomizer, &check_poly);
+            combined_check_poly += (randomizer, &check_poly);
             combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
 
             randomizer = u128::rand(rng).into();
@@ -783,7 +783,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let proof_time = start_timer!(|| "Checking batched proof");
         let final_key = Self::cm_commit(
             vk.comm_key.as_slice(),
-            combined_rep_poly.coeffs.as_slice(),
+            combined_check_poly.coeffs.as_slice(),
             None,
             None,
         );
