@@ -15,7 +15,7 @@
 
 A (univariate) polynomial commitment scheme is a cryptographic primitive that enables a party to commit to a univariate polynomial and then, later on, to reveal desired evaluations of the polynomial along with cryptographic proofs attesting to their correctness.
 
-This library provides constructions of polynomial commitment schemes that are based on the [\[KZG10\] paper][kzg10]. These constructions support committing to multiple polynomials at a time with differing degree bounds, batching multiple evaluation proofs for the same evaluation point into a single one, and batch verification of proofs.
+This library provides various constructions of polynomial commitment schemes. These constructions support committing to multiple polynomials at a time with differing degree bounds, batching multiple evaluation proofs for the same evaluation point into a single one, and batch verification of proofs.
 
 The key properties satisfied by the polynomial commitment schemes are **succinctness**, **extractability**, and **hiding**. See [the Marlin paper][marlin] for definitions of these properties.
 
@@ -53,12 +53,32 @@ This library is licensed under either of the following licenses, at your discret
 Unless you explicitly state otherwise, any contribution that you submit to this library shall be dual licensed as above (as defined in the Apache v2 License), without any additional terms or conditions.
 
 [marlin]: https://ia.cr/2019/1047
+[sonic]: https://ia.cr/2019/099
+[aurora-light]: https://ia.cr/2019/601
+[pcd-acc]: https://ia.cr/2020/499
 
-## Reference paper
+## Reference papers
+
+[Polynomial Commitments][kzg10]     
+Aniket Kate, Gregory M. Zaverucha, Ian Goldberg     
+ASIACRYPT 2010
+
+[Sonic: Zero-Knowledge SNARKs from Linear-Size Universal and Updateable Structured Reference Strings][sonic]     
+Mary Maller, Sean Bowe, Markulf Kohlweiss, Sarah Meiklejohn     
+CCS 2019
+
+[AuroraLight: Improved prover efficiency and SRS size in a Sonic-like system][aurora-light]     
+Ariel Gabizon     
+ePrint, 2019
 
 [Marlin: Preprocessing zkSNARKs with Universal and Updatable SRS][marlin]     
 Alessandro Chiesa, Yuncong Hu, Mary Maller, [Pratyush Mishra](https://www.github.com/pratyush), Noah Vesely, [Nicholas Ward](https://www.github.com/npwardberkeley)     
 EUROCRYPT 2020
+
+[Proof-Carrying Data from Accumulation Schemes][pcd-acc]     
+Benedikt Bünz, Alessandro Chiesa, [Pratyush Mishra](https://www.github.com/pratyush), Nicholas Spooner     
+ePrint, 2020
+
 
 ## Acknowledgements
 
