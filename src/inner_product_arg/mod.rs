@@ -20,12 +20,15 @@ use rayon::prelude::*;
 use digest::Digest;
 use std::iter::Iterator;
 
-/// Polynomial commitment scheme based on the discrete log problem.
-/// The specific construction is detailed in
-/// [[BCMS20, "Proof-Carrying Data from Accumulation Schemes"]][pcdas].
-/// If degree bounds are used, this implementation requires that points
-/// are sufficiently random or previously unknown such that the opening party cannot
-/// construct a commitment specialized to the point to replace shifted commitments.
+/// A polynomial commitment scheme based on the hardness of the 
+/// discrete logarithm problem in prime-order groups.
+/// The construction is detailed in
+/// [[BCMS20]][pcdas].
+///
+/// To enforce degree bounds, it must be the case that the points at 
+/// which a committed polynomial is evaluated are from a distribution that is
+/// random conditioned on the polynomial. This is because degree bound
+/// enforcement relies on checking a polynomial identity at this point. 
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub struct InnerProductArg<G: AffineCurve, D: Digest> {
@@ -37,6 +40,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
 
+    /// Create a Pedersen commitment to `scalar` using the commitment key `comm_key`.
     fn cm_commit(
         comm_key: &[G],
         scalars: &[G::ScalarField],
@@ -75,7 +79,9 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
         ff_fft::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
     }
-
+	
+	/// The succinct portion of `PC::check`. This algorithm runs in time
+	/// O(log d), where d is the degree of the committed polynomials.
     fn succinct_check<'a>(
         vk: &VerifierKey<G>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<G>>>,

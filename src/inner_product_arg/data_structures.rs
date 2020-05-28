@@ -36,13 +36,15 @@ pub struct CommitterKey<G: AffineCurve> {
     /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
 
-    /// Some group generator.
+    /// A random group generator.
     pub h: G,
 
-    /// Some group generator specifically used for hiding.
+    /// A random group generator that is to be used to make
+    /// a commitment hiding.
     pub s: G,
 
-    /// Max degree supported by the universal parameters.
+    /// The maximum degree supported by the parameters
+    /// this key was derived from.
     pub max_degree: usize,
 }
 
@@ -67,13 +69,15 @@ pub struct VerifierKey<G: AffineCurve> {
     /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
 
-    /// Some group generator.
+    /// A random group generator.
     pub h: G,
 
-    /// Some group generator specifically used for hiding.
+    /// A random group generator that is to be used to make
+    /// a commitment hiding.
     pub s: G,
 
-    /// Max degree supported by the universal parameters.
+    /// The maximum degree supported by the universal parameters
+    /// this key was derived from.
     pub max_degree: usize,
 }
 
@@ -99,11 +103,12 @@ impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     Eq(bound = "")
 )]
 pub struct Commitment<G: AffineCurve> {
-    /// Commitment is some group element.
+    /// A Pedersen commitment to the polynomial.
     pub comm: G,
 
-    /// Commitment to the shifted polynomial is some group element.
-    /// Is `none` if polynomial has no degree bound.
+    /// A Pedersen commitment to the shifted polynomial.
+    /// This is `none` if the committed polynomial does not
+    /// enforce a strict degree bound.
     pub shifted_comm: Option<G>,
 }
 
@@ -185,22 +190,24 @@ impl<G: AffineCurve> PCRandomness for Randomness<G> {
     Debug(bound = "")
 )]
 pub struct Proof<G: AffineCurve> {
-    /// Vector of left elements from each of the log_d sub-procedures in `open`
+    /// Vector of left elements for each of the log_d iterations in `open`
     pub l_vec: Vec<G>,
 
-    /// Vector of right elements from each of the log_d sub-procedures of `open`
+    /// Vector of right elements for each of the log_d iterations within `open`
     pub r_vec: Vec<G>,
 
-    /// Last committer key from the last of the log_d sub-procedures of `open`
+    /// Committer key from the last iteration within `open`
     pub final_comm_key: G,
 
-    /// Last coefficient from the last of the log_d sub-procedures of `open`
+    /// Coefficient from the last iteration within withinopen`
     pub c: G::ScalarField,
 
-    /// Commitment to the hiding polynomial
+    /// Commitment to the blinding polynomial.
     pub hiding_comm: Option<G>,
 
-    /// Sum of all randomness in commitments and hiding polynomial
+    /// Linear combination of all the randomness used for commitments 
+    /// to the opened polynomials, along with the randomness used for the
+    /// commitment to the hiding polynomial.
     pub rand: Option<G::ScalarField>,
 }
 
@@ -228,13 +235,13 @@ impl<G: AffineCurve> ToBytes for Proof<G> {
     }
 }
 
-/// `SuccinctCheckPolynomial` is a special check polynomial generated
-/// from a size `log_d` vector of scalar field elements.
-/// Can be evaluated in `O(log_d)` but can optionally be represented as a degree `d` polynomial.
+/// `SuccinctCheckPolynomial` is a succinctly-representated polynomial 
+/// generated from the `log_d` random oracle challenges generated in `open`.
+/// It has the special property that can be evaluated in `O(log_d)` time.
 pub struct SuccinctCheckPolynomial<F: Field>(pub Vec<F>);
 
 impl<F: Field> SuccinctCheckPolynomial<F> {
-    /// Computes the underlying degree `d` polynomial coefficients
+    /// Computes the coefficients of the underlying degree `d` polynomial.
     pub fn compute_coeffs(&self) -> Vec<F> {
         let challenges = &self.0;
         let log_d = challenges.len();
@@ -253,7 +260,7 @@ impl<F: Field> SuccinctCheckPolynomial<F> {
         coeffs
     }
 
-    /// Evaluates the underlying degree `d` polynomial coefficients in `O(log_d)`
+    /// Evaluate `self` at `point` in time `O(log_d)`.
     pub fn evaluate(&self, point: F) -> F {
         let challenges = &self.0;
         let log_d = challenges.len();
