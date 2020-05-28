@@ -184,7 +184,7 @@ pub struct Proof<G: AffineCurve> {
     /// Commitment to the blinding polynomial.
     pub hiding_comm: Option<G>,
 
-    /// Linear combination of all the randomness used for commitments 
+    /// Linear combination of all the randomness used for commitments
     /// to the opened polynomials, along with the randomness used for the
     /// commitment to the hiding polynomial.
     pub rand: Option<G::ScalarField>,
@@ -214,7 +214,7 @@ impl<G: AffineCurve> ToBytes for Proof<G> {
     }
 }
 
-/// `SuccinctCheckPolynomial` is a succinctly-representated polynomial 
+/// `SuccinctCheckPolynomial` is a succinctly-representated polynomial
 /// generated from the `log_d` random oracle challenges generated in `open`.
 /// It has the special property that can be evaluated in `O(log_d)` time.
 pub struct SuccinctCheckPolynomial<F: Field>(pub Vec<F>);
