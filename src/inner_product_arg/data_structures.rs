@@ -58,28 +58,7 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
 }
 
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
-#[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = "")
-)]
-pub struct VerifierKey<G: AffineCurve> {
-    /// The key used to commit to polynomials.
-    pub comm_key: Vec<G>,
-
-    /// A random group generator.
-    pub h: G,
-
-    /// A random group generator that is to be used to make
-    /// a commitment hiding.
-    pub s: G,
-
-    /// The maximum degree supported by the universal parameters
-    /// this key was derived from.
-    pub max_degree: usize,
-}
+pub type VerifierKey<G> = CommitterKey<G>;
 
 impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     fn max_degree(&self) -> usize {

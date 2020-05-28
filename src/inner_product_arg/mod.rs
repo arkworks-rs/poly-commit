@@ -1,8 +1,7 @@
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCCommitterKey, PCVerifierKey};
-use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
+use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{
     AffineCurve, Field, One, PrimeField, ProjectiveCurve, ToBytes, UniformRand, VariableBaseMSM,
@@ -227,6 +226,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
             Polynomial::from_coefficients_vec(shifted_polynomial_coeffs)
         }
     }
+
     fn combine_shifted_rand(
         combined_rand: Option<G::ScalarField>,
         new_rand: Option<G::ScalarField>,
@@ -253,11 +253,11 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         combined_comm
     }
 
-    fn projectives_to_labeled_commitments(
-        lc_info: &Vec<(String, Option<usize>)>,
-        projectives: &Vec<G::Projective>,
+    fn construct_labeled_commitments(
+        lc_info: &[(String, Option<usize>)],
+        elements: &[G::Projective],
     ) -> Vec<LabeledCommitment<Commitment<G>>> {
-        let comms = G::Projective::batch_normalization_into_affine(projectives.as_slice());
+        let comms = G::Projective::batch_normalization_into_affine(elements);
         let mut commitments = Vec::new();
 
         let mut i = 0;
@@ -287,6 +287,17 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
 
         return commitments;
     }
+
+    fn sample_generators(num_generators: usize) -> Vec<G> {
+        let generators: Vec<_> = ff_fft::cfg_into_iter!(0..num_generators).map(|i| {
+            let bytes: Vec<u8> = algebra_core::to_bytes![&Self::PROTOCOL_NAME, i as u64].unwrap();
+            let hash = D::digest(bytes.as_slice());
+            let generator = G::from_random_bytes(&hash).unwrap();
+            generator.mul_by_cofactor_to_projective()
+        }).collect();
+
+        G::Projective::batch_normalization_into_affine(&generators)
+    }
 }
 
 impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerProductArg<G, D> {
@@ -306,29 +317,15 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         // Ensure that max_degree + 1 is a power of 2
         let max_degree = (max_degree + 1).next_power_of_two() - 1;
 
-        let mut affines = Vec::with_capacity(max_degree + 3);
-
-        let setup_time = start_timer!(|| format!("Generating {} affine elements", max_degree + 3));
-
-        let mut i = G::ScalarField::zero();
-        while affines.len() < max_degree + 3 {
-            let bytes: Vec<u8> = algebra_core::to_bytes![&Self::PROTOCOL_NAME, i].unwrap();
-
-            let hash = D::digest(bytes.as_slice());
-            let affine = G::from_random_bytes(&hash);
-            if affine.is_some() {
-                affines.push(affine.unwrap().mul_by_cofactor());
-            }
-
-            i += &G::ScalarField::one();
-        }
+        let setup_time = start_timer!(|| format!("Sampling {} generators", max_degree + 3));
+        let generators = Self::sample_generators(max_degree + 3);
         end_timer!(setup_time);
 
-        let h: G = affines.pop().unwrap();
-        let s: G = affines.pop().unwrap();
+        let h = generators.pop().unwrap();
+        let s = generators.pop().unwrap();
 
         let pp = UniversalParams {
-            comm_key: affines,
+            comm_key: generators,
             h,
             s,
         };
@@ -381,8 +378,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         ),
         Self::Error,
     > {
-        let mut comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
-        let mut rands: Vec<Self::Randomness> = Vec::new();
+        let mut comms = Vec::new();
+        let mut rands = Vec::new();
 
         let commit_time = start_timer!(|| "Committing to polynomials");
         for labeled_polynomial in polynomials {
@@ -415,19 +412,15 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             )
             .into();
 
-            let shifted_comm = if let Some(degree_bound) = degree_bound {
-                Some(
-                    Self::cm_commit(
-                        &ck.comm_key[(ck.supported_degree() - degree_bound)..],
-                        &polynomial.coeffs,
-                        Some(ck.s),
-                        randomness.shifted_rand,
-                    )
-                    .into(),
+            let shifted_comm = degree_bound.map(|d| {
+                Self::cm_commit(
+                    &ck.comm_key[(ck.supported_degree() - d)..],
+                    &polynomial.coeffs,
+                    Some(ck.s),
+                    randomness.shifted_rand,
                 )
-            } else {
-                None
-            };
+                .into()
+            });
 
             let commitment = Commitment { comm, shifted_comm };
             let labeled_comm = LabeledCommitment::new(label.to_string(), commitment, degree_bound);
@@ -601,14 +594,10 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         // Key for MSM
         // We initialize this to capacity 0 initially because we want to use the key slice first
-        let mut key: Vec<G> = Vec::with_capacity(0);
+        let mut key = Vec::with_capacity(0);
 
         // This will be used for transforming the key in each step
-        let mut key_proj = ck
-            .comm_key
-            .iter()
-            .map(|x| (*x).into())
-            .collect::<Vec<G::Projective>>();
+        let mut key_proj: Vec<_> = ck.comm_key.iter().map(|x| (*x).into()).collect();
         let mut key_proj = key_proj.as_mut_slice();
 
         let mut l_vec = Vec::with_capacity(log_d);
@@ -639,11 +628,11 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 Self::rand_oracle(&algebra_core::to_bytes![round_challenge, lr[0], lr[1]].unwrap());
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
-            for i in 0..n / 2 {
+            ff_fft::cfg_into_iter!(0..n/2).for_each(|i| {
                 coeffs_l[i] += &(round_challenge_inv * &coeffs_r[i]);
                 z_l[i] += &(round_challenge * &z_r[i]);
                 key_proj_l[i] += &(key_proj_r[i].mul(round_challenge));
-            }
+            })
 
             coeffs = coeffs_l;
             z = z_l;
@@ -659,8 +648,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok(Proof {
             l_vec,
             r_vec,
-            final_comm_key: key[0].clone(),
-            c: coeffs[0].clone(),
+            final_comm_key: key[0],
+            c: coeffs[0],
             hiding_comm: hiding_commitment,
             rand: combined_rand,
         })
