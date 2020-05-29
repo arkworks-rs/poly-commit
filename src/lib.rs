@@ -482,12 +482,11 @@ pub mod tests {
         num_equations: Option<usize>,
     }
 
-    pub fn bad_degree_bound_test<F, PC>() -> Result<(), PC::Error> 
+    pub fn bad_degree_bound_test<F, PC>() -> Result<(), PC::Error>
     where
         F: Field,
         PC: PolynomialCommitment<F>,
     {
-
         let rng = &mut test_rng();
         let max_degree = 100;
         let pp = PC::setup(max_degree, rng)?;
@@ -521,11 +520,7 @@ pub mod tests {
             }
 
             println!("supported degree: {:?}", supported_degree);
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                Some(degree_bounds.as_slice()),
-            )?;
+            let (ck, vk) = PC::trim(&pp, supported_degree, Some(degree_bounds.as_slice()))?;
             println!("Trimmed");
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
