@@ -996,24 +996,10 @@ mod tests {
     use crate::inner_product_arg::InnerProductArg;
 
     use algebra::jubjub::JubJubAffine;
-    use algebra::{AffineCurve, ToBytes};
     use blake2::Blake2s;
-    use digest::Digest;
 
     type PC<E, D> = InnerProductArg<E, D>;
     type PC_JJB2S = PC<JubJubAffine, Blake2s>;
-
-    #[test]
-    fn sample_point_test() {
-        let bytes = algebra_core::to_bytes![10u64].unwrap();
-        let hash = Blake2s::digest(bytes.as_slice());
-        let mut g = JubJubAffine::from_random_bytes(&hash);
-        while g.is_none() {
-            g = JubJubAffine::from_random_bytes(&hash);
-            println!("Hashing is not working!")
-        }
-        let _generator = g.unwrap();
-    }
 
     #[test]
     fn single_poly_test() {
