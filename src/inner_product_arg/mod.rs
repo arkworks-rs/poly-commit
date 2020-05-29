@@ -4,8 +4,8 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{
-    AffineCurve, Field, One, PrimeField, ProjectiveCurve, ToBytes, UniformRand, VariableBaseMSM,
-    Zero, to_bytes
+    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, ToBytes, UniformRand,
+    VariableBaseMSM, Zero,
 };
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
@@ -996,9 +996,9 @@ mod tests {
     use crate::inner_product_arg::InnerProductArg;
 
     use algebra::jubjub::JubJubAffine;
+    use algebra::{AffineCurve, ToBytes};
     use blake2::Blake2s;
     use digest::Digest;
-    use algebra::{AffineCurve, ToBytes};
 
     type PC<E, D> = InnerProductArg<E, D>;
     type PC_JJB2S = PC<JubJubAffine, Blake2s>;
