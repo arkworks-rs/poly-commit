@@ -1,4 +1,4 @@
-use crate::{BTreeMap, BTreeSet, ToString, Vec};
+use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
@@ -17,7 +17,6 @@ pub use data_structures::*;
 use rayon::prelude::*;
 
 use digest::Digest;
-use std::iter::Iterator;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
@@ -94,7 +93,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         let d = vk.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = ((d + 1) as f32).log2() as usize;
+        let log_d = algebra_core::log2(d + 1) as usize;
 
         let mut combined_commitment_proj = G::Projective::zero();
         let mut combined_v = G::ScalarField::zero();
@@ -510,7 +509,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let d = ck.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = ((d + 1) as f32).log2() as usize;
+        let log_d = algebra_core::log2(d + 1) as usize;
 
         let mut combined_commitment;
         let mut hiding_commitment = None;
@@ -675,7 +674,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let d = vk.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = ((d + 1) as f32).log2() as usize;
+        let log_d = algebra_core::log2(d + 1) as usize;
 
         if proof.l_vec.len() != proof.r_vec.len() || proof.l_vec.len() != log_d {
             return Err(Error::IncorrectInputLength(
