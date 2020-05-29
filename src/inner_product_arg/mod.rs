@@ -369,10 +369,10 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     }
 
     /// Outputs a commitment to `polynomial`.
-    fn commit<'a, R: RngCore>(
+    fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -380,6 +380,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         ),
         Self::Error,
     > {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let mut comms = Vec::new();
         let mut rands = Vec::new();
 
@@ -437,14 +438,14 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok((comms, rands))
     }
 
-    fn open<'a, R: RngCore>(
+    fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Commitment: 'a,
@@ -515,8 +516,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let mut hiding_commitment = None;
 
         if has_hiding {
+            let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-            let mut hiding_polynomial = Polynomial::rand(d, rng);
+            let mut hiding_polynomial = Polynomial::rand(d, &mut rng);
             hiding_polynomial -=
                 &Polynomial::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 
@@ -793,15 +795,15 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok(true)
     }
 
-    fn open_combinations<'a, R: RngCore>(
+    fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<G::ScalarField, Self>, Self::Error>
     where
         Self::Randomness: 'a,
@@ -891,10 +893,10 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let proof = Self::batch_open(
             ck,
             lc_polynomials.iter(),
+            lc_commitments.iter(),
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
-            lc_commitments.iter(),
             rng,
         )?;
         Ok(BatchLCProof { proof, evals: None })

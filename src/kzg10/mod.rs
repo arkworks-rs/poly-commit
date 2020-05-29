@@ -19,8 +19,6 @@ use core::marker::PhantomData;
 mod data_structures;
 pub use data_structures::*;
 
-pub(crate) mod optional_rng;
-
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
 ///

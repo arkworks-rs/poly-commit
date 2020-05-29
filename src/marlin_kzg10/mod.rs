@@ -249,10 +249,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     }
 
     /// Outputs a commitment to `polynomial`.
-    fn commit<'a, R: RngCore>(
+    fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -260,6 +260,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         ),
         Self::Error,
     > {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
@@ -318,14 +319,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open<'a, R: RngCore>(
+    fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        _rng: &mut R,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
@@ -510,15 +511,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         Ok(result)
     }
 
-    fn open_combinations<'a, R: RngCore>(
+    fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
         Self::Randomness: 'a,
@@ -595,10 +596,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         let proof = Self::batch_open(
             ck,
             lc_polynomials.iter(),
+            lc_commitments.iter(),
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
-            lc_commitments.iter(),
             rng,
         )?;
 
