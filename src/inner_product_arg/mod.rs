@@ -5,7 +5,7 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, Polynom
 
 use algebra_core::{
     AffineCurve, Field, One, PrimeField, ProjectiveCurve, ToBytes, UniformRand, VariableBaseMSM,
-    Zero,
+    Zero, to_bytes
 };
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
@@ -292,10 +292,16 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
     fn sample_generators(num_generators: usize) -> Vec<G> {
         let generators: Vec<_> = ff_fft::cfg_into_iter!(0..num_generators)
             .map(|i| {
-                let bytes: Vec<u8> =
-                    algebra_core::to_bytes![&Self::PROTOCOL_NAME, i as u64].unwrap();
-                let hash = D::digest(bytes.as_slice());
-                let generator = G::from_random_bytes(&hash).unwrap();
+                let i = i as u64;
+                let mut hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i].unwrap());
+                let mut g = G::from_random_bytes(&hash);
+                let mut j = 0u64;
+                while g.is_none() {
+                    hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i, j].unwrap());
+                    g = G::from_random_bytes(&hash);
+                    j += 1;
+                }
+                let generator = g.unwrap();
                 generator.mul_by_cofactor_to_projective()
             })
             .collect();
@@ -1002,11 +1008,25 @@ mod tests {
 
     use crate::inner_product_arg::InnerProductArg;
 
-    use algebra::jubjub;
+    use algebra::jubjub::JubJubAffine;
     use blake2::Blake2s;
+    use digest::Digest;
+    use algebra::{AffineCurve, ToBytes};
 
     type PC<E, D> = InnerProductArg<E, D>;
-    type PC_JJB2S = PC<jubjub::JubJubAffine, Blake2s>;
+    type PC_JJB2S = PC<JubJubAffine, Blake2s>;
+
+    #[test]
+    fn sample_point_test() {
+        let bytes = algebra_core::to_bytes![10u64].unwrap();
+        let hash = Blake2s::digest(bytes.as_slice());
+        let mut g = JubJubAffine::from_random_bytes(&hash);
+        while g.is_none() {
+            g = JubJubAffine::from_random_bytes(&hash);
+            println!("Hashing is not working!")
+        }
+        let _generator = g.unwrap();
+    }
 
     #[test]
     fn single_poly_test() {
