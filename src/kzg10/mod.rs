@@ -463,7 +463,6 @@ mod tests {
     use algebra::test_rng;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::SW6;
 
     type KZG_Bls12_381 = KZG10<Bls12_381>;
 
@@ -610,19 +609,16 @@ mod tests {
     fn end_to_end_test() {
         end_to_end_test_template::<Bls12_377>().expect("test failed for bls12-377");
         end_to_end_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        end_to_end_test_template::<SW6>().expect("test failed for SW6");
     }
 
     #[test]
     fn linear_polynomial_test() {
         linear_polynomial_test_template::<Bls12_377>().expect("test failed for bls12-377");
         linear_polynomial_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        linear_polynomial_test_template::<SW6>().expect("test failed for SW6");
     }
     #[test]
     fn batch_check_test() {
         batch_check_test_template::<Bls12_377>().expect("test failed for bls12-377");
         batch_check_test_template::<Bls12_381>().expect("test failed for bls12-381");
-        batch_check_test_template::<SW6>().expect("test failed for SW6");
     }
 }
