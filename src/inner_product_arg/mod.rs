@@ -121,10 +121,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
             cur_challenge *= &opening_challenge;
         }
 
-        let mut combined_commitment =
-            G::Projective::batch_normalization_into_affine(&[combined_commitment_proj])
-                .pop()
-                .unwrap();
+        let mut combined_commitment = combined_commitment_proj.into_affine();
 
         assert_eq!(proof.hiding_comm.is_some(), proof.rand.is_some());
         if proof.hiding_comm.is_some() {
@@ -136,10 +133,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
                     .unwrap(),
             );
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
-            combined_commitment =
-                G::Projective::batch_normalization_into_affine(&[combined_commitment_proj])
-                    .pop()
-                    .unwrap();
+            combined_commitment = combined_commitment_proj.into_affine();
         }
 
         // Challenge for each round
@@ -166,9 +160,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
 
         let check_poly = SuccinctCheckPolynomial::<G::ScalarField>(round_challenges);
         let v_prime = check_poly.evaluate(point) * &proof.c;
-        let h_prime = G::Projective::batch_normalization_into_affine(&[h_prime])
-            .pop()
-            .unwrap();
+        let h_prime = h_prime.into_affine();
 
         let check_commitment_elem: G::Projective = Self::cm_commit(
             &[proof.final_comm_key.clone(), h_prime],
@@ -536,12 +528,12 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 Some(hiding_rand),
             );
 
-            let mut wrapper = G::Projective::batch_normalization_into_affine(&[
+            let mut batch = G::Projective::batch_normalization_into_affine(&[
                 combined_commitment_proj,
                 hiding_commitment_proj,
             ]);
-            hiding_commitment = Some(wrapper.pop().unwrap());
-            combined_commitment = wrapper.pop().unwrap();
+            hiding_commitment = Some(batch.pop().unwrap());
+            combined_commitment = batch.pop().unwrap();
 
             let hiding_challenge = Self::compute_random_oracle_challenge(
                 &algebra_core::to_bytes![
@@ -569,20 +561,14 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let proof_time =
             start_timer!(|| format!("Generating proof for degree {} combined polynomial", d + 1));
 
-        combined_commitment =
-            G::Projective::batch_normalization_into_affine(&[combined_commitment_proj])
-                .pop()
-                .unwrap();
+        combined_commitment = combined_commitment_proj.into_affine();
 
         // ith challenge
         let mut round_challenge = Self::compute_random_oracle_challenge(
             &algebra_core::to_bytes![combined_commitment, point, combined_v].unwrap(),
         );
 
-        let h_prime = ck.h.mul(round_challenge);
-        let h_prime = G::Projective::batch_normalization_into_affine(&[h_prime])
-            .pop()
-            .unwrap();
+        let h_prime = ck.h.mul(round_challenge).into_affine();
 
         // Pads the coefficients with zeroes to get the number of coeff to be d+1
         let mut coeffs = combined_polynomial.coeffs;
