@@ -68,7 +68,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod marlin_kzg10;
+pub mod marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
 /// modified to obtain batching and to enforce strict
@@ -80,14 +80,14 @@ pub mod marlin_kzg10;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod sonic_kzg10;
+pub mod sonic_pc;
 
-/// Polynomial commitment scheme based on the discrete log problem.
-/// The specific construction is detailed in
-/// [[BCMS20, "Proof-Carrying Data from Accumulation Schemes"]][pcdas].
+/// A polynomial commitment scheme based on the hardness of the
+/// discrete logarithm problem in prime-order groups.
+/// The construction is detailed in [[BCMS20]][pcdas].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
-pub mod inner_product_arg;
+pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
@@ -480,6 +480,88 @@ pub mod tests {
         enforce_degree_bounds: bool,
         max_num_queries: usize,
         num_equations: Option<usize>,
+    }
+
+    pub fn bad_degree_bound_test<F, PC>() -> Result<(), PC::Error> 
+    where
+        F: Field,
+        PC: PolynomialCommitment<F>,
+    {
+
+        let rng = &mut test_rng();
+        let max_degree = 100;
+        let pp = PC::setup(max_degree, rng)?;
+
+        for _ in 0..10 {
+            let supported_degree = rand::distributions::Uniform::from(1..=max_degree).sample(rng);
+            assert!(
+                max_degree >= supported_degree,
+                "max_degree < supported_degree"
+            );
+
+            let mut labels = Vec::new();
+            let mut polynomials = Vec::new();
+            let mut degree_bounds = Vec::new();
+
+            for i in 0..10 {
+                let label = format!("Test{}", i);
+                labels.push(label.clone());
+                let poly = Polynomial::rand(supported_degree, rng);
+
+                let degree_bound = 1usize;
+                let hiding_bound = Some(1);
+                degree_bounds.push(degree_bound);
+
+                polynomials.push(LabeledPolynomial::new_owned(
+                    label,
+                    poly,
+                    Some(degree_bound),
+                    hiding_bound,
+                ))
+            }
+
+            println!("supported degree: {:?}", supported_degree);
+            let (ck, vk) = PC::trim(
+                &pp,
+                supported_degree,
+                Some(degree_bounds.as_slice()),
+            )?;
+            println!("Trimmed");
+
+            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+            let mut query_set = QuerySet::new();
+            let mut values = Evaluations::new();
+            let point = F::rand(rng);
+            for (i, label) in labels.iter().enumerate() {
+                query_set.insert((label.clone(), point));
+                let value = polynomials[i].evaluate(point);
+                values.insert((label.clone(), point), value);
+            }
+            println!("Generated query set");
+
+            let opening_challenge = F::rand(rng);
+            let proof = PC::batch_open(
+                &ck,
+                &polynomials,
+                &comms,
+                &query_set,
+                opening_challenge,
+                &rands,
+                Some(rng),
+            )?;
+            let result = PC::batch_check(
+                &vk,
+                &comms,
+                &query_set,
+                &values,
+                &proof,
+                opening_challenge,
+                rng,
+            )?;
+            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
+        }
+        Ok(())
     }
 
     fn test_template<F, PC>(info: TestInfo) -> Result<(), PC::Error>

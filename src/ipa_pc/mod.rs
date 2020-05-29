@@ -20,29 +20,32 @@ use digest::Digest;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
-/// The construction is detailed in
-/// [[BCMS20]][pcdas].
+/// The construction is described in detail in [[BCMS20]][pcdas].
 ///
-/// To enforce degree bounds, it must be the case that the points at
+/// Degree bound enforcement requires that (at least one of) the points at
 /// which a committed polynomial is evaluated are from a distribution that is
 /// random conditioned on the polynomial. This is because degree bound
 /// enforcement relies on checking a polynomial identity at this point.
+/// More formally, the points must be sampled from an admissible query sampler,
+/// as detailed in [[CHMMVW20]][marlin].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
-pub struct InnerProductArg<G: AffineCurve, D: Digest> {
+/// [marlin]: https://eprint.iacr.org/2019/104
+pub struct InnerProductArgPC<G: AffineCurve, D: Digest> {
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
 }
 
-impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
+impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
 
-    /// Create a Pedersen commitment to `scalar` using the commitment key `comm_key`.
+    /// Create a Pedersen commitment to `scalars` using the commitment key `comm_key`.
+    /// Optionally, randomize the commitment using `hiding_generator` and `randomizer`.
     fn cm_commit(
         comm_key: &[G],
         scalars: &[G::ScalarField],
-        hiding_elem: Option<G>,
+        hiding_generator: Option<G>,
         randomizer: Option<G::ScalarField>,
     ) -> G::Projective {
         let scalars_bigint = ff_fft::cfg_iter!(scalars)
@@ -52,20 +55,19 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, &scalars_bigint);
 
         if randomizer.is_some() {
-            assert!(hiding_elem.is_some());
-            comm += &hiding_elem.unwrap().mul(randomizer.unwrap());
+            assert!(hiding_generator.is_some());
+            comm += &hiding_generator.unwrap().mul(randomizer.unwrap());
         }
 
         comm
     }
 
-    fn compute_random_oracle_challenge(bytes: &Vec<u8>) -> G::ScalarField {
+    fn compute_random_oracle_challenge(bytes: &[u8]) -> G::ScalarField {
         let mut i = 0u64;
         let mut challenge = None;
         while challenge.is_none() {
-            let mut hash_input = algebra_core::to_bytes![i].unwrap();
-            hash_input.extend_from_slice(bytes.as_slice());
-            let hash = D::digest(hash_input.as_slice());
+            let hash_input = algebra_core::to_bytes![bytes, i].unwrap();
+            let hash = D::digest(&hash_input);
             challenge = <G::ScalarField as Field>::from_random_bytes(&hash);
 
             i += 1;
@@ -74,6 +76,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
         challenge.unwrap()
     }
 
+    #[inline]
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
         ff_fft::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
     }
@@ -301,7 +304,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArg<G, D> {
     }
 }
 
-impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerProductArg<G, D> {
+impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerProductArgPC<G, D> {
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
@@ -993,12 +996,12 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::inner_product_arg::InnerProductArg;
+    use super::InnerProductArgPC;
 
     use algebra::jubjub::JubJubAffine;
     use blake2::Blake2s;
 
-    type PC<E, D> = InnerProductArg<E, D>;
+    type PC<E, D> = InnerProductArgPC<E, D>;
     type PC_JJB2S = PC<JubJubAffine, Blake2s>;
 
     #[test]
@@ -1072,6 +1075,14 @@ mod tests {
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
         full_end_to_end_equation_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
+        println!("Finished jubjub-blake2s");
+    }
+
+    #[test]
+    #[should_panic]
+    fn bad_degree_bound_test() {
+        use crate::tests::*;
+        bad_degree_bound_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
         println!("Finished jubjub-blake2s");
     }
 }

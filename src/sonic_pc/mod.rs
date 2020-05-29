@@ -644,7 +644,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::sonic_kzg10::SonicKZG10;
+    use super::SonicKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
 
@@ -742,6 +742,16 @@ mod tests {
         full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+    }
+
+    #[test]
+    #[should_panic]
+    fn bad_degree_bound_test() {
+        use crate::tests::*;
+        bad_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        bad_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 }

@@ -14,6 +14,13 @@ pub use data_structures::*;
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
 /// and (optional) hiding property taken from [[CHMMVW20, “Marlin”]][marlin].
 ///
+/// Degree bound enforcement requires that (at least one of) the points at
+/// which a committed polynomial is evaluated are from a distribution that is
+/// random conditioned on the polynomial. This is because degree bound
+/// enforcement relies on checking a polynomial identity at this point.
+/// More formally, the points must be sampled from an admissible query sampler,
+/// as detailed in [[CHMMVW20]][marlin].
+///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
 pub struct MarlinKZG10<E: PairingEngine> {
@@ -696,7 +703,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::marlin_kzg10::MarlinKZG10;
+    use super::MarlinKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
 
@@ -794,6 +801,16 @@ mod tests {
         full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         println!("Finished bls12-377");
         full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
+    }
+
+    #[test]
+    #[should_panic]
+    fn bad_degree_bound_test() {
+        use crate::tests::*;
+        bad_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        bad_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 }
