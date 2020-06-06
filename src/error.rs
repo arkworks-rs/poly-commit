@@ -79,6 +79,9 @@ pub enum Error {
 
     /// The inputs to `commit`, `open` or `verify` had incorrect lengths.
     IncorrectInputLength(String),
+
+    /// The commitment was generated incorrectly, tampered with, or doesn't support the polynomial.
+    MalformedCommitment(String),
 }
 
 impl core::fmt::Display for Error {
@@ -151,7 +154,8 @@ impl core::fmt::Display for Error {
                  supported degree ({:?})",
                 degree_bound, label, poly_degree, supported_degree
             ),
-            Error::IncorrectInputLength(err) => write!(f, "{}", err)
+            Error::IncorrectInputLength(err) => write!(f, "{}", err),
+            Error::MalformedCommitment(err) => write!(f, "{}", err)
         }
     }
 }

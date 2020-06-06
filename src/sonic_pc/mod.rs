@@ -259,10 +259,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         ),
         Self::Error,
     > {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
         let mut randomness: Vec<Self::Randomness> = Vec::new();
-        let rng = &mut kzg10::optional_rng::OptionalRng(rng);
 
         for labeled_polynomial in polynomials {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -314,12 +314,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Randomness: 'a,
+        Self::Commitment: 'a,
     {
         let mut combined_polynomial = Polynomial::zero();
         let mut combined_rand = kzg10::Randomness::empty();
@@ -350,13 +353,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Ok(proof)
     }
 
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
+        _rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -463,37 +467,43 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
     where
         Self::Randomness: 'a,
+        Self::Commitment: 'a,
     {
-        let label_poly_rand_map = polynomials
+        let label_map = polynomials
             .into_iter()
             .zip(rands)
-            .map(|(p, r)| (p.label(), (p, r)))
+            .zip(commitments)
+            .map(|((p, r), c)| (p.label(), (p, r, c)))
             .collect::<BTreeMap<_, _>>();
 
         let mut lc_polynomials = Vec::new();
         let mut lc_randomness = Vec::new();
+        let mut lc_commitments = Vec::new();
+        let mut lc_info = Vec::new();
+
         for lc in lc_s {
             let lc_label = lc.label().clone();
             let mut poly = Polynomial::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
+            let mut comm = E::G1Projective::zero();
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
                 let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand) =
-                    label_poly_rand_map
-                        .get(label)
-                        .ok_or(Error::MissingPolynomial {
-                            label: label.to_string(),
-                        })?;
+                let &(cur_poly, cur_rand, curr_comm) =
+                    label_map.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
 
                 if num_polys == 1 && cur_poly.degree_bound().is_some() {
                     assert!(
@@ -510,18 +520,37 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
+                comm += &curr_comm.commitment().0.into_projective().mul(*coeff);
             }
-            let lc_poly = LabeledPolynomial::new_owned(lc_label, poly, degree_bound, hiding_bound);
+
+            let lc_poly =
+                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
+            lc_commitments.push(comm);
+            lc_info.push((lc_label, degree_bound));
         }
+
+        let comms: Vec<Self::Commitment> =
+            E::G1Projective::batch_normalization_into_affine(&lc_commitments)
+                .into_iter()
+                .map(|c| kzg10::Commitment::<E>(c))
+                .collect();
+
+        let lc_commitments = lc_info
+            .into_iter()
+            .zip(comms)
+            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
+            .collect::<Vec<_>>();
 
         let proof = Self::batch_open(
             ck,
             lc_polynomials.iter(),
+            lc_commitments.iter(),
             &query_set,
             opening_challenge,
             lc_randomness.iter(),
+            rng,
         )?;
         Ok(BatchLCProof { proof, evals: None })
     }
@@ -615,22 +644,19 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::sonic_kzg10::SonicKZG10;
+    use super::SonicKZG10;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
-    use algebra::SW6;
 
     type PC<E> = SonicKZG10<E>;
     type PC_Bls12_377 = PC<Bls12_377>;
     type PC_Bls12_381 = PC<Bls12_381>;
-    type PC_SW6 = PC<SW6>;
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
         single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        single_poly_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -640,8 +666,6 @@ mod tests {
             .expect("test failed for bls12-377");
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_SW6>()
-            .expect("test failed for SW6");
     }
 
     #[test]
@@ -649,7 +673,6 @@ mod tests {
         use crate::tests::*;
         linear_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         linear_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        linear_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -657,7 +680,6 @@ mod tests {
         use crate::tests::*;
         single_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
         single_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
-        single_poly_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -667,7 +689,6 @@ mod tests {
             .expect("test failed for bls12-377");
         single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        single_poly_degree_bound_multiple_queries_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -677,7 +698,6 @@ mod tests {
             .expect("test failed for bls12-377");
         two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
             .expect("test failed for bls12-381");
-        two_polys_degree_bound_single_query_test::<_, PC_SW6>().expect("test failed for SW6");
     }
 
     #[test]
@@ -687,8 +707,6 @@ mod tests {
         println!("Finished bls12-377");
         full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        full_end_to_end_test::<_, PC_SW6>().expect("test failed for SW6");
-        println!("Finished sw6");
     }
 
     #[test]
@@ -698,8 +716,6 @@ mod tests {
         println!("Finished bls12-377");
         single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        single_equation_test::<_, PC_SW6>().expect("test failed for SW6");
-        println!("Finished sw6");
     }
 
     #[test]
@@ -709,8 +725,6 @@ mod tests {
         println!("Finished bls12-377");
         two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        two_equation_test::<_, PC_SW6>().expect("test failed for SW6");
-        println!("Finished sw6");
     }
 
     #[test]
@@ -720,8 +734,6 @@ mod tests {
         println!("Finished bls12-377");
         two_equation_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        two_equation_degree_bound_test::<_, PC_SW6>().expect("test failed for SW6");
-        println!("Finished sw6");
     }
 
     #[test]
@@ -731,7 +743,15 @@ mod tests {
         println!("Finished bls12-377");
         full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
         println!("Finished bls12-381");
-        full_end_to_end_equation_test::<_, PC_SW6>().expect("test failed for SW6");
-        println!("Finished sw6");
+    }
+
+    #[test]
+    #[should_panic]
+    fn bad_degree_bound_test() {
+        use crate::tests::*;
+        bad_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        println!("Finished bls12-377");
+        bad_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        println!("Finished bls12-381");
     }
 }

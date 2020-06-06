@@ -233,6 +233,9 @@ impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
     fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
         self.w.write(&mut writer)?;
-        self.random_v.write(&mut writer)
+        self.random_v
+            .as_ref()
+            .unwrap_or(&E::Fr::zero())
+            .write(&mut writer)
     }
 }

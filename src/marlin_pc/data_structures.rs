@@ -7,7 +7,7 @@ use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 
-/// `ComitterKey` is used to commit to and create evaluation proofs for a given
+/// `CommitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
 #[derive(Derivative)]
 #[derivative(

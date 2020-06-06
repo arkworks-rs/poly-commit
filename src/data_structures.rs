@@ -101,6 +101,7 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
             label,
             polynomial: Cow::Owned(polynomial),
             degree_bound,
+
             hiding_bound,
         }
     }
@@ -174,7 +175,7 @@ impl<C: PCCommitment> LabeledCommitment<C> {
         &self.label
     }
 
-    /// Retrieve the polynomial from `self`.
+    /// Retrieve the commitment from `self`.
     pub fn commitment(&self) -> &C {
         &self.commitment
     }
