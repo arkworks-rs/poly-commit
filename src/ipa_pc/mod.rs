@@ -468,6 +468,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         for (labeled_polynomial, (labeled_commitment, randomness)) in
             polys_iter.zip(comms_iter.zip(rands_iter))
         {
+            let label = labeled_polynomial.label();
+            assert_eq!(labeled_polynomial.label(), labeled_commitment.label());
             Self::check_degrees_and_bounds(ck.supported_degree(), labeled_polynomial)?;
 
             let polynomial = labeled_polynomial.polynomial();
@@ -485,19 +487,30 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
             cur_challenge *= &opening_challenge;
 
-            assert_eq!(degree_bound.is_some(), randomness.shifted_rand.is_some());
-            assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
+            let has_degree_bound = degree_bound.is_some();
+            
+            assert_eq!(
+                has_degree_bound, 
+                commitment.shifted_comm.is_some(), 
+                "shifted_comm mismatch for {}", 
+                label
+            );
 
-            if let Some(degree_bound) = labeled_polynomial.degree_bound() {
-                assert!(labeled_commitment.degree_bound().is_some());
-                assert_eq!(labeled_commitment.degree_bound().unwrap(), degree_bound);
-
+            assert_eq!(
+                degree_bound,
+                labeled_commitment.degree_bound(),
+                "labeled_comm degree bound mismatch for {}", 
+                label
+            );
+            if let Some(degree_bound) = degree_bound {
                 let shifted_polynomial = Self::shift_polynomial(ck, polynomial, degree_bound);
                 combined_polynomial += (cur_challenge, &shifted_polynomial);
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
 
                 if hiding_bound.is_some() {
-                    combined_rand += &(cur_challenge * &randomness.shifted_rand.unwrap());
+                    let shifted_rand = randomness.shifted_rand;
+                    assert!(shifted_rand.is_some(), "shifted_rand.is_none() for {}", label);
+                    combined_rand += &(cur_challenge * &shifted_rand.unwrap());
                 }
             }
 
