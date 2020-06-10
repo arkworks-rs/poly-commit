@@ -403,8 +403,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 hiding_bound,
             ));
 
-            let randomness = if hiding_bound.is_some() {
-                Randomness::rand(degree_bound.is_some(), rng)
+            let randomness = if let Some(h) = hiding_bound {
+                Randomness::rand(h, degree_bound.is_some(), rng)
             } else {
                 Randomness::empty()
             };
@@ -488,18 +488,18 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             cur_challenge *= &opening_challenge;
 
             let has_degree_bound = degree_bound.is_some();
-            
+
             assert_eq!(
-                has_degree_bound, 
-                commitment.shifted_comm.is_some(), 
-                "shifted_comm mismatch for {}", 
+                has_degree_bound,
+                commitment.shifted_comm.is_some(),
+                "shifted_comm mismatch for {}",
                 label
             );
 
             assert_eq!(
                 degree_bound,
                 labeled_commitment.degree_bound(),
-                "labeled_comm degree bound mismatch for {}", 
+                "labeled_comm degree bound mismatch for {}",
                 label
             );
             if let Some(degree_bound) = degree_bound {
@@ -509,7 +509,11 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
                 if hiding_bound.is_some() {
                     let shifted_rand = randomness.shifted_rand;
-                    assert!(shifted_rand.is_some(), "shifted_rand.is_none() for {}", label);
+                    assert!(
+                        shifted_rand.is_some(),
+                        "shifted_rand.is_none() for {}",
+                        label
+                    );
                     combined_rand += &(cur_challenge * &shifted_rand.unwrap());
                 }
             }
