@@ -403,8 +403,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 hiding_bound,
             ));
 
-            let randomness = if hiding_bound.is_some() {
-                Randomness::rand(degree_bound.is_some(), rng)
+            let randomness = if let Some(h) = hiding_bound {
+                Randomness::rand(h, degree_bound.is_some(), rng)
             } else {
                 Randomness::empty()
             };
