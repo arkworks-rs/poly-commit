@@ -148,7 +148,7 @@ impl<G: AffineCurve> PCRandomness for Randomness<G> {
         }
     }
 
-    fn rand<R: RngCore>(_hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(has_degree_bound: bool, rng: &mut R) -> Self {
         let rand = G::ScalarField::rand(rng);
         let shifted_rand = if has_degree_bound {
             Some(G::ScalarField::rand(rng))
