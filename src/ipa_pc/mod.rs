@@ -1015,91 +1015,95 @@ mod tests {
 
     use super::InnerProductArgPC;
 
-    use algebra::jubjub::JubJubAffine;
+    use algebra::ed_on_bls12_381::EdwardsAffine;
     use blake2::Blake2s;
 
     type PC<E, D> = InnerProductArgPC<E, D>;
-    type PC_JJB2S = PC<JubJubAffine, Blake2s>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s>;
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
+        single_poly_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
         quadratic_poly_degree_bound_multiple_queries_test::<_, PC_JJB2S>()
-            .expect("test failed for jubjub-blake2s");
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
+        linear_poly_degree_bound_test::<_, PC_JJB2S>()
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
+        single_poly_degree_bound_test::<_, PC_JJB2S>()
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
         single_poly_degree_bound_multiple_queries_test::<_, PC_JJB2S>()
-            .expect("test failed for jubjub-blake2s");
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
         two_polys_degree_bound_single_query_test::<_, PC_JJB2S>()
-            .expect("test failed for jubjub-blake2s");
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        full_end_to_end_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        single_equation_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        two_equation_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        two_equation_degree_bound_test::<_, PC_JJB2S>()
+            .expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        full_end_to_end_equation_test::<_, PC_JJB2S>()
+            .expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, PC_JJB2S>().expect("test failed for jubjub-blake2s");
-        println!("Finished jubjub-blake2s");
+        bad_degree_bound_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        println!("Finished ed_on_bls12_381-blake2s");
     }
 }

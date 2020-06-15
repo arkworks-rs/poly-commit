@@ -30,7 +30,7 @@ derivative = { version = "2", features = [ "use_core" ] }
 
 [dev-dependencies]
 rand = { version = "0.7", default-features = false }
-algebra = { git = "https://github.com/scipr-lab/zexe/", default-features = false, features = ["jubjub", "bls12_381", "bls12_377"] }
+algebra = { git = "https://github.com/scipr-lab/zexe/", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 blake2 = { version = "0.8", default-features = false }
 
 [profile.release]
