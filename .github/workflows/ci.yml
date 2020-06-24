@@ -15,6 +15,14 @@ jobs:
 
     - name: Checkout
       uses: actions/checkout@v1
+   
+    - name: Fetch snarkOS
+    - run: |
+        mkdir ~/.ssh
+        echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        git clone git@github.com:AleoHQ/snarkOS.git
+      
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
