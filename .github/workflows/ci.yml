@@ -15,11 +15,19 @@ jobs:
 
     - name: Checkout
       uses: actions/checkout@v1
+   
+    - name: Fetch snarkOS
+      run: |
+        mkdir ~/.ssh
+        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
+      
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: nightly
         override: true
         components: rustfmt
 
@@ -42,6 +50,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        
+      - name: Fetch snarkOS
+        run: |
+          mkdir ~/.ssh
+          echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
 
       - name: Install Rust (${{ matrix.rust }})
         uses: actions-rs/toolchain@v1
@@ -76,30 +91,37 @@ jobs:
             command: test
             args: --release
 
-  check_no_std:
-    name: Check no_std
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install Rust (${{ matrix.rust }})
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: thumbv6m-none-eabi
-          override: true
-
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --no-default-features --target thumbv6m-none-eabi
-
-      - name: Check
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: check
-          args: --examples --no-default-features --target thumbv6m-none-eabi
+#  check_no_std:
+#    name: Check no_std
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Fetch snarkOS
+#        run: |
+#          mkdir ~/.ssh
+#          echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+#          chmod 600 ~/.ssh/id_rsa
+#          cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
+#
+#      - name: Install Rust (${{ matrix.rust }})
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          target: thumbv6m-none-eabi
+#          override: true
+#
+#      - name: Build
+#        uses: actions-rs/cargo@v1
+#        with:
+#          use-cross: true
+#          command: build
+#          args: --no-default-features --target thumbv6m-none-eabi
+#
+#      - name: Check
+#        uses: actions-rs/cargo@v1
+#        with:
+#          use-cross: true
+#          command: check
+#          args: --examples --no-default-features --target thumbv6m-none-eabi

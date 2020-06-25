@@ -1,23 +1,32 @@
 use crate::{Cow, String, Vec};
-use algebra_core::Field;
-use core::borrow::Borrow;
-use core::ops::{AddAssign, MulAssign, SubAssign};
-pub use ff_fft::DensePolynomial as Polynomial;
+use core::{
+    borrow::Borrow,
+    fmt::Debug,
+    ops::{AddAssign, MulAssign, SubAssign},
+};
 use rand_core::RngCore;
+pub use snarkos_algorithms::fft::DensePolynomial as Polynomial;
+use snarkos_errors::serialization::SerializationError;
+use snarkos_models::curves::Field;
+use snarkos_utilities::{
+    bytes::{FromBytes, ToBytes},
+    error as error_fn,
+    serialize::*,
+};
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
 
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
-pub trait PCUniversalParams: Clone + core::fmt::Debug {
+pub trait PCUniversalParams: CanonicalSerialize + CanonicalDeserialize + Clone + Debug + ToBytes + FromBytes {
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
-pub trait PCCommitterKey: Clone + core::fmt::Debug {
+pub trait PCCommitterKey: CanonicalSerialize + CanonicalDeserialize + Clone + Debug {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -28,7 +37,7 @@ pub trait PCCommitterKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCVerifierKey: Clone + core::fmt::Debug {
+pub trait PCVerifierKey: CanonicalSerialize + CanonicalDeserialize + Clone + Debug {
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -39,20 +48,17 @@ pub trait PCVerifierKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + algebra_core::ToBytes {
+pub trait PCCommitment: CanonicalDeserialize + CanonicalSerialize + Clone + Debug + ToBytes {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
     /// Does this commitment have a degree bound?
     fn has_degree_bound(&self) -> bool;
-
-    /// Size in bytes
-    fn size_in_bytes(&self) -> usize;
 }
 
 /// Defines the minimal interface of commitment randomness for any polynomial
 /// commitment scheme.
-pub trait PCRandomness: Clone {
+pub trait PCRandomness: CanonicalSerialize + CanonicalDeserialize + Clone {
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 
@@ -65,15 +71,12 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + algebra_core::ToBytes {
-    /// Size in bytes
-    fn size_in_bytes(&self) -> usize;
-}
+pub trait PCProof: CanonicalSerialize + CanonicalDeserialize + Clone + ToBytes {}
 
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct LabeledPolynomial<'a, F: Field> {
     label: PolynomialLabel,
     polynomial: Cow<'a, Polynomial<F>>,
@@ -153,11 +156,21 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
 }
 
 /// A commitment along with information about its degree bound (if any).
-#[derive(Clone)]
+#[derive(Clone, CanonicalSerialize)]
 pub struct LabeledCommitment<C: PCCommitment> {
     label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
+}
+
+// NOTE: Serializing the LabeledCommitments struct is done by serializing
+// _WITHOUT_ the labels or the degree bound. Deserialization is _NOT_ supported,
+// and you should construct the struct via the `LabeledCommitment::new` method after
+// deserializing the Commitment.
+impl<C: PCCommitment> ToBytes for LabeledCommitment<C> {
+    fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        CanonicalSerialize::serialize(&self.commitment, &mut writer).map_err(|_| error_fn("could not serialize struct"))
+    }
 }
 
 impl<C: PCCommitment> LabeledCommitment<C> {
@@ -186,13 +199,6 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 }
 
-impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
-    #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
-        self.commitment.write(writer)
-    }
-}
-
 /// A term in a linear combination.
 #[derive(Hash, Ord, PartialOrd, Clone, Eq, PartialEq, Debug)]
 pub enum LCTerm {
@@ -206,11 +212,7 @@ impl LCTerm {
     /// Returns `true` if `self == LCTerm::One`
     #[inline]
     pub fn is_one(&self) -> bool {
-        if let LCTerm::One = self {
-            true
-        } else {
-            false
-        }
+        if let LCTerm::One = self { true } else { false }
     }
 }
 
@@ -228,6 +230,7 @@ impl<'a> From<&'a str> for LCTerm {
 
 impl core::convert::TryInto<PolynomialLabel> for LCTerm {
     type Error = ();
+
     fn try_into(self) -> Result<PolynomialLabel, ()> {
         match self {
             Self::One => Err(()),
@@ -280,7 +283,7 @@ impl<F: Field> LinearCombination<F> {
         let terms = terms.into_iter().map(|(c, t)| (c, t.into())).collect();
         Self {
             label: label.into(),
-            terms: terms,
+            terms,
         }
     }
 
@@ -323,8 +326,7 @@ impl<'a, F: Field> AddAssign<&'a LinearCombination<F>> for LinearCombination<F> 
 
 impl<'a, F: Field> SubAssign<&'a LinearCombination<F>> for LinearCombination<F> {
     fn sub_assign(&mut self, other: &'a LinearCombination<F>) {
-        self.terms
-            .extend(other.terms.iter().map(|(c, t)| (-*c, t.clone())));
+        self.terms.extend(other.terms.iter().map(|(c, t)| (-*c, t.clone())));
     }
 }
 
@@ -342,7 +344,7 @@ impl<F: Field> SubAssign<F> for LinearCombination<F> {
 
 impl<F: Field> MulAssign<F> for LinearCombination<F> {
     fn mul_assign(&mut self, coeff: F) {
-        self.terms.iter_mut().for_each(|(c, _)| *c *= coeff);
+        self.terms.iter_mut().for_each(|(c, _)| *c *= &coeff);
     }
 }
 
@@ -352,4 +354,22 @@ impl<F: Field> core::ops::Deref for LinearCombination<F> {
     fn deref(&self) -> &Self::Target {
         &self.terms
     }
+}
+
+/// Helper macro to forward all derived implementations to the ToBytes and FromBytes traits
+#[macro_export]
+macro_rules! impl_bytes {
+    ($ty: ident) => {
+        impl<E: PairingEngine> FromBytes for $ty<E> {
+            fn read<R: Read>(mut reader: R) -> io::Result<Self> {
+                CanonicalDeserialize::deserialize(&mut reader).map_err(|_| error("could not deserialize struct"))
+            }
+        }
+
+        impl<E: PairingEngine> ToBytes for $ty<E> {
+            fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+                CanonicalSerialize::serialize(self, &mut writer).map_err(|_| error("could not serialize struct"))
+            }
+        }
+    };
 }

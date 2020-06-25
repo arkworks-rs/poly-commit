@@ -6,13 +6,15 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};
-use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra_core::{
-    AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
-};
 use rand_core::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use snarkos_algorithms::{
+    cfg_iter,
+    msm::{FixedBaseMSM, VariableBaseMSM},
+};
+use snarkos_models::curves::{AffineCurve, Group, One, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve, Zero};
+use snarkos_utilities::rand::UniformRand;
 
 use core::marker::PhantomData;
 
@@ -23,6 +25,7 @@ pub use data_structures::*;
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
 ///
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
+#[derive(Clone, Debug)]
 pub struct KZG10<E: PairingEngine> {
     _engine: PhantomData<E>,
 }
@@ -57,12 +60,8 @@ impl<E: PairingEngine> KZG10<E> {
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
-        let powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &powers_of_beta,
-        );
+        let powers_of_g =
+            FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(scalar_bits, window_size, &g_table, &powers_of_beta);
         end_timer!(g_time);
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
         let gamma_g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, gamma_g);
@@ -78,11 +77,9 @@ impl<E: PairingEngine> KZG10<E> {
         end_timer!(gamma_g_time);
 
         let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
-        let powers_of_gamma_g =
-            E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
+        let powers_of_gamma_g = E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
 
-        let prepared_neg_powers_of_h_time =
-            start_timer!(|| "Generating negative powers of h in G2");
+        let prepared_neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
         let prepared_neg_powers_of_h = if produce_g2_powers {
             let mut neg_powers_of_beta = vec![E::Fr::one()];
             let mut cur = E::Fr::one() / &beta;
@@ -100,17 +97,17 @@ impl<E: PairingEngine> KZG10<E> {
             );
 
             let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
-            Some(affines.into_iter().map(|a| a.into()).collect())
+            Some(affines.into_iter().map(|a| a.prepare()).collect())
         } else {
             None
         };
 
         end_timer!(prepared_neg_powers_of_h_time);
 
-        let beta_h = h.mul(beta).into_affine();
+        let beta_h = h.mul(&beta).into_affine();
         let h = h.into_affine();
-        let prepared_h = h.into();
-        let prepared_beta_h = beta_h.into();
+        let prepared_h = h.prepare();
+        let prepared_beta_h = beta_h.prepare();
 
         let pp = UniversalParams {
             powers_of_g,
@@ -140,37 +137,27 @@ impl<E: PairingEngine> KZG10<E> {
             hiding_bound,
         ));
 
-        let (num_leading_zeros, plain_coeffs) =
-            skip_leading_zeros_and_convert_to_bigints(&polynomial);
+        let (num_leading_zeros, plain_coeffs) = skip_leading_zeros_and_convert_to_bigints(&polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = VariableBaseMSM::multi_scalar_mul(
-            &powers.powers_of_g[num_leading_zeros..],
-            &plain_coeffs,
-        );
+        let mut commitment = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
         end_timer!(msm_time);
 
         let mut randomness = Randomness::empty();
         if let Some(hiding_degree) = hiding_bound {
             let mut rng = rng.ok_or(Error::MissingRng)?;
-            let sample_random_poly_time = start_timer!(|| format!(
-                "Sampling a random polynomial of degree {}",
-                hiding_degree
-            ));
+            let sample_random_poly_time =
+                start_timer!(|| format!("Sampling a random polynomial of degree {}", hiding_degree));
 
             randomness = Randomness::rand(hiding_degree, false, &mut rng);
-            Self::check_hiding_bound(
-                randomness.blinding_polynomial.degree(),
-                powers.powers_of_gamma_g.len(),
-            )?;
+            Self::check_hiding_bound(randomness.blinding_polynomial.degree(), powers.powers_of_gamma_g.len())?;
             end_timer!(sample_random_poly_time);
         }
 
         let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs);
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
         let random_commitment =
-            VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, random_ints.as_slice())
-                .into_affine();
+            VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, random_ints.as_slice()).into_affine();
         end_timer!(msm_time);
 
         commitment.add_assign_mixed(&random_commitment);
@@ -217,14 +204,10 @@ impl<E: PairingEngine> KZG10<E> {
         hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
     ) -> Result<Proof<E>, Error> {
         Self::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
-        let (num_leading_zeros, witness_coeffs) =
-            skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
+        let (num_leading_zeros, witness_coeffs) = skip_leading_zeros_and_convert_to_bigints(&witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBaseMSM::multi_scalar_mul(
-            &powers.powers_of_g[num_leading_zeros..],
-            &witness_coeffs,
-        );
+        let mut w = VariableBaseMSM::multi_scalar_mul(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
         end_timer!(witness_comm_time);
 
         let random_v = if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
@@ -234,12 +217,8 @@ impl<E: PairingEngine> KZG10<E> {
             end_timer!(blinding_eval_time);
 
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs);
-            let witness_comm_time =
-                start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBaseMSM::multi_scalar_mul(
-                &powers.powers_of_gamma_g,
-                &random_witness_coeffs,
-            );
+            let witness_comm_time = start_timer!(|| "Computing commitment to random witness polynomial");
+            w += &VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, &random_witness_coeffs);
             end_timer!(witness_comm_time);
             Some(blinding_evaluation)
         } else {
@@ -266,13 +245,8 @@ impl<E: PairingEngine> KZG10<E> {
         let (witness_poly, hiding_witness_poly) = Self::compute_witness_polynomial(p, point, rand)?;
         end_timer!(witness_time);
 
-        let proof = Self::open_with_witness_polynomial(
-            powers,
-            point,
-            rand,
-            &witness_poly,
-            hiding_witness_poly.as_ref(),
-        );
+        let proof =
+            Self::open_with_witness_polynomial(powers, point, rand, &witness_poly, hiding_witness_poly.as_ref());
 
         end_timer!(open_time);
         proof
@@ -288,7 +262,7 @@ impl<E: PairingEngine> KZG10<E> {
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(value);
+        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(&value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
@@ -311,8 +285,7 @@ impl<E: PairingEngine> KZG10<E> {
         proofs: &[Proof<E>],
         rng: &mut R,
     ) -> Result<bool, Error> {
-        let check_time =
-            start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
+        let check_time = start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
 
@@ -334,14 +307,14 @@ impl<E: PairingEngine> KZG10<E> {
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer);
-            total_w += &w.mul(randomizer);
+            total_c += &c.mul(&randomizer);
+            total_w += &w.mul(randomizer.into_repr());
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(g_multiplier);
-        total_c -= &gamma_g.mul(gamma_g_multiplier);
+        total_c -= &g.mul(&g_multiplier);
+        total_c -= &gamma_g.mul(&gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
@@ -351,8 +324,8 @@ impl<E: PairingEngine> KZG10<E> {
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&[
-            (total_w.into(), vk.prepared_beta_h.clone()),
-            (total_c.into(), vk.prepared_h.clone()),
+            (&total_w.prepare(), &vk.prepared_beta_h),
+            (&total_c.prepare(), &vk.prepared_h),
         ])
         .is_one();
         end_timer!(pairing_time);
@@ -361,10 +334,7 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     // Functions for checking errors
-    pub(crate) fn check_degree_is_within_bounds(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_degree_is_within_bounds(num_coefficients: usize, num_powers: usize) -> Result<(), Error> {
         if num_coefficients < 1 {
             Err(Error::DegreeIsZero)
         } else {
@@ -372,10 +342,7 @@ impl<E: PairingEngine> KZG10<E> {
         }
     }
 
-    pub(crate) fn check_degree_is_too_large(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_degree_is_too_large(num_coefficients: usize, num_powers: usize) -> Result<(), Error> {
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
                 num_coefficients,
@@ -386,10 +353,7 @@ impl<E: PairingEngine> KZG10<E> {
         }
     }
 
-    pub(crate) fn check_hiding_bound(
-        hiding_poly_degree: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Error> {
         if hiding_poly_degree == 0 {
             Err(Error::HidingBoundIsZero)
         } else if hiding_poly_degree >= num_powers {
@@ -412,8 +376,7 @@ impl<E: PairingEngine> KZG10<E> {
         p: &'a LabeledPolynomial<'a, E::Fr>,
     ) -> Result<(), Error> {
         if let Some(bound) = p.degree_bound() {
-            let enforced_degree_bounds =
-                enforced_degree_bounds.ok_or(Error::UnsupportedDegreeBound(bound))?;
+            let enforced_degree_bounds = enforced_degree_bounds.ok_or(Error::UnsupportedDegreeBound(bound))?;
 
             if enforced_degree_bounds.binary_search(&bound).is_err() {
                 Err(Error::UnsupportedDegreeBound(bound))
@@ -433,9 +396,7 @@ impl<E: PairingEngine> KZG10<E> {
     }
 }
 
-fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
-    p: &Polynomial<F>,
-) -> (usize, Vec<F::BigInt>) {
+fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(p: &Polynomial<F>) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
     while p.coeffs[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs.len() {
         num_leading_zeros += 1;
@@ -446,9 +407,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
 
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-    let coeffs = ff_fft::cfg_iter!(p)
-        .map(|s| s.into_repr())
-        .collect::<Vec<_>>();
+    let coeffs = cfg_iter!(p).map(|s| s.into_repr()).collect::<Vec<_>>();
     end_timer!(to_bigint_time);
     coeffs
 }
@@ -456,15 +415,12 @@ fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-    use crate::kzg10::*;
-    use crate::*;
+    use crate::{kzg10::*, *};
 
-    use algebra::bls12_381::Fr;
-    use algebra::test_rng;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
+    use snarkos_curves::bls12_377::{Bls12_377, Fr};
+    use snarkos_utilities::rand::test_rng;
 
-    type KZG_Bls12_381 = KZG10<Bls12_381>;
+    type KZG_Bls12_377 = KZG10<Bls12_377>;
 
     impl<E: PairingEngine> KZG10<E> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
@@ -510,8 +466,8 @@ mod tests {
         f_p += (f, &p);
 
         let degree = 4;
-        let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
-        let (powers, _) = KZG_Bls12_381::trim(&pp, degree).unwrap();
+        let pp = KZG_Bls12_377::setup(degree, false, rng).unwrap();
+        let (powers, _) = KZG_Bls12_377::trim(&pp, degree).unwrap();
 
         let hiding_bound = None;
         let (comm, _) = KZG10::commit(&powers, &p, hiding_bound, Some(rng)).unwrap();
@@ -598,9 +554,7 @@ mod tests {
                 points.push(point);
                 proofs.push(proof);
             }
-            assert!(KZG10::<E>::batch_check(
-                &vk, &comms, &points, &values, &proofs, rng
-            )?);
+            assert!(KZG10::<E>::batch_check(&vk, &comms, &points, &values, &proofs, rng)?);
         }
         Ok(())
     }
@@ -608,17 +562,14 @@ mod tests {
     #[test]
     fn end_to_end_test() {
         end_to_end_test_template::<Bls12_377>().expect("test failed for bls12-377");
-        end_to_end_test_template::<Bls12_381>().expect("test failed for bls12-381");
     }
 
     #[test]
     fn linear_polynomial_test() {
         linear_polynomial_test_template::<Bls12_377>().expect("test failed for bls12-377");
-        linear_polynomial_test_template::<Bls12_381>().expect("test failed for bls12-381");
     }
     #[test]
     fn batch_check_test() {
         batch_check_test_template::<Bls12_377>().expect("test failed for bls12-377");
-        batch_check_test_template::<Bls12_381>().expect("test failed for bls12-381");
     }
 }

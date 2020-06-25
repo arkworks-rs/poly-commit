@@ -12,12 +12,20 @@
 
 #[macro_use]
 extern crate derivative;
-#[macro_use]
-extern crate bench_utils;
 
-use algebra_core::Field;
-use core::iter::FromIterator;
-pub use ff_fft::DensePolynomial as Polynomial;
+#[macro_use]
+extern crate snarkos_profiler;
+
+pub use snarkos_algorithms::fft::DensePolynomial as Polynomial;
+use snarkos_errors::serialization::SerializationError;
+use snarkos_models::curves::Field;
+use snarkos_utilities::{
+    bytes::{FromBytes, ToBytes},
+    error as error_fn,
+    serialize::*,
+};
+
+use core::{fmt::Debug, iter::FromIterator};
 use rand_core::RngCore;
 
 #[cfg(not(feature = "std"))]
@@ -70,25 +78,6 @@ pub mod kzg10;
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod marlin_pc;
 
-/// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
-/// modified to obtain batching and to enforce strict
-/// degree bounds by following the approach outlined in [[MBKM19,
-/// “Sonic”]][sonic] (more precisely, via the variant in
-/// [[Gabizon19, “AuroraLight”]][al] that avoids negative G1 powers).
-///
-/// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-/// [sonic]: https://eprint.iacr.org/2019/099
-/// [al]: https://eprint.iacr.org/2019/601
-/// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod sonic_pc;
-
-/// A polynomial commitment scheme based on the hardness of the
-/// discrete logarithm problem in prime-order groups.
-/// The construction is detailed in [[BCMS20]][pcdas].
-///
-/// [pcdas]: https://eprint.iacr.org/2020/499
-pub mod ipa_pc;
-
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
 /// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
@@ -102,6 +91,7 @@ pub type QuerySet<'a, F> = BTreeSet<(String, F)>;
 pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
 
 /// A proof of satisfaction of linear combinations.
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
@@ -109,36 +99,50 @@ pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     pub evals: Option<Vec<F>>,
 }
 
+impl<F: Field, PC: PolynomialCommitment<F>> FromBytes for BatchLCProof<F, PC> {
+    fn read<R: Read>(mut reader: R) -> io::Result<Self> {
+        CanonicalDeserialize::deserialize(&mut reader).map_err(|_| error_fn("could not deserialize struct"))
+    }
+}
+
+impl<F: Field, PC: PolynomialCommitment<F>> ToBytes for BatchLCProof<F, PC> {
+    fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        CanonicalSerialize::serialize(self, &mut writer).map_err(|_| error_fn("could not serialize struct"))
+    }
+}
+
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
 /// enforcing per-polynomial degree bounds.
-pub trait PolynomialCommitment<F: Field>: Sized {
+pub trait PolynomialCommitment<F: Field>: Sized + Clone + Debug {
     /// The universal parameters for the commitment scheme. These are "trimmed"
     /// down to `Self::CommitterKey` and `Self::VerifierKey` by `Self::trim`.
-    type UniversalParams: PCUniversalParams;
+    type UniversalParams: PCUniversalParams + Clone;
     /// The committer key for the scheme; used to commit to a polynomial and then
     /// open the commitment to produce an evaluation proof.
-    type CommitterKey: PCCommitterKey;
+    type CommitterKey: PCCommitterKey + Clone;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey;
+    type VerifierKey: PCVerifierKey + Clone;
     /// The commitment to a polynomial.
-    type Commitment: PCCommitment;
+    type Commitment: PCCommitment + Clone;
     /// The commitment randomness.
-    type Randomness: PCRandomness;
+    type Randomness: PCRandomness + Clone;
     /// The evaluation proof for a single point.
     type Proof: PCProof + Clone;
     /// The evaluation proof for a query set.
-    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
+    type BatchProof: CanonicalSerialize
+        + CanonicalDeserialize
+        + Clone
+        + From<Vec<Self::Proof>>
+        + Into<Vec<Self::Proof>>
+        + Debug;
     /// The error type for the scheme.
-    type Error: algebra_core::Error + From<Error>;
+    type Error: snarkos_utilities::error::Error + From<Error>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
-    fn setup<R: RngCore>(
-        max_degree: usize,
-        rng: &mut R,
-    ) -> Result<Self::UniversalParams, Self::Error>;
+    fn setup<R: RngCore>(max_degree: usize, rng: &mut R) -> Result<Self::UniversalParams, Self::Error>;
 
     /// Specializes the public parameters for polynomials up to the given `supported_degree`
     /// and for enforcing degree bounds in the range `1..=supported_degree`.
@@ -161,13 +165,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<
-        (
-            Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
-        ),
-        Self::Error,
-    >;
+    ) -> Result<(Vec<LabeledCommitment<Self::Commitment>>, Vec<Self::Randomness>), Self::Error>;
 
     /// On input a list of labeled polynomials and a query point, `open` outputs a proof of evaluation
     /// of the polynomials at the query point.
@@ -227,10 +225,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             for label in labels {
-                let (polynomial, rand, comm) =
-                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
+                let (polynomial, rand, comm) = poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
+                    label: label.to_string(),
+                })?;
 
                 query_polys.push(polynomial);
                 query_rands.push(rand);
@@ -306,12 +303,11 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                     label: label.to_string(),
                 })?;
 
-                let v_i =
-                    evaluations
-                        .get(&(label.clone(), *query))
-                        .ok_or(Error::MissingEvaluation {
-                            label: label.to_string(),
-                        })?;
+                let v_i = evaluations
+                    .get(&(label.clone(), *query))
+                    .ok_or(Error::MissingEvaluation {
+                        label: label.to_string(),
+                    })?;
 
                 comms.push(commitment);
                 values.push(*v_i);
@@ -343,8 +339,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     {
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
         let polynomials: Vec<_> = polynomials.into_iter().collect();
-        let poly_query_set =
-            lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
+        let poly_query_set = lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
         let poly_evals = evaluate_query_set(polynomials.iter().copied(), &poly_query_set);
         let proof = Self::batch_open(
             ck,
@@ -381,16 +376,15 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
-        let poly_evals =
-            Evaluations::from_iter(poly_query_set.iter().cloned().zip(evals.clone().unwrap()));
+        let poly_evals = Evaluations::from_iter(poly_query_set.iter().cloned().zip(evals.clone().unwrap()));
 
         for &(ref lc_label, point) in eqn_query_set {
             if let Some(lc) = lc_s.get(lc_label) {
-                let claimed_rhs = *eqn_evaluations.get(&(lc_label.clone(), point)).ok_or(
-                    Error::MissingEvaluation {
+                let claimed_rhs = *eqn_evaluations
+                    .get(&(lc_label.clone(), point))
+                    .ok_or(Error::MissingEvaluation {
                         label: lc_label.to_string(),
-                    },
-                )?;
+                    })?;
 
                 let mut actual_rhs = F::zero();
 
@@ -402,7 +396,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                             .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 
-                    actual_rhs += &(*coeff * eval);
+                    actual_rhs += &(*coeff * &eval);
                 }
                 if claimed_rhs != actual_rhs {
                     eprintln!("Claimed evaluation of {} is incorrect", lc.label());
@@ -437,9 +431,7 @@ pub fn evaluate_query_set<'a, F: Field>(
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::new();
     for (label, point) in query_set {
-        let poly = polys
-            .get(label)
-            .expect("polynomial in evaluated lc is not found");
+        let poly = polys.get(label).expect("polynomial in evaluated lc is not found");
         let eval = poly.evaluate(*point);
         evaluations.insert((label.clone(), *point), eval);
     }
@@ -468,8 +460,9 @@ fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use algebra::{test_rng, Field};
     use rand::{distributions::Distribution, Rng};
+    use snarkos_models::curves::Field;
+    use snarkos_utilities::rand::test_rng;
 
     #[derive(Default)]
     struct TestInfo {
@@ -493,10 +486,7 @@ pub mod tests {
 
         for _ in 0..10 {
             let supported_degree = rand::distributions::Uniform::from(1..=max_degree).sample(rng);
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
+            assert!(max_degree >= supported_degree, "max_degree < supported_degree");
 
             let mut labels = Vec::new();
             let mut polynomials = Vec::new();
@@ -545,15 +535,7 @@ pub mod tests {
                 &rands,
                 Some(rng),
             )?;
-            let result = PC::batch_check(
-                &vk,
-                &comms,
-                &query_set,
-                &values,
-                &proof,
-                opening_challenge,
-                rng,
-            )?;
+            let result = PC::batch_check(&vk, &comms, &query_set, &values, &proof, opening_challenge, rng)?;
             assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
         Ok(())
@@ -575,30 +557,21 @@ pub mod tests {
         } = info;
 
         let rng = &mut test_rng();
-        let max_degree =
-            max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
+        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
         let pp = PC::setup(max_degree, rng)?;
 
         for _ in 0..num_iters {
-            let supported_degree = supported_degree
-                .unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
+            let supported_degree =
+                supported_degree.unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
+            assert!(max_degree >= supported_degree, "max_degree < supported_degree");
             let mut polynomials = Vec::new();
-            let mut degree_bounds = if enforce_degree_bounds {
-                Some(Vec::new())
-            } else {
-                None
-            };
+            let mut degree_bounds = if enforce_degree_bounds { Some(Vec::new()) } else { None };
 
             let mut labels = Vec::new();
             println!("Sampled supported degree");
 
             // Generate polynomials
-            let num_points_in_query_set =
-                rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
             for i in 0..num_polynomials {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
@@ -621,20 +594,11 @@ pub mod tests {
                 };
                 println!("Hiding bound: {:?}", hiding_bound);
 
-                polynomials.push(LabeledPolynomial::new_owned(
-                    label,
-                    poly,
-                    degree_bound,
-                    hiding_bound,
-                ))
+                polynomials.push(LabeledPolynomial::new_owned(label, poly, degree_bound, hiding_bound))
             }
             println!("supported degree: {:?}", supported_degree);
             println!("num_points_in_query_set: {:?}", num_points_in_query_set);
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                degree_bounds.as_ref().map(|s| s.as_slice()),
-            )?;
+            let (ck, vk) = PC::trim(&pp, supported_degree, degree_bounds.as_ref().map(|s| s.as_slice()))?;
             println!("Trimmed");
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
@@ -663,15 +627,7 @@ pub mod tests {
                 &rands,
                 Some(rng),
             )?;
-            let result = PC::batch_check(
-                &vk,
-                &comms,
-                &query_set,
-                &values,
-                &proof,
-                opening_challenge,
-                rng,
-            )?;
+            let result = PC::batch_check(&vk, &comms, &query_set, &values, &proof, opening_challenge, rng)?;
             if !result {
                 println!(
                     "Failed with {} polynomials, num_points_in_query_set: {:?}",
@@ -703,30 +659,21 @@ pub mod tests {
         } = info;
 
         let rng = &mut test_rng();
-        let max_degree =
-            max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
+        let max_degree = max_degree.unwrap_or(rand::distributions::Uniform::from(2..=64).sample(rng));
         let pp = PC::setup(max_degree, rng)?;
 
         for _ in 0..num_iters {
-            let supported_degree = supported_degree
-                .unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
+            let supported_degree =
+                supported_degree.unwrap_or(rand::distributions::Uniform::from(1..=max_degree).sample(rng));
+            assert!(max_degree >= supported_degree, "max_degree < supported_degree");
             let mut polynomials = Vec::new();
-            let mut degree_bounds = if enforce_degree_bounds {
-                Some(Vec::new())
-            } else {
-                None
-            };
+            let mut degree_bounds = if enforce_degree_bounds { Some(Vec::new()) } else { None };
 
             let mut labels = Vec::new();
             println!("Sampled supported degree");
 
             // Generate polynomials
-            let num_points_in_query_set =
-                rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
+            let num_points_in_query_set = rand::distributions::Uniform::from(1..=max_num_queries).sample(rng);
             for i in 0..num_polynomials {
                 let label = format!("Test{}", i);
                 labels.push(label.clone());
@@ -753,12 +700,7 @@ pub mod tests {
                 };
                 println!("Hiding bound: {:?}", hiding_bound);
 
-                polynomials.push(LabeledPolynomial::new_owned(
-                    label,
-                    poly,
-                    degree_bound,
-                    hiding_bound,
-                ))
+                polynomials.push(LabeledPolynomial::new_owned(label, poly, degree_bound, hiding_bound))
             }
             println!("supported degree: {:?}", supported_degree);
             println!("num_points_in_query_set: {:?}", num_points_in_query_set);
@@ -766,11 +708,7 @@ pub mod tests {
             println!("{}", num_polynomials);
             println!("{}", enforce_degree_bounds);
 
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                degree_bounds.as_ref().map(|s| s.as_slice()),
-            )?;
+            let (ck, vk) = PC::trim(&pp, supported_degree, degree_bounds.as_ref().map(|s| s.as_slice()))?;
             println!("Trimmed");
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
@@ -799,7 +737,7 @@ pub mod tests {
                             } else {
                                 assert!(poly.degree_bound().is_none());
                                 let coeff = F::rand(rng);
-                                value += &(coeff * poly.evaluate(point));
+                                value += &(coeff * &poly.evaluate(point));
                                 lc.push((coeff, label.to_string().into()));
                             }
                         }
@@ -850,11 +788,7 @@ pub mod tests {
                     println!("Degree: {:?}", poly.degree());
                 }
             }
-            assert!(
-                result,
-                "proof was incorrect, equations: {:#?}",
-                linear_combinations
-            );
+            assert!(result, "proof was incorrect, equations: {:#?}", linear_combinations);
         }
         Ok(())
     }

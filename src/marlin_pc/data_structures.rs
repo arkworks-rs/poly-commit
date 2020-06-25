@@ -1,7 +1,13 @@
-use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec};
-use algebra_core::{PairingEngine, ToBytes};
+use crate::{impl_bytes, PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec};
 use core::ops::{Add, AddAssign};
 use rand_core::RngCore;
+use snarkos_errors::serialization::SerializationError;
+use snarkos_models::curves::PairingEngine;
+use snarkos_utilities::{
+    bytes::{FromBytes, ToBytes},
+    error,
+    serialize::*,
+};
 
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -10,12 +16,8 @@ pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 /// `CommitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
 #[derive(Derivative)]
-#[derivative(
-    Default(bound = ""),
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = "")
-)]
+#[derivative(Default(bound = ""), Hash(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct CommitterKey<E: PairingEngine> {
     /// The key used to commit to polynomials.
     pub powers: Vec<E::G1Affine>,
@@ -35,6 +37,7 @@ pub struct CommitterKey<E: PairingEngine> {
     /// from.
     pub max_degree: usize,
 }
+impl_bytes!(CommitterKey);
 
 impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
@@ -46,23 +49,11 @@ impl<E: PairingEngine> CommitterKey<E> {
     }
 
     /// Obtain powers for committing to shifted polynomials.
-    pub fn shifted_powers<'a>(
-        &'a self,
-        degree_bound: impl Into<Option<usize>>,
-    ) -> Option<kzg10::Powers<'a, E>> {
+    pub fn shifted_powers<'a>(&'a self, degree_bound: impl Into<Option<usize>>) -> Option<kzg10::Powers<'a, E>> {
         self.shifted_powers.as_ref().map(|shifted_powers| {
             let powers_range = if let Some(degree_bound) = degree_bound.into() {
-                assert!(self
-                    .enforced_degree_bounds
-                    .as_ref()
-                    .unwrap()
-                    .contains(&degree_bound));
-                let max_bound = self
-                    .enforced_degree_bounds
-                    .as_ref()
-                    .unwrap()
-                    .last()
-                    .unwrap();
+                assert!(self.enforced_degree_bounds.as_ref().unwrap().contains(&degree_bound));
+                let max_bound = self.enforced_degree_bounds.as_ref().unwrap().last().unwrap();
                 (max_bound - degree_bound)..
             } else {
                 0..
@@ -89,6 +80,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct VerifierKey<E: PairingEngine> {
     /// The verification key for the underlying KZG10 scheme.
     pub vk: kzg10::VerifierKey<E>,
@@ -104,15 +96,14 @@ pub struct VerifierKey<E: PairingEngine> {
     /// a part of.
     pub supported_degree: usize,
 }
+impl_bytes!(VerifierKey);
 
 impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, bound: usize) -> Option<E::G1Affine> {
-        self.degree_bounds_and_shift_powers.as_ref().and_then(|v| {
-            v.binary_search_by(|(d, _)| d.cmp(&bound))
-                .ok()
-                .map(|i| v[i].1)
-        })
+        self.degree_bounds_and_shift_powers
+            .as_ref()
+            .and_then(|v| v.binary_search_by(|(d, _)| d.cmp(&bound)).ok().map(|i| v[i].1))
     }
 }
 
@@ -137,23 +128,12 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<E: PairingEngine> {
     pub(crate) comm: kzg10::Commitment<E>,
     pub(crate) shifted_comm: Option<kzg10::Commitment<E>>,
 }
-
-impl<E: PairingEngine> ToBytes for Commitment<E> {
-    #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
-        self.comm.write(&mut writer)?;
-        let shifted_exists = self.shifted_comm.is_some();
-        shifted_exists.write(&mut writer)?;
-        self.shifted_comm
-            .as_ref()
-            .unwrap_or(&kzg10::Commitment::empty())
-            .write(&mut writer)
-    }
-}
+impl_bytes!(Commitment);
 
 impl<E: PairingEngine> PCCommitment for Commitment<E> {
     #[inline]
@@ -167,10 +147,6 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     fn has_degree_bound(&self) -> bool {
         self.shifted_comm.is_some()
     }
-
-    fn size_in_bytes(&self) -> usize {
-        self.comm.size_in_bytes() + self.shifted_comm.as_ref().map_or(0, |c| c.size_in_bytes())
-    }
 }
 
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
@@ -183,10 +159,12 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
+#[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct Randomness<E: PairingEngine> {
     pub(crate) rand: kzg10::Randomness<E>,
     pub(crate) shifted_rand: Option<kzg10::Randomness<E>>,
 }
+impl_bytes!(Randomness);
 
 impl<'a, E: PairingEngine> Add<&'a Self> for Randomness<E> {
     type Output = Self;
@@ -202,10 +180,7 @@ impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
     fn add_assign(&mut self, other: &'a Self) {
         self.rand += &other.rand;
         if let Some(r1) = &mut self.shifted_rand {
-            *r1 += other
-                .shifted_rand
-                .as_ref()
-                .unwrap_or(&kzg10::Randomness::empty());
+            *r1 += other.shifted_rand.as_ref().unwrap_or(&kzg10::Randomness::empty());
         } else {
             self.shifted_rand = other.shifted_rand.as_ref().map(|r| r.clone());
         }
