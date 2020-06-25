@@ -21,7 +21,8 @@ jobs:
         mkdir ~/.ssh
         echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
+        eval $(ssh-agent -s)
+        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" | tr -d '\r' | ssh-add -
       
     - name: Install Rust
       uses: actions-rs/toolchain@v1
@@ -53,10 +54,11 @@ jobs:
         
       - name: Fetch snarkOS
         run: |
-          mkdir ~/.ssh
-          echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
+        mkdir ~/.ssh
+        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        eval $(ssh-agent -s)
+        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" | tr -d '\r' | ssh-add -
 
       - name: Install Rust (${{ matrix.rust }})
         uses: actions-rs/toolchain@v1
@@ -100,10 +102,11 @@ jobs:
 #
 #      - name: Fetch snarkOS
 #        run: |
-#          mkdir ~/.ssh
-#          echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
-#          chmod 600 ~/.ssh/id_rsa
-#          cd .. && git clone git@github.com:AleoHQ/snarkOS.git && cd poly-commit
+#        mkdir ~/.ssh
+#        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" > ~/.ssh/id_rsa
+#        chmod 600 ~/.ssh/id_rsa
+#        eval $(ssh-agent -s)
+#        echo "${{ secrets.SNARKOS_DEPLOY_KEY }}" | tr -d '\r' | ssh-add -
 #
 #      - name: Install Rust (${{ matrix.rust }})
 #        uses: actions-rs/toolchain@v1

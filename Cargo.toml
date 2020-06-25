@@ -20,11 +20,11 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-snarkos-algorithms = { path = "../snarkOS/algorithms", version = "0.8.0" }
-snarkos-errors = { path = "../snarkOS/errors", version = "0.8.0" }
-snarkos-models = { path = "../snarkOS/models", version = "0.8.0" }
-snarkos-utilities = { path = "../snarkOS/utilities", version = "0.8.0" }
-snarkos-profiler = { path = "../snarkOS/profiler", version = "0.8.0" }
+snarkos-algorithms = { git = "https://github.com/AleoHQ/snarkOS/algorithms" }
+snarkos-errors = { git = "https://github.com/AleoHQ/errors" }
+snarkos-models = { git = "https://github.com/AleoHQ/models" }
+snarkos-utilities = { git = "https://github.com/AleoHQ/utilities" }
+snarkos-profiler = { git = "https://github.com/AleoHQ/profiler" }
 
 derivative = { version = "2", features = [ "use_core" ] }
 digest = "0.8"
@@ -32,7 +32,7 @@ rand_core = { version = "0.5", default-features = false }
 rayon = { version = "1", optional = true }
 
 [dev-dependencies]
-snarkos-curves = { path = "../snarkOS/curves", version = "0.8.0" }
+snarkos-curves = { git = "https://github.com/AleoHQ/curves" }
 
 blake2 = { version = "0.8", default-features = false }
 rand = { version = "0.7", default-features = false }
