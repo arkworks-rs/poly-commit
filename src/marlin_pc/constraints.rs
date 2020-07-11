@@ -2380,10 +2380,7 @@ mod tests {
         type E2 = MNT6_298;
     }
 
-    #[test]
-    fn marlin_pc_batch_check_test() {
-        let prepared = true;
-
+    fn marlin_pc_batch_check_test(prepared: bool) {
         let num_inputs = 100;
         //let mut rng = &mut thread_rng();
         let rng = &mut StepRng::new(0, 2);
@@ -2463,137 +2460,108 @@ mod tests {
             let (comms, rands) =
                 TestCommitmentScheme::commit(&ck, &polynomials, Some(rng)).unwrap();
 
-            let mut commitment_gadgets: Vec<TestCommitmentGadget> = Vec::new();
 
-            let (
-                query_set,
-                evaluations,
-                batch_proof,
-                opening_challenge_gadgets,
-                opening_challenge_bits,
-                batching_rands_gadgets,
-                batching_rands_bits,
-                commitment_gadgets,
-                query_set_gadget,
-                evaluations_gadget,
-                proof_gadgets,
-            ) = {
-                let mut cs = cs.ns(|| "setup");
-
-                let mut opening_challenge_gadgets = Vec::new();
-                let mut opening_challenge_bits = Vec::new();
-                for (i, challenge) in opening_challenges.iter().enumerate() {
-                    let challenge_gadget = TestNonNativeGadget::alloc_input(
-                        cs.ns(|| format!("opening challenge {}", i)),
-                        || Ok(challenge.clone()),
-                    )
-                    .unwrap();
-
-                    let challenge_bits = challenge_gadget
-                        .to_bits(cs.ns(|| format!("opening challenge {} to bits", i)))
-                        .unwrap();
-
-                    opening_challenge_gadgets.push(challenge_gadget);
-                    opening_challenge_bits.push(challenge_bits);
-                }
-
-                let mut batching_rands_gadgets = Vec::new();
-                let mut batching_rands_bits = Vec::new();
-                for (i, batching_rand) in batching_rands.iter().enumerate() {
-                    let batching_rands_gadget = TestNonNativeGadget::alloc_input(
-                        cs.ns(|| format!("batching rand {}", i)),
-                        || Ok(batching_rand.clone()),
-                    )
-                    .unwrap();
-
-                    let bits = batching_rands_gadget
-                        .to_bits(cs.ns(|| format!("batching rand {} to bits", i)))
-                        .unwrap();
-
-                    batching_rands_gadgets.push(batching_rands_gadget);
-                    batching_rands_bits.push(bits);
-                }
-
-                // Construct query set
-                let mut query_set = QuerySet::new();
-                let mut evaluations = Evaluations::new();
-                let mut query_set_gadget = QuerySetGadget::<TestNonNativeFieldParams>::new();
-                let mut evaluations_gadget = EvaluationsGadget::<TestNonNativeFieldParams>::new();
-                for i in 0..num_points_in_query_set {
-                    let mut point = Fq::one();
-                    point += point;
-                    point += point;
-                    point += Fq::one();
-                    point += point;
-                    point += Fq::one();
-
-                    let point_gadget =
-                        TestNonNativeGadget::alloc(cs.ns(|| format!("point {}", i)), || Ok(point))
-                            .unwrap();
-
-                    for (j, label) in labels.iter().enumerate() {
-                        query_set.insert((label.to_string(), point));
-                        query_set_gadget.insert((label.to_string(), point_gadget.clone()));
-
-                        let value = polynomials[j].evaluate(point);
-                        let value_gadget = TestNonNativeGadget::alloc_input(
-                            cs.ns(|| format!("value {} {}", i, j)),
-                            || Ok(value.clone()),
-                        )
-                        .unwrap();
-
-                        evaluations.insert((label.to_string(), point), value);
-                        evaluations_gadget
-                            .insert((label.to_string(), point_gadget.clone()), value_gadget);
-                    }
-                }
-
-                for (c, comm) in comms.iter().enumerate() {
-                    let commitment_gadget =
-                        TestCommitmentGadget::alloc(cs.ns(|| format!("commitment {}", c)), || {
-                            Ok(comm.clone())
-                        })
-                        .unwrap();
-                    commitment_gadgets.push(commitment_gadget);
-                }
-
-                let batch_proof = TestCommitmentScheme::batch_open(
-                    &ck,
-                    &polynomials,
-                    &comms,
-                    &query_set,
-                    opening_challenge.clone(),
-                    &rands,
-                    Some(rng),
+            let mut opening_challenge_gadgets = Vec::new();
+            let mut opening_challenge_bits = Vec::new();
+            for (i, challenge) in opening_challenges.iter().enumerate() {
+                let challenge_gadget = TestNonNativeGadget::alloc_input(
+                    cs.ns(|| format!("opening challenge {}", i)),
+                    || Ok(challenge.clone()),
                 )
                 .unwrap();
-                let proof_vec: Vec<_> = batch_proof.clone().into();
-                let proof_gadgets: Vec<_> = proof_vec
-                    .iter()
-                    .enumerate()
-                    .map(|(i, proof)| {
-                        TestProofGadget::alloc(cs.ns(|| format!("proof {}", i)), || {
-                            Ok(proof.clone())
-                        })
-                        .unwrap()
-                    })
-                    .collect();
 
-                (
-                    query_set,
-                    evaluations,
-                    batch_proof,
-                    opening_challenge_gadgets,
-                    opening_challenge_bits,
-                    batching_rands_gadgets,
-                    batching_rands_bits,
-                    commitment_gadgets,
-                    query_set_gadget,
-                    evaluations_gadget,
-                    proof_gadgets,
+                let challenge_bits = challenge_gadget
+                    .to_bits(cs.ns(|| format!("opening challenge {} to bits", i)))
+                    .unwrap();
+
+                opening_challenge_gadgets.push(challenge_gadget);
+                opening_challenge_bits.push(challenge_bits);
+            }
+
+            let mut batching_rands_gadgets = Vec::new();
+            let mut batching_rands_bits = Vec::new();
+            for (i, batching_rand) in batching_rands.iter().enumerate() {
+                let batching_rands_gadget = TestNonNativeGadget::alloc_input(
+                    cs.ns(|| format!("batching rand {}", i)),
+                    || Ok(batching_rand.clone()),
                 )
-            };
+                .unwrap();
 
+                let bits = batching_rands_gadget
+                    .to_bits(cs.ns(|| format!("batching rand {} to bits", i)))
+                    .unwrap();
+
+                batching_rands_gadgets.push(batching_rands_gadget);
+                batching_rands_bits.push(bits);
+            }
+
+            // Construct query set
+            let mut query_set = QuerySet::new();
+            let mut evaluations = Evaluations::new();
+            let mut query_set_gadget = QuerySetGadget::<TestNonNativeFieldParams>::new();
+            let mut evaluations_gadget = EvaluationsGadget::<TestNonNativeFieldParams>::new();
+            for i in 0..num_points_in_query_set {
+                let mut point = Fq::one();
+                point += point;
+                point += point;
+                point += Fq::one();
+                point += point;
+                point += Fq::one();
+
+                let point_gadget =
+                    TestNonNativeGadget::alloc(cs.ns(|| format!("point {}", i)), || Ok(point))
+                        .unwrap();
+
+                for (j, label) in labels.iter().enumerate() {
+                    query_set.insert((label.to_string(), point));
+                    query_set_gadget.insert((label.to_string(), point_gadget.clone()));
+
+                    let value = polynomials[j].evaluate(point);
+                    let value_gadget = TestNonNativeGadget::alloc_input(
+                        cs.ns(|| format!("value {} {}", i, j)),
+                        || Ok(value.clone()),
+                    )
+                    .unwrap();
+
+                    evaluations.insert((label.to_string(), point), value);
+                    evaluations_gadget
+                        .insert((label.to_string(), point_gadget.clone()), value_gadget);
+                }
+            }
+
+            let mut commitment_gadgets: Vec<TestCommitmentGadget> = Vec::new();
+            for (c, comm) in comms.iter().enumerate() {
+                let commitment_gadget =
+                    TestCommitmentGadget::alloc(cs.ns(|| format!("commitment {}", c)), || {
+                        Ok(comm.clone())
+                    })
+                    .unwrap();
+                commitment_gadgets.push(commitment_gadget);
+            }
+
+            let batch_proof = TestCommitmentScheme::batch_open(
+                &ck,
+                &polynomials,
+                &comms,
+                &query_set,
+                opening_challenge.clone(),
+                &rands,
+                Some(rng),
+            )
+            .unwrap();
+            let proof_vec: Vec<_> = batch_proof.clone().into();
+            let proof_gadgets: Vec<_> = proof_vec
+                .iter()
+                .enumerate()
+                .map(|(i, proof)| {
+                    TestProofGadget::alloc(cs.ns(|| format!("proof {}", i)), || {
+                        Ok(proof.clone())
+                    })
+                    .unwrap()
+                })
+                .collect();
+
+            // Check native proof
             let native_result = TestCommitmentScheme::batch_check(
                 &vk,
                 &comms,
@@ -2609,6 +2577,7 @@ mod tests {
             let vk_gadget =
                 TestVKGadget::alloc_input(cs.ns(|| "verifier key"), || Ok(vk.clone())).unwrap();
 
+            // Check proof in constraints world
             if prepared {
                 let prepared_vk_gadget = PreparedVerifierKeyGadget::prepare(
                     &mut cs.ns(|| "prepare vk gadget"),
@@ -2675,8 +2644,8 @@ mod tests {
             }
             assert!(cs.is_satisfied());
 
+            // Constraints profiling
             let show_constraints = false;
-
             if show_constraints {
                 let constraint_str_list = cs.get_constraints_list();
                 let prefix_vec = vec![
@@ -2761,6 +2730,16 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn marlin_pc_batch_check_test_unprepared() {
+        marlin_pc_batch_check_test(false)
+    }
+
+    #[test]
+    fn marlin_pc_batch_check_test_prepared() {
+        marlin_pc_batch_check_test(true)
     }
 
     #[test]
@@ -3002,6 +2981,23 @@ mod tests {
             .unwrap();
             println!("Generated proof");
 
+            // Check native proof
+            let native_result = TestCommitmentScheme::check_combinations(
+                &vk,
+                &linear_combinations,
+                &comms,
+                &query_set,
+                &evaluations,
+                &proof,
+                opening_challenge.clone(),
+                rng,
+            )
+            .unwrap();
+            assert!(native_result);
+
+            // Convert outputs from native world to constraints world
+
+            // Convert proof
             let proof_vec: Vec<_> = proof.proof.clone().into();
             let proof_gadgets: Vec<_> = proof_vec
                 .iter()
@@ -3011,17 +3007,16 @@ mod tests {
                         .unwrap()
                 })
                 .collect();
-
             let evals_vec: Vec<_> = query_set_gadget
                 .iter()
                 .map(|q| evaluations_gadget.get(q).unwrap().clone())
                 .collect();
-
             let batch_lc_proof_gadget = BatchLCProofGadget {
                 proofs: proof_gadgets,
                 evals: Some(evals_vec),
             };
 
+            // Convert linear combinations
             let linear_combination_gadgets = linear_combinations
                 .iter()
                 .enumerate()
@@ -3034,24 +3029,14 @@ mod tests {
                 })
                 .collect();
 
-            TestCommitmentScheme::check_combinations(
-                &vk,
-                &linear_combinations,
-                &comms,
-                &query_set,
-                &evaluations,
-                &proof,
-                opening_challenge.clone(),
-                rng,
-            )
-            .unwrap();
-
+            // Convert verifier key
             let vk_gadget =
                 TestVKGadget::alloc_input(cs.ns(|| "verifier key"), || Ok(vk.clone())).unwrap();
             let prepared_vk_gadget =
                 PreparedVerifierKeyGadget::prepare(&mut cs.ns(|| "prepare vk gadget"), &vk_gadget)
                     .unwrap();
 
+            // Prepare commitment gadgets
             let prepared_commitment_gadgets = commitment_gadgets
                 .iter()
                 .enumerate()
@@ -3064,6 +3049,7 @@ mod tests {
                 })
                 .collect();
 
+            // Check proof in constraints world
             <TestCheckGadget as PCCheckGadget<
                 Fq,
                 TestCommitmentScheme,
