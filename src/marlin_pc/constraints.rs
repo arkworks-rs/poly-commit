@@ -2440,12 +2440,14 @@ mod tests {
                 ))
             }
 
+            // Generate public randomness for prover/verifier
             let mut current_challenge = Fq::one();
             for _ in 0..num_polynomials + num_of_polys_with_degree_bounds {
                 opening_challenges.push(current_challenge);
                 current_challenge *= &opening_challenge;
             }
 
+            // Generate private randomness for the verifier (can actually be random)
             for _ in 0..num_points_in_query_set {
                 batching_rands.push(Fq::rand(rng));
             }
@@ -2460,7 +2462,7 @@ mod tests {
             let (comms, rands) =
                 TestCommitmentScheme::commit(&ck, &polynomials, Some(rng)).unwrap();
 
-
+            // Convert public randomness to constraints world
             let mut opening_challenge_gadgets = Vec::new();
             let mut opening_challenge_bits = Vec::new();
             for (i, challenge) in opening_challenges.iter().enumerate() {
@@ -2478,6 +2480,7 @@ mod tests {
                 opening_challenge_bits.push(challenge_bits);
             }
 
+            // Convert private randomness to constraints world
             let mut batching_rands_gadgets = Vec::new();
             let mut batching_rands_bits = Vec::new();
             for (i, batching_rand) in batching_rands.iter().enumerate() {
@@ -2495,7 +2498,7 @@ mod tests {
                 batching_rands_bits.push(bits);
             }
 
-            // Construct query set
+            // Construct query set and find evaluations (in both native and constraints world)
             let mut query_set = QuerySet::new();
             let mut evaluations = Evaluations::new();
             let mut query_set_gadget = QuerySetGadget::<TestNonNativeFieldParams>::new();
@@ -2529,6 +2532,7 @@ mod tests {
                 }
             }
 
+            // Convert commitments to constraints world
             let mut commitment_gadgets: Vec<TestCommitmentGadget> = Vec::new();
             for (c, comm) in comms.iter().enumerate() {
                 let commitment_gadget =
@@ -2539,6 +2543,7 @@ mod tests {
                 commitment_gadgets.push(commitment_gadget);
             }
 
+            // Prove! (In native world)
             let batch_proof = TestCommitmentScheme::batch_open(
                 &ck,
                 &polynomials,
@@ -2549,17 +2554,6 @@ mod tests {
                 Some(rng),
             )
             .unwrap();
-            let proof_vec: Vec<_> = batch_proof.clone().into();
-            let proof_gadgets: Vec<_> = proof_vec
-                .iter()
-                .enumerate()
-                .map(|(i, proof)| {
-                    TestProofGadget::alloc(cs.ns(|| format!("proof {}", i)), || {
-                        Ok(proof.clone())
-                    })
-                    .unwrap()
-                })
-                .collect();
 
             // Check native proof
             let native_result = TestCommitmentScheme::batch_check(
@@ -2574,6 +2568,20 @@ mod tests {
             .unwrap();
             assert!(native_result);
 
+            // Convert proof to constraints world
+            let proof_vec: Vec<_> = batch_proof.clone().into();
+            let proof_gadgets: Vec<_> = proof_vec
+                .iter()
+                .enumerate()
+                .map(|(i, proof)| {
+                    TestProofGadget::alloc(cs.ns(|| format!("proof {}", i)), || {
+                        Ok(proof.clone())
+                    })
+                    .unwrap()
+                })
+                .collect();
+
+            // Convert verifier key to constraints world
             let vk_gadget =
                 TestVKGadget::alloc_input(cs.ns(|| "verifier key"), || Ok(vk.clone())).unwrap();
 
