@@ -37,6 +37,13 @@ pub trait PCVerifierKey: Clone + core::fmt::Debug {
     fn supported_degree(&self) -> usize;
 }
 
+/// Defines the minimal interface of prepared verifier keys for any polynomial
+/// commitment scheme.
+pub trait PCPreparedVerifierKey<UNPREPARED: PCVerifierKey> {
+    /// prepare
+    fn prepare(vk: &UNPREPARED) -> Self;
+}
+
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
 pub trait PCCommitment: Clone + algebra_core::ToBytes {
@@ -48,6 +55,13 @@ pub trait PCCommitment: Clone + algebra_core::ToBytes {
 
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
+}
+
+/// Defines the minimal interface of prepared commitments for any polynomial
+/// commitment scheme.
+pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
+    /// prepare
+    fn prepare(comm: &UNPREPARED) -> Self;
 }
 
 /// Defines the minimal interface of commitment randomness for any polynomial
@@ -262,7 +276,7 @@ pub struct LinearCombination<F> {
     /// The label.
     pub label: String,
     /// The linear combination of `(coeff, poly_label)` pairs.
-    terms: Vec<(F, LCTerm)>,
+    pub terms: Vec<(F, LCTerm)>,
 }
 
 impl<F: Field> LinearCombination<F> {

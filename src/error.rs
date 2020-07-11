@@ -9,7 +9,6 @@ pub enum Error {
         /// The label of the missing polynomial.
         label: String,
     },
-
     /// `Evaluations` does not contain an evaluation for the polynomial labelled
     /// `label` at a particular query.
     MissingEvaluation {
@@ -82,6 +81,55 @@ pub enum Error {
 
     /// The commitment was generated incorrectly, tampered with, or doesn't support the polynomial.
     MalformedCommitment(String),
+
+    /// None Error.
+    NoneError,
+}
+
+impl Error {
+    pub(crate) fn check_degree_is_within_bounds(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
+        if num_coefficients < 1 {
+            Err(Error::DegreeIsZero)
+        } else {
+            Self::check_degree_is_too_large(num_coefficients, num_powers)
+        }
+    }
+
+    pub(crate) fn check_degree_is_too_large(
+        num_coefficients: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
+        if num_coefficients > num_powers {
+            Err(Error::TooManyCoefficients {
+                num_coefficients,
+                num_powers,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn check_hiding_bound(
+        hiding_poly_degree: usize,
+        num_powers: usize,
+    ) -> Result<(), Self> {
+        if hiding_poly_degree == 0 {
+            Err(Error::HidingBoundIsZero)
+        } else if hiding_poly_degree >= num_powers {
+            // The above check uses `>=` because committing to a hiding poly with
+            // degree `hiding_poly_degree` requires `hiding_poly_degree + 1`
+            // powers.
+            Err(Error::HidingBoundToolarge {
+                hiding_poly_degree,
+                num_powers,
+            })
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl core::fmt::Display for Error {
@@ -155,9 +203,11 @@ impl core::fmt::Display for Error {
                 degree_bound, label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
-            Error::MalformedCommitment(err) => write!(f, "{}", err)
+            Error::MalformedCommitment(err) => write!(f, "{}", err),
+            Error::NoneError => write!(f, "{}", "NoneError"),
         }
     }
+    
 }
 
 impl algebra_core::Error for Error {}

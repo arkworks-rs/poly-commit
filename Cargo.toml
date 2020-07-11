@@ -20,17 +20,22 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-algebra-core = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
-ff-fft = { git = "https://github.com/scipr-lab/zexe/", default-features = false }
-bench-utils = { git = "https://github.com/scipr-lab/zexe/" }
-rand_core = { version = "0.5", default-features = false }
+algebra = { path = "../zexe_with_ledger/algebra", features = [ "ed_on_bls12_381", "mnt4_298", "mnt4_753", "mnt6_298", "mnt6_753", "bls12_377" ] }
+algebra-benches = { path = "../zexe_with_ledger/algebra-benches" }
+algebra-core = { path = "../zexe_with_ledger/algebra-core" }
+ff-fft = { path = "../zexe_with_ledger/ff-fft" }
+rand_core = { version = "0.5" }
+r1cs-core = { path = "../zexe_with_ledger/r1cs-core" }
+r1cs-std = { path = "../zexe_with_ledger/r1cs-std", features = [  "mnt4_298", "mnt4_753", "mnt6_298", "mnt6_753" ] }
+bench-utils = { path = "../zexe_with_ledger/bench-utils" }
+num-traits = { version = "0.2", default-features = false }
 digest = "0.8"
 rayon = { version = "1", optional = true }
 derivative = { version = "2", features = [ "use_core" ] }
+nonnative = { version = "0.0.4", path = "../perfect-constraints/marlin/nonnative" }
 
 [dev-dependencies]
 rand = { version = "0.7", default-features = false }
-algebra = { git = "https://github.com/scipr-lab/zexe/", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 blake2 = { version = "0.8", default-features = false }
 
 [profile.release]

@@ -127,7 +127,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     type UniversalParams = UniversalParams<E>;
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
+    type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
+    type PreparedCommitment = PreparedCommitment<E>;
     type Randomness = Randomness<E>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;

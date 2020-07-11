@@ -1,6 +1,6 @@
 use crate::kzg10;
-use crate::{PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::PairingEngine;
+use crate::{PCCommitterKey, PCVerifierKey, PCPreparedCommitment, PCPreparedVerifierKey, Vec};
+use algebra_core::{PairingEngine, ProjectiveCurve};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
@@ -10,6 +10,24 @@ pub type Randomness<E> = kzg10::Randomness<E>;
 
 /// `Commitment` is the commitment for the KZG10 scheme.
 pub type Commitment<E> = kzg10::Commitment<E>;
+
+/// `PreparedCommitment` is the prepared commitment for the KZG10 scheme.
+pub type PreparedCommitment<E> = kzg10::PreparedCommitment<E>;
+
+impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+    /// prepare `PreparedCommitment` from `Commitment`
+    fn prepare(comm: &Commitment<E>) -> Self {
+        let mut prepared_comm = Vec::<E::G1Affine>::new();
+        let mut cur = E::G1Projective::from(comm.0.clone());
+        for _ in 0..128 {
+            prepared_comm.push(cur.clone().into());
+            cur.double_in_place();
+        }
+
+        Self { 0: prepared_comm }
+    }
+}
+
 
 /// `ComitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
@@ -145,6 +163,16 @@ impl<E: PairingEngine> VerifierKey<E> {
                     .ok()
                     .map(|i| v[i].1.clone())
             })
+    }
+}
+
+/// Nothing to do to prepare this verifier key (for now).
+pub type PreparedVerifierKey<E> = VerifierKey<E>;
+
+impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
+    /// prepare `PreparedVerifierKey` from `VerifierKey`
+    fn prepare(vk: &VerifierKey<E>) -> Self {
+        vk.clone()
     }
 }
 

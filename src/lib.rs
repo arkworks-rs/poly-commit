@@ -9,6 +9,8 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
+#![feature(map_first_last)]
+#![feature(move_ref_pattern)]
 
 #[macro_use]
 extern crate derivative;
@@ -44,6 +46,9 @@ use std::{
 pub mod data_structures;
 pub use data_structures::*;
 
+mod pc_constraints;
+pub use pc_constraints::*;
+
 /// Errors pertaining to query sets.
 pub mod error;
 pub use error::*;
@@ -54,6 +59,11 @@ pub mod optional_rng;
 
 #[cfg(not(feature = "std"))]
 macro_rules! eprintln {
+    () => {};
+    ($($arg: tt)*) => {};
+}
+#[cfg(not(feature = "std"))]
+macro_rules! println {
     () => {};
     ($($arg: tt)*) => {};
 }
@@ -68,6 +78,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
+// TODO: add "Prepared" to marlin_pc
 pub mod marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
@@ -87,6 +98,7 @@ pub mod sonic_pc;
 /// The construction is detailed in [[BCMS20]][pcdas].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
+// TODO: add "Prepared" to marlin_pc
 pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
@@ -122,8 +134,12 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
     type VerifierKey: PCVerifierKey;
+    /// The prepared verifier key for the scheme; used to check an evaluation proof.
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey>;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment;
+    /// The prepared commitment to a polynomial.
+    type PreparedCommitment: PCPreparedCommitment<Self::Commitment>;
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.

@@ -308,7 +308,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
+    type PreparedVerifierKey = PreparedVerifierKey<G>;
     type Commitment = Commitment<G>;
+    type PreparedCommitment = PreparedCommitment<G>;
     type Randomness = Randomness<G>;
     type Proof = Proof<G>;
     type BatchProof = Vec<Self::Proof>;
