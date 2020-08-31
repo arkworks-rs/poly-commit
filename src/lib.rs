@@ -260,14 +260,14 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
     /// Verifies that `values` are the evaluations at `point` of the polynomials
     /// committed inside `commitments`.
-    fn check<'a, R: RngCore>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: F,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         opening_challenge: F,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a;
@@ -319,7 +319,15 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             }
 
             let proof_time = start_timer!(|| "Checking per-query proof");
-            result &= Self::check(vk, comms, *query, values, &proof, opening_challenge, rng)?;
+            result &= Self::check(
+                vk,
+                comms,
+                *query,
+                values,
+                &proof,
+                opening_challenge,
+                Some(rng),
+            )?;
             end_timer!(proof_time);
         }
         Ok(result)
