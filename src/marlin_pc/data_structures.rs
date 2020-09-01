@@ -138,8 +138,13 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     Eq(bound = "")
 )]
 pub struct Commitment<E: PairingEngine> {
-    pub(crate) comm: kzg10::Commitment<E>,
-    pub(crate) shifted_comm: Option<kzg10::Commitment<E>>,
+    /// A KZG10 commitment to the polynomial.
+    pub comm: kzg10::Commitment<E>,
+
+    /// A KZG10 commitment to the shifted polynomial.
+    /// This is `none` if the committed polynomial does not
+    /// enforce a strict degree bound.
+    pub shifted_comm: Option<kzg10::Commitment<E>>,
 }
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
