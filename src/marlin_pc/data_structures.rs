@@ -126,6 +126,20 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     }
 }
 
+impl<E: PairingEngine> ToBytes for VerifierKey<E> {
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+        self.vk.write(&mut writer)?;
+        if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
+            for (degree_bound, shift_power) in degree_bounds_and_shift_powers {
+                writer.write_all(&degree_bound.to_le_bytes())?;
+                shift_power.write(&mut writer)?;
+            }
+        }
+        writer.write_all(&self.supported_degree.to_le_bytes())?;
+        writer.write_all(&self.max_degree.to_le_bytes())
+    }
+}
+
 /// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(
