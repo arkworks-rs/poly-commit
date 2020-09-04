@@ -30,7 +30,7 @@ use digest::Digest;
 /// as detailed in [[CHMMVW20]][marlin].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
-/// [marlin]: https://eprint.iacr.org/2019/104
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct InnerProductArgPC<G: AffineCurve, D: Digest> {
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
