@@ -127,9 +127,11 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 }
 
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
+    #[inline]
     fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
         self.vk.write(&mut writer)?;
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
+            writer.write_all(&degree_bounds_and_shift_powers.len().to_le_bytes())?;
             for (degree_bound, shift_power) in degree_bounds_and_shift_powers {
                 writer.write_all(&degree_bound.to_le_bytes())?;
                 shift_power.write(&mut writer)?;
