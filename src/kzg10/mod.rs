@@ -18,6 +18,7 @@ use core::marker::PhantomData;
 
 mod data_structures;
 pub use data_structures::*;
+use std::collections::BTreeMap;
 
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
@@ -79,7 +80,10 @@ impl<E: PairingEngine> KZG10<E> {
 
         let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
         let powers_of_gamma_g =
-            E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g);
+            E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g)
+                .into_iter()
+                .enumerate()
+                .collect();
 
         let prepared_neg_powers_of_h_time =
             start_timer!(|| "Generating negative powers of h in G2");
@@ -100,9 +104,17 @@ impl<E: PairingEngine> KZG10<E> {
             );
 
             let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
-            Some(affines.into_iter().map(|a| a.into()).collect())
+            let mut affines_map = BTreeMap::new();
+            affines
+                .into_iter()
+                .enumerate()
+                .map(|(i, a)| (i, a.into()))
+                .for_each(|(i, a)| {
+                    affines_map.insert(i, a);
+                });
+            affines_map
         } else {
-            None
+            BTreeMap::new()
         };
 
         end_timer!(prepared_neg_powers_of_h_time);
@@ -477,7 +489,9 @@ mod tests {
                 supported_degree += 1;
             }
             let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
-            let powers_of_gamma_g = pp.powers_of_gamma_g[..=supported_degree].to_vec();
+            let powers_of_gamma_g = (0..=supported_degree)
+                .map(|i| pp.powers_of_gamma_g[&i])
+                .collect();
 
             let powers = Powers {
                 powers_of_g: Cow::Owned(powers_of_g),
@@ -485,7 +499,7 @@ mod tests {
             };
             let vk = VerifierKey {
                 g: pp.powers_of_g[0],
-                gamma_g: pp.powers_of_gamma_g[0],
+                gamma_g: pp.powers_of_gamma_g[&0],
                 h: pp.h,
                 beta_h: pp.beta_h,
                 prepared_h: pp.prepared_h.clone(),

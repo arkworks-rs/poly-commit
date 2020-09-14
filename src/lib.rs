@@ -145,6 +145,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     fn trim(
         pp: &Self::UniversalParams,
         supported_degree: usize,
+        supported_hiding_bound: usize,
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
@@ -519,8 +520,22 @@ pub mod tests {
                 ))
             }
 
+            let supported_hiding_bound = polynomials
+                .iter()
+                .map(|p| match p.hiding_bound() {
+                    Some(b) => b,
+                    None => 0,
+                })
+                .max()
+                .unwrap_or(0);
             println!("supported degree: {:?}", supported_degree);
-            let (ck, vk) = PC::trim(&pp, supported_degree, Some(degree_bounds.as_slice()))?;
+            println!("supported hiding bound: {:?}", supported_hiding_bound);
+            let (ck, vk) = PC::trim(
+                &pp,
+                supported_degree,
+                supported_hiding_bound,
+                Some(degree_bounds.as_slice()),
+            )?;
             println!("Trimmed");
 
             let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
@@ -628,11 +643,21 @@ pub mod tests {
                     hiding_bound,
                 ))
             }
+            let supported_hiding_bound = polynomials
+                .iter()
+                .map(|p| match p.hiding_bound() {
+                    Some(b) => b,
+                    None => 0,
+                })
+                .max()
+                .unwrap_or(0);
             println!("supported degree: {:?}", supported_degree);
+            println!("supported hiding bound: {:?}", supported_hiding_bound);
             println!("num_points_in_query_set: {:?}", num_points_in_query_set);
             let (ck, vk) = PC::trim(
                 &pp,
                 supported_degree,
+                supported_hiding_bound,
                 degree_bounds.as_ref().map(|s| s.as_slice()),
             )?;
             println!("Trimmed");
@@ -768,6 +793,7 @@ pub mod tests {
 
             let (ck, vk) = PC::trim(
                 &pp,
+                supported_degree,
                 supported_degree,
                 degree_bounds.as_ref().map(|s| s.as_slice()),
             )?;

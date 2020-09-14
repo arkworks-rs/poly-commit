@@ -1,6 +1,7 @@
 use crate::kzg10;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
 use algebra_core::PairingEngine;
+use std::collections::BTreeMap;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
@@ -33,7 +34,7 @@ pub struct CommitterKey<E: PairingEngine> {
 
     /// The powers used to commit to shifted hiding polynomials.
     /// This is `None` if `self` does not support enforcing any degree bounds.
-    pub shifted_powers_of_gamma_g: Option<Vec<E::G1Affine>>,
+    pub shifted_powers_of_gamma_g: Option<BTreeMap<usize, Vec<E::G1Affine>>>,
 
     /// The degree bounds that are supported by `self`.
     /// Sorted in ascending order from smallest bound to largest bound.
@@ -60,26 +61,26 @@ impl<E: PairingEngine> CommitterKey<E> {
     ) -> Option<kzg10::Powers<E>> {
         match (&self.shifted_powers_of_g, &self.shifted_powers_of_gamma_g) {
             (Some(shifted_powers_of_g), Some(shifted_powers_of_gamma_g)) => {
-                let powers_range = if let Some(degree_bound) = degree_bound.into() {
+                let max_bound = self
+                    .enforced_degree_bounds
+                    .as_ref()
+                    .unwrap()
+                    .last()
+                    .unwrap();
+                let (bound, powers_range) = if let Some(degree_bound) = degree_bound.into() {
                     assert!(self
                         .enforced_degree_bounds
                         .as_ref()
                         .unwrap()
                         .contains(&degree_bound));
-                    let max_bound = self
-                        .enforced_degree_bounds
-                        .as_ref()
-                        .unwrap()
-                        .last()
-                        .unwrap();
-                    (max_bound - degree_bound)..
+                    (degree_bound, (max_bound - degree_bound)..)
                 } else {
-                    0..
+                    (*max_bound, 0..)
                 };
 
                 let ck = kzg10::Powers {
                     powers_of_g: shifted_powers_of_g[powers_range.clone()].into(),
-                    powers_of_gamma_g: shifted_powers_of_gamma_g[powers_range].into(),
+                    powers_of_gamma_g: shifted_powers_of_gamma_g[&bound].clone().into(),
                 };
 
                 Some(ck)
