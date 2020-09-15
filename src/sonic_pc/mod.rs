@@ -225,7 +225,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         };
 
         let powers_of_g = pp.powers_of_g[..=supported_degree].to_vec();
-        let powers_of_gamma_g = (0..=supported_hiding_bound + 1)
+        let powers_of_gamma_g = (0..=(supported_hiding_bound + 1))
             .map(|i| pp.powers_of_gamma_g[&i])
             .collect();
 
