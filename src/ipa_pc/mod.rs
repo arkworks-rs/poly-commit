@@ -4,8 +4,8 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{
-    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, ToBytes, UniformRand,
-    VariableBaseMSM, Zero,
+    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, UniformRand, VariableBaseMSM,
+    Zero,
 };
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
@@ -340,6 +340,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     fn trim(
         pp: &Self::UniversalParams,
         supported_degree: usize,
+        _supported_hiding_bound: usize,
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         // Ensure that supported_degree + 1 is a power of two
