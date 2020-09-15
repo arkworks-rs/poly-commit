@@ -1,8 +1,8 @@
 use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet, UniPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
+use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use algebra_core::{AffineCurve, One, PairingEngine, ProjectiveCurve, UniformRand, Zero};
 use core::{convert::TryInto, marker::PhantomData};
@@ -135,6 +135,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
     fn setup<R: RngCore>(
         max_degree: usize,
+        _: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         kzg10::KZG10::setup(max_degree, true, rng).map_err(Into::into)
@@ -291,7 +292,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 &labeled_polynomial,
             )?;
 
-            let polynomial = labeled_polynomial.polynomial();
+            let polynomial: &UniPolynomial<_> = labeled_polynomial.polynomial().try_into()?;
             let degree_bound = labeled_polynomial.degree_bound();
             let hiding_bound = labeled_polynomial.hiding_bound();
             let label = labeled_polynomial.label();
@@ -310,7 +311,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 ck.powers()
             };
 
-            let (comm, rand) = kzg10::KZG10::commit(&powers, &polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) = kzg10::KZG10::commit(&powers, polynomial, hiding_bound, Some(rng))?;
 
             labeled_comms.push(LabeledCommitment::new(
                 label.to_string(),
@@ -329,7 +330,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a [E::Fr],
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
@@ -338,7 +339,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let mut combined_polynomial = Polynomial::zero();
+        let mut combined_polynomial = UniPolynomial::zero();
         let mut combined_rand = kzg10::Randomness::empty();
         let mut curr_challenge = opening_challenge;
 
@@ -355,13 +356,18 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 &polynomial,
             )?;
 
-            combined_polynomial += (curr_challenge, polynomial.polynomial());
+            combined_polynomial += (curr_challenge, polynomial.polynomial().try_into()?);
             combined_rand += (curr_challenge, rand);
             curr_challenge *= &opening_challenge;
         }
 
         let proof_time = start_timer!(|| "Creating proof for polynomials");
-        let proof = kzg10::KZG10::open(&ck.powers(), &combined_polynomial, point, &combined_rand)?;
+        let proof = kzg10::KZG10::open(
+            &ck.powers(),
+            &combined_polynomial,
+            *point.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?,
+            &combined_rand,
+        )?;
         end_timer!(proof_time);
 
         Ok(proof)
@@ -370,7 +376,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a [E::Fr],
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
@@ -390,7 +396,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             &mut combined_adjusted_witness,
             vk,
             commitments,
-            point,
+            *point.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?,
             values,
             proof,
             opening_challenge,
@@ -443,11 +449,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                     label: label.to_string(),
                 })?;
 
-                let v_i = values
-                    .get(&(label.clone(), *query))
-                    .ok_or(Error::MissingEvaluation {
+                let v_i = values.get(&(label.clone(), query.clone())).ok_or(
+                    Error::MissingEvaluation {
                         label: label.to_string(),
-                    })?;
+                    },
+                )?;
 
                 comms_to_combine.push(commitment);
                 values_to_combine.push(*v_i);
@@ -459,7 +465,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 &mut combined_adjusted_witness,
                 vk,
                 comms_to_combine.into_iter(),
-                *query,
+                *query.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?,
                 values_to_combine.into_iter(),
                 p,
                 opening_challenge,
@@ -505,7 +511,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
         for lc in lc_s {
             let lc_label = lc.label().clone();
-            let mut poly = Polynomial::zero();
+            let mut poly = UniPolynomial::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
@@ -532,13 +538,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial());
+                poly += (*coeff, cur_poly.polynomial().try_into()?);
                 randomness += (*coeff, cur_rand);
                 comm += &curr_comm.commitment().0.into_projective().mul(*coeff);
             }
 
             let lc_poly =
-                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
+                LabeledPolynomial::new(lc_label.clone(), poly.into(), degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
             lc_commitments.push(comm);
@@ -669,8 +675,8 @@ mod tests {
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
-        single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_test::<_, PC_Bls12_377>(None).expect("test failed for bls12-377");
+        single_poly_test::<_, PC_Bls12_381>(None).expect("test failed for bls12-381");
     }
 
     #[test]
@@ -717,27 +723,27 @@ mod tests {
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_test::<_, PC_Bls12_377>(None).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        full_end_to_end_test::<_, PC_Bls12_381>(None).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_equation_test::<_, PC_Bls12_377>(None).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_equation_test::<_, PC_Bls12_381>(None).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_test::<_, PC_Bls12_377>(None).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        two_equation_test::<_, PC_Bls12_381>(None).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -753,9 +759,9 @@ mod tests {
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_equation_test::<_, PC_Bls12_377>(None).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        full_end_to_end_equation_test::<_, PC_Bls12_381>(None).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 

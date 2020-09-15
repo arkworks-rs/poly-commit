@@ -5,7 +5,7 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG11](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};
+use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, UniPolynomial, Vec};
 use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra_core::{
     AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
@@ -139,7 +139,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// Outputs a commitment to `polynomial`.
     pub fn commit(
         powers: &Powers<E>,
-        polynomial: &Polynomial<E::Fr>,
+        polynomial: &UniPolynomial<E::Fr>,
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<(Commitment<E>, Randomness<E>), Error> {
@@ -169,7 +169,7 @@ impl<E: PairingEngine> KZG10<E> {
                 hiding_degree
             ));
 
-            randomness = Randomness::rand(hiding_degree, false, &mut rng);
+            randomness = Randomness::rand(hiding_degree, false, None, &mut rng);
             Self::check_hiding_bound(
                 randomness.blinding_polynomial.degree(),
                 powers.powers_of_gamma_g.len(),
@@ -196,11 +196,11 @@ impl<E: PairingEngine> KZG10<E> {
     /// Observe that this quotient does not change with z because
     /// p(z) is the remainder term. We can therefore omit p(z) when computing the quotient.
     pub fn compute_witness_polynomial(
-        p: &Polynomial<E::Fr>,
+        p: &UniPolynomial<E::Fr>,
         point: E::Fr,
         randomness: &Randomness<E>,
-    ) -> Result<(Polynomial<E::Fr>, Option<Polynomial<E::Fr>>), Error> {
-        let divisor = Polynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
+    ) -> Result<(UniPolynomial<E::Fr>, Option<UniPolynomial<E::Fr>>), Error> {
+        let divisor = UniPolynomial::from_coefficients_vec(vec![-point, E::Fr::one()]);
 
         let witness_time = start_timer!(|| "Computing witness polynomial");
         let witness_polynomial = p / &divisor;
@@ -224,8 +224,8 @@ impl<E: PairingEngine> KZG10<E> {
         powers: &Powers<E>,
         point: E::Fr,
         randomness: &Randomness<E>,
-        witness_polynomial: &Polynomial<E::Fr>,
-        hiding_witness_polynomial: Option<&Polynomial<E::Fr>>,
+        witness_polynomial: &UniPolynomial<E::Fr>,
+        hiding_witness_polynomial: Option<&UniPolynomial<E::Fr>>,
     ) -> Result<Proof<E>, Error> {
         Self::check_degree_is_too_large(witness_polynomial.degree(), powers.size())?;
         let (num_leading_zeros, witness_coeffs) =
@@ -266,7 +266,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     pub(crate) fn open<'a>(
         powers: &Powers<E>,
-        p: &Polynomial<E::Fr>,
+        p: &UniPolynomial<E::Fr>,
         point: E::Fr,
         rand: &Randomness<E>,
     ) -> Result<Proof<E>, Error> {
@@ -445,7 +445,7 @@ impl<E: PairingEngine> KZG10<E> {
 }
 
 fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
-    p: &Polynomial<F>,
+    p: &UniPolynomial<F>,
 ) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
     while p.coeffs[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs.len() {
@@ -511,7 +511,7 @@ mod tests {
     #[test]
     fn add_commitments_test() {
         let rng = &mut test_rng();
-        let p = Polynomial::from_coefficients_slice(&[
+        let p = UniPolynomial::from_coefficients_slice(&[
             Fr::rand(rng),
             Fr::rand(rng),
             Fr::rand(rng),
@@ -519,7 +519,7 @@ mod tests {
             Fr::rand(rng),
         ]);
         let f = Fr::rand(rng);
-        let mut f_p = Polynomial::zero();
+        let mut f_p = UniPolynomial::zero();
         f_p += (f, &p);
 
         let degree = 4;
@@ -544,7 +544,7 @@ mod tests {
             }
             let pp = KZG10::<E>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::trim(&pp, degree)?;
-            let p = Polynomial::rand(degree, rng);
+            let p = UniPolynomial::rand(degree, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
             let point = E::Fr::rand(rng);
@@ -567,7 +567,7 @@ mod tests {
             let degree = 50;
             let pp = KZG10::<E>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::trim(&pp, 2)?;
-            let p = Polynomial::rand(1, rng);
+            let p = UniPolynomial::rand(1, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
             let point = E::Fr::rand(rng);
@@ -598,7 +598,7 @@ mod tests {
             let mut points = Vec::new();
             let mut proofs = Vec::new();
             for _ in 0..10 {
-                let p = Polynomial::rand(degree, rng);
+                let p = UniPolynomial::rand(degree, rng);
                 let hiding_bound = Some(1);
                 let (comm, rand) = KZG10::<E>::commit(&ck, &p, hiding_bound, Some(rng))?;
                 let point = E::Fr::rand(rng);

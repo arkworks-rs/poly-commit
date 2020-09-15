@@ -132,7 +132,7 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
 )]
 pub struct Randomness<E: PairingEngine> {
     /// For KZG10, the commitment randomness is a random polynomial.
-    pub blinding_polynomial: Polynomial<E::Fr>,
+    pub blinding_polynomial: UniPolynomial<E::Fr>,
 }
 
 impl<E: PairingEngine> Randomness<E> {
@@ -153,14 +153,14 @@ impl<E: PairingEngine> Randomness<E> {
 impl<E: PairingEngine> PCRandomness for Randomness<E> {
     fn empty() -> Self {
         Self {
-            blinding_polynomial: Polynomial::zero(),
+            blinding_polynomial: UniPolynomial::zero(),
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, _: bool, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, _: bool, _: Option<usize>, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
-        randomness.blinding_polynomial = Polynomial::rand(hiding_poly_degree, rng);
+        randomness.blinding_polynomial = UniPolynomial::rand(hiding_poly_degree, rng);
         randomness
     }
 }

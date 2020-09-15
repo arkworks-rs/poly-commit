@@ -1,8 +1,7 @@
-use crate::{Cow, String, Vec};
+use crate::{Cow, MultiPolynomial, String, UniPolynomial, Vec};
 use algebra_core::Field;
 use core::borrow::Borrow;
 use core::ops::{AddAssign, MulAssign, SubAssign};
-pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -59,8 +58,14 @@ pub trait PCRandomness: Clone {
     /// Samples randomness for commitments;
     /// `num_queries` specifies the number of queries that the commitment will be opened at.
     /// `has_degree_bound` indicates that the corresponding commitment has an enforced
+    /// `num_vars` specifies the number of variables for multivariate commitment.
     /// strict degree bound.
-    fn rand<R: RngCore>(num_queries: usize, has_degree_bound: bool, rng: &mut R) -> Self;
+    fn rand<R: RngCore>(
+        num_queries: usize,
+        has_degree_bound: bool,
+        num_vars: Option<usize>,
+        rng: &mut R,
+    ) -> Self;
 }
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
@@ -70,19 +75,74 @@ pub trait PCProof: Clone + algebra_core::ToBytes {
     fn size_in_bytes(&self) -> usize;
 }
 
+/// Wrapper for univariate or multivariate polynomial
+#[derive(Debug, Clone)]
+pub enum Polynomial<'a, F: Field> {
+    /// Univariate polynomial type
+    Uni(Cow<'a, UniPolynomial<F>>),
+    /// Multivariate polynomial type
+    Mul(Cow<'a, MultiPolynomial<F>>),
+}
+
+impl<'a, F: 'a + Field> From<UniPolynomial<F>> for Polynomial<'a, F> {
+    fn from(other: UniPolynomial<F>) -> Self {
+        Self::Uni(Cow::Owned(other))
+    }
+}
+
+impl<'a, F: 'a + Field> From<&'a UniPolynomial<F>> for Polynomial<'a, F> {
+    fn from(other: &'a UniPolynomial<F>) -> Self {
+        Self::Uni(Cow::Borrowed(other))
+    }
+}
+
+impl<'a, F: 'a + Field> From<MultiPolynomial<F>> for Polynomial<'a, F> {
+    fn from(other: MultiPolynomial<F>) -> Self {
+        Self::Mul(Cow::Owned(other))
+    }
+}
+
+impl<'a, F: 'a + Field> From<&'a MultiPolynomial<F>> for Polynomial<'a, F> {
+    fn from(other: &'a MultiPolynomial<F>) -> Self {
+        Self::Mul(Cow::Borrowed(other))
+    }
+}
+
+impl<'a, F: Field> core::convert::TryInto<&'a UniPolynomial<F>> for &'a Polynomial<'a, F> {
+    type Error = crate::Error;
+
+    fn try_into(self) -> Result<&'a UniPolynomial<F>, Self::Error> {
+        match self {
+            Polynomial::Uni(p) => Ok(&p),
+            Polynomial::Mul(_) => Err(Self::Error::InvalidPolynomialType),
+        }
+    }
+}
+
+impl<'a, F: Field> core::convert::TryInto<&'a MultiPolynomial<F>> for &'a Polynomial<'a, F> {
+    type Error = crate::Error;
+
+    fn try_into(self) -> Result<&'a MultiPolynomial<F>, Self::Error> {
+        match self {
+            Polynomial::Uni(_) => Err(Self::Error::InvalidPolynomialType),
+            Polynomial::Mul(p) => Ok(&p),
+        }
+    }
+}
+
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
 #[derive(Debug, Clone)]
 pub struct LabeledPolynomial<'a, F: Field> {
     label: PolynomialLabel,
-    polynomial: Cow<'a, Polynomial<F>>,
+    polynomial: Polynomial<'a, F>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
 }
 
 impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<'a, F> {
-    type Target = Polynomial<F>;
+    type Target = Polynomial<'a, F>;
 
     fn deref(&self) -> &Self::Target {
         &self.polynomial
@@ -90,32 +150,16 @@ impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<'a, F> {
 }
 
 impl<'a, F: Field> LabeledPolynomial<'a, F> {
-    /// Construct a new labeled polynomial by consuming `polynomial`.
-    pub fn new_owned(
-        label: PolynomialLabel,
-        polynomial: Polynomial<F>,
-        degree_bound: Option<usize>,
-        hiding_bound: Option<usize>,
-    ) -> Self {
-        Self {
-            label,
-            polynomial: Cow::Owned(polynomial),
-            degree_bound,
-
-            hiding_bound,
-        }
-    }
-
     /// Construct a new labeled polynomial.
     pub fn new(
         label: PolynomialLabel,
-        polynomial: &'a Polynomial<F>,
+        polynomial: Polynomial<'a, F>,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
     ) -> Self {
         Self {
             label,
-            polynomial: Cow::Borrowed(polynomial),
+            polynomial: polynomial,
             degree_bound,
             hiding_bound,
         }
@@ -126,14 +170,25 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
         &self.label
     }
 
-    /// Retrieve the polynomial from `self`.
-    pub fn polynomial(&self) -> &Polynomial<F> {
+    /// Retrieve the polynomial from `self`
+    pub fn polynomial(&self) -> &Polynomial<'a, F> {
         &self.polynomial
     }
 
     /// Evaluate the polynomial in `self`.
-    pub fn evaluate(&self, point: F) -> F {
-        self.polynomial.evaluate(point)
+    pub fn evaluate(&self, point: &[F]) -> F {
+        match &self.polynomial {
+            Polynomial::Uni(p) => p.evaluate(point[0]),
+            Polynomial::Mul(p) => p.evaluate(point),
+        }
+    }
+
+    /// Retrieve the degree of the polynomial in `self`.
+    pub fn degree(&self) -> usize {
+        match &self.polynomial {
+            Polynomial::Uni(p) => p.degree(),
+            Polynomial::Mul(p) => p.degree(),
+        }
     }
 
     /// Retrieve the degree bound in `self`.

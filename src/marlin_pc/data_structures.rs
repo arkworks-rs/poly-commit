@@ -248,14 +248,19 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(
+        hiding_bound: usize,
+        has_degree_bound: bool,
+        _: Option<usize>,
+        rng: &mut R,
+    ) -> Self {
         let shifted_rand = if has_degree_bound {
-            Some(kzg10::Randomness::rand(hiding_bound, false, rng))
+            Some(kzg10::Randomness::rand(hiding_bound, false, None, rng))
         } else {
             None
         };
         Self {
-            rand: kzg10::Randomness::rand(hiding_bound, false, rng),
+            rand: kzg10::Randomness::rand(hiding_bound, false, None, rng),
             shifted_rand,
         }
     }

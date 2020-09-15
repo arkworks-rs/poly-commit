@@ -82,6 +82,26 @@ pub enum Error {
 
     /// The commitment was generated incorrectly, tampered with, or doesn't support the polynomial.
     MalformedCommitment(String),
+
+    /// The provided evaluation point is empty
+    EmptyEvaluationPoint,
+
+    /// Attempted to cast `Polynomial` to wrong underlying polynomial type
+    InvalidPolynomialType,
+
+    /// An invalid number of variables was provided to `setup`
+    InvalidNumberOfVariables,
+
+    /// The degree of the `index`-th polynomial passed to `commit`, `open`
+    /// or `check` was incorrect, that is, `supported_degree <= poly_degree`
+    PolynomialDegreeTooLarge {
+        /// Degree of the polynomial.
+        poly_degree: usize,
+        /// Maximum supported degree.
+        supported_degree: usize,
+        /// Index of the offending polynomial.
+        label: String,
+    },
 }
 
 impl core::fmt::Display for Error {
@@ -154,8 +174,26 @@ impl core::fmt::Display for Error {
                  supported degree ({:?})",
                 degree_bound, label, poly_degree, supported_degree
             ),
+            Error::EmptyEvaluationPoint => write!(f, "The provided evaluation point is empty"),
+            Error::InvalidPolynomialType => write!(
+                f,
+                "Attempted to cast `Polynomial` to wrong underlying polynomial type"
+            ),
+            Error::InvalidNumberOfVariables => write!(
+                f,
+                "An invalid number of variables was provided to `setup`"
+            ),
+            Error::PolynomialDegreeTooLarge {
+                poly_degree,
+                supported_degree,
+                label,
+            } => write!(
+                f,
+                "the polynomial {} has degree {:?}, but parameters only
+                support up to degree ({:?})", label, poly_degree, supported_degree
+            ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
-            Error::MalformedCommitment(err) => write!(f, "{}", err)
+            Error::MalformedCommitment(err) => write!(f, "{}", err),
         }
     }
 }
