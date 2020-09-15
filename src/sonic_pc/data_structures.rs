@@ -1,5 +1,5 @@
 use crate::kzg10;
-use crate::{PCCommitterKey, PCVerifierKey, Vec, BTreeMap};
+use crate::{BTreeMap, PCCommitterKey, PCVerifierKey, Vec};
 use algebra_core::PairingEngine;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.

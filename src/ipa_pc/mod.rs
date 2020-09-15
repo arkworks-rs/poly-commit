@@ -4,8 +4,8 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use algebra_core::{
-    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, UniformRand,
-    VariableBaseMSM, Zero,
+    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, UniformRand, VariableBaseMSM,
+    Zero,
 };
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
