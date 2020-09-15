@@ -186,7 +186,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 for degree_bound in enforced_degree_bounds {
                     let shift_degree = max_degree - degree_bound;
                     let mut powers_for_degree_bound = vec![];
-                    for i in 0..=supported_hiding_bound + 1 {
+                    for i in 0..=(supported_hiding_bound + 1) {
                         // We have an additional degree in `powers_of_gamma_g` beyond `powers_of_g`.
                         if shift_degree + i < max_degree + 2 {
                             powers_for_degree_bound.push(pp.powers_of_gamma_g[&(shift_degree + i)]);
