@@ -73,6 +73,18 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
+impl<E: PairingEngine> ToBytes for VerifierKey<E> {
+    #[inline]
+    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+        self.g.write(&mut writer)?;
+        self.gamma_g.write(&mut writer)?;
+        self.h.write(&mut writer)?;
+        self.beta_h.write(&mut writer)?;
+        self.prepared_h.write(&mut writer)?;
+        self.prepared_beta_h.write(&mut writer)
+    }
+}
+
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
 #[derive(Derivative)]
 #[derivative(
