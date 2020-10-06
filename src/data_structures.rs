@@ -1,7 +1,10 @@
 use crate::{Cow, Polynomial, String, Vec};
 use algebra_core::Field;
-use core::borrow::Borrow;
-use core::ops::{AddAssign, MulAssign, SubAssign};
+use core::{
+    borrow::Borrow,
+    marker::PhantomData,
+    ops::{AddAssign, MulAssign, SubAssign},
+};
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -84,7 +87,7 @@ pub struct LabeledPolynomial<'a, F: Field, P: Polynomial<F>> {
     polynomial: Cow<'a, P>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
-    _field: std::marker::PhantomData<F>,
+    _field: PhantomData<F>,
 }
 
 impl<'a, F: Field, P: Polynomial<F>> core::ops::Deref for LabeledPolynomial<'a, F, P> {
@@ -108,7 +111,7 @@ impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<'a, F, P> {
             polynomial: Cow::Owned(polynomial),
             degree_bound,
             hiding_bound,
-            _field: std::marker::PhantomData,
+            _field: PhantomData,
         }
     }
 
@@ -124,7 +127,7 @@ impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<'a, F, P> {
             polynomial: Cow::Borrowed(polynomial),
             degree_bound,
             hiding_bound,
-            _field: std::marker::PhantomData,
+            _field: PhantomData,
         }
     }
 

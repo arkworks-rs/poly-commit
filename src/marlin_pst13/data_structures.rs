@@ -1,4 +1,4 @@
-use crate::{BTreeMap, MVPolynomial};
+use crate::{BTreeMap, MVPolynomial, Vec};
 use crate::{PCCommitterKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey};
 use algebra_core::{PairingEngine, ToBytes, Zero};
 use core::{

@@ -1,5 +1,5 @@
 use crate::kzg10;
-use crate::{BTreeMap, BTreeSet, MVPolynomial, String, Term, Vec};
+use crate::{BTreeMap, BTreeSet, MVPolynomial, String, Term, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
@@ -353,9 +353,8 @@ where
 
             let commit_time = start_timer!(|| {
                 format!(
-                    "Polynomial {} with {} variables of degree {} and hiding bound {:?}",
+                    "Polynomial {} with degree {} and hiding bound {:?}",
                     label,
-                    polynomial.num_vars,
                     polynomial.degree(),
                     hiding_bound,
                 )
