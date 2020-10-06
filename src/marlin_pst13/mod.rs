@@ -1,5 +1,5 @@
 use crate::kzg10;
-use crate::{BTreeMap, BTreeSet, MultiPolynomial, PolyVars, String, Vec};
+use crate::{BTreeMap, BTreeSet, MVPolynomial, String, Term, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
@@ -8,9 +8,8 @@ use algebra_core::{
     AffineCurve, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
 use combinations::Combinations;
-use core::marker::PhantomData;
+use core::{convert::TryInto, marker::PhantomData, ops::Index};
 use rand_core::RngCore;
-use std::convert::TryInto;
 
 mod data_structures;
 pub use data_structures::*;
@@ -24,11 +23,22 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: PairingEngine> {
+pub struct MarlinPST13<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     _engine: PhantomData<E>,
+    _poly: PhantomData<P>,
 }
 
-impl<E: PairingEngine> MarlinPST13<E> {
+impl<E, P> MarlinPST13<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     /// MSM for `commitments` and `coeffs`
     fn combine_commitments<'a>(
         coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a kzg10::Commitment<E>)>,
@@ -69,11 +79,31 @@ impl<E: PairingEngine> MarlinPST13<E> {
         Ok((combined_comm, combined_value))
     }
 
+    /// Check that the powers support the hiding bound
+    fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Error> {
+        if hiding_poly_degree == 0 {
+            Err(Error::HidingBoundIsZero)
+        } else if hiding_poly_degree >= num_powers {
+            // The above check uses `>=` because committing to a hiding poly with
+            // degree `hiding_poly_degree` requires `hiding_poly_degree + 1`
+            // powers.
+            Err(Error::HidingBoundToolarge {
+                hiding_poly_degree,
+                num_powers,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     /// Check that a given polynomial is supported by parameters
-    pub(crate) fn check_degrees_and_bounds<'a>(
+    fn check_degrees_and_bounds<'a>(
         supported_degree: usize,
-        p: &'a LabeledPolynomial<'a, E::Fr>,
-    ) -> Result<(), Error> {
+        p: &'a LabeledPolynomial<'a, E::Fr, P>,
+    ) -> Result<(), Error>
+    where
+        P: 'a,
+    {
         if p.degree() > supported_degree {
             return Err(Error::PolynomialDegreeTooLarge {
                 poly_degree: p.degree(),
@@ -86,9 +116,9 @@ impl<E: PairingEngine> MarlinPST13<E> {
     }
 
     /// Convert polynomial coefficients to `BigInt`
-    fn convert_to_bigints<F: PrimeField>(p: &MultiPolynomial<F>) -> Vec<F::BigInt> {
+    fn convert_to_bigints(p: &P) -> Vec<<E::Fr as PrimeField>::BigInt> {
         let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-        let plain_coeffs = ff_fft::cfg_iter!(p.terms)
+        let plain_coeffs = ff_fft::cfg_into_iter!(p.terms())
             .map(|(_, coeff)| coeff.into_repr())
             .collect();
         end_timer!(to_bigint_time);
@@ -96,12 +126,17 @@ impl<E: PairingEngine> MarlinPST13<E> {
     }
 }
 
-impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
-    type UniversalParams = UniversalParams<E>;
-    type CommitterKey = CommitterKey<E>;
+impl<E, P> PolynomialCommitment<E::Fr, P> for MarlinPST13<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
+    type UniversalParams = UniversalParams<E, P>;
+    type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = kzg10::Commitment<E>;
-    type Randomness = Randomness<E>;
+    type Randomness = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -112,7 +147,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
         max_degree: usize,
         num_vars: Option<usize>,
         rng: &mut R,
-    ) -> Result<UniversalParams<E>, Error> {
+    ) -> Result<UniversalParams<E, P>, Error> {
         let num_vars = num_vars.ok_or(Error::InvalidNumberOfVariables)?;
         if num_vars < 1 {
             return Err(Error::InvalidNumberOfVariables);
@@ -149,7 +184,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
                         Combinations::new(variable_set.clone(), degree).collect()
                     };
                     // For each multiset in `terms` evaluate the corresponding monomial at the
-                    // trapdoor and generate a `PolyVars` object to index it
+                    // trapdoor and generate a `P::Term` object to index it
                     terms
                         .into_iter()
                         .map(|term| {
@@ -157,7 +192,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
                             let term = (0..num_vars)
                                 .map(|var| (var, term.iter().filter(|e| **e == var).count()))
                                 .collect();
-                            (value, PolyVars::new(term))
+                            (value, P::Term::new(term))
                         })
                         .collect::<Vec<_>>()
                 })
@@ -174,7 +209,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
             &powers_of_beta,
         );
         powers_of_g.push(g);
-        powers_of_beta_terms.push(PolyVars::new(vec![]));
+        powers_of_beta_terms.push(P::Term::new(vec![]));
         end_timer!(g_time);
 
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
@@ -278,7 +313,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
         };
 
         let vk = VerifierKey {
-            g: pp.powers_of_g[&PolyVars::new(vec![])],
+            g: pp.powers_of_g[&P::Term::new(vec![])],
             gamma_g: pp.gamma_g,
             h: pp.h,
             beta_h: pp.beta_h.clone(),
@@ -294,7 +329,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     /// Outputs a commitments to `polynomials`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -302,7 +337,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
             Vec<Self::Randomness>,
         ),
         Self::Error,
-    > {
+    >
+    where
+        P: 'a,
+    {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut commitments = Vec::new();
@@ -310,7 +348,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
         for p in polynomials {
             let label = p.label();
             let hiding_bound = p.hiding_bound();
-            let polynomial: &MultiPolynomial<E::Fr> = p.polynomial().try_into()?;
+            let polynomial: &P = p.polynomial();
             Self::check_degrees_and_bounds(ck.supported_degree, &p)?;
 
             let commit_time = start_timer!(|| {
@@ -324,7 +362,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
             });
             // Get the powers of `G` corresponding to the terms of `polynomial`
             let powers_of_g = polynomial
-                .terms
+                .terms()
                 .iter()
                 .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
                 .collect::<Vec<_>>();
@@ -336,27 +374,28 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
             end_timer!(msm_time);
 
             // Sample random polynomial
-            let mut rand = Randomness::empty();
+            let mut rand = Randomness::<E, P>::empty();
             if let Some(hiding_degree) = hiding_bound {
                 let sample_random_poly_time = start_timer!(|| format!(
                     "Sampling a random polynomial of degree {}",
                     hiding_degree
                 ));
                 rand = Randomness::rand(hiding_degree, false, Some(ck.num_vars), rng);
-                kzg10::KZG10::<E>::check_hiding_bound(hiding_degree, ck.supported_degree + 1)?;
+                Self::check_hiding_bound(hiding_degree, ck.supported_degree + 1)?;
                 end_timer!(sample_random_poly_time);
             }
 
             // Get the powers of `\gamma G` corresponding to the terms of `rand`
             let powers_of_gamma_g = rand
                 .blinding_polynomial
-                .terms
+                .terms()
                 .iter()
                 .map(|(v, _)| {
                     // Implicit Assumption: Each monomial in `rand` is univariate
-                    match v.is_empty() {
+                    let vars = v.vars();
+                    match v.is_constant() {
                         true => ck.gamma_g,
-                        false => ck.powers_of_gamma_g[v[0].0][v[0].1 - 1],
+                        false => ck.powers_of_gamma_g[vars[0]][v.degree() - 1],
                     }
                 })
                 .collect::<Vec<_>>();
@@ -383,9 +422,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     /// Output a proof of evaluation of `labeled_polynomials` at `point`
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &[E::Fr],
+        point: &P::Domain,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
@@ -393,23 +432,24 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
+        P: 'a,
     {
         // Compute random linear combinations of committed polynomials and randomness
-        let mut p = MultiPolynomial::zero();
+        let mut p = P::zero();
         let mut r = Randomness::empty();
         let mut challenge_j = E::Fr::one();
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
             challenge_j *= &opening_challenge;
-            p += (challenge_j, polynomial.polynomial().try_into()?);
+            p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, rand);
         }
 
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
         let witness_time = start_timer!(|| "Computing witness polynomials");
-        let witnesses = p.divide_at_point(&point);
+        let witnesses = p.divide_at_point(point);
         let hiding_witnesses = if r.is_hiding() {
-            Some(r.blinding_polynomial.divide_at_point(&point))
+            Some(r.blinding_polynomial.divide_at_point(point))
         } else {
             None
         };
@@ -420,7 +460,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
             .map(|w| {
                 // Get the powers of `G` corresponding to the witness poly
                 let powers_of_g = w
-                    .terms
+                    .terms()
                     .iter()
                     .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
                     .collect::<Vec<_>>();
@@ -443,13 +483,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
                     let hiding_witness = &hiding_witnesses[i];
                     // Get the powers of `\gamma G` corresponding to the terms of `hiding_witness`
                     let powers_of_gamma_g = hiding_witness
-                        .terms
+                        .terms()
                         .iter()
                         .map(|(v, _)| {
                             // Implicit Assumption: Each monomial in `hiding_witness` is univariate
-                            match v.is_empty() {
+                            let vars = v.vars();
+                            match v.is_constant() {
                                 true => ck.gamma_g,
-                                false => ck.powers_of_gamma_g[v[0].0][v[0].1 - 1],
+                                false => ck.powers_of_gamma_g[vars[0]][v.degree() - 1],
                             }
                         })
                         .collect::<Vec<_>>();
@@ -478,7 +519,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &[E::Fr],
+        point: &P::Domain,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
@@ -519,8 +560,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        values: &Evaluations<E::Fr>,
+        query_set: &QuerySet<P::Domain>,
+        values: &Evaluations<E::Fr, P::Domain>,
         proof: &Self::BatchProof,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -636,16 +677,17 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
+        query_set: &QuerySet<P::Domain>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, P, Self>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
+        P: 'a,
     {
         let label_map = polynomials
             .into_iter()
@@ -661,7 +703,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
 
         for lc in lc_s {
             let lc_label = lc.label().clone();
-            let mut poly = MultiPolynomial::zero();
+            let mut poly = P::zero();
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
             let mut coeffs_and_comms = Vec::new();
@@ -675,11 +717,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
 
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial().try_into()?);
+                poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
                 coeffs_and_comms.push((*coeff, cur_comm.commitment()));
             }
-            let lc_poly = LabeledPolynomial::new(lc_label.clone(), poly.into(), None, hiding_bound);
+            let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, None, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
             lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
@@ -712,9 +754,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinPST13<E> {
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self>,
+        query_set: &QuerySet<P::Domain>,
+        evaluations: &Evaluations<E::Fr, P::Domain>,
+        proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenge: E::Fr,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -783,26 +825,32 @@ mod tests {
     use super::MarlinPST13;
     use algebra::Bls12_377;
     use algebra::Bls12_381;
+    use algebra::PairingEngine;
 
-    type PC<E> = MarlinPST13<E>;
-    type PC_Bls12_381 = PC<Bls12_381>;
-    type PC_Bls12_377 = PC<Bls12_377>;
+    use ff_fft::multivariate::{SparsePolynomial as SparsePoly, SparseTerm};
+
+    type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
+    type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
+
+    type PC<E, P> = MarlinPST13<E, P>;
+    type PC_Bls12_381 = PC<Bls12_381, MVPoly_381>;
+    type PC_Bls12_377 = PC<Bls12_377, MVPoly_377>;
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_poly_test::<_, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
-        single_poly_test::<_, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        single_poly_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        single_poly_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_test::<_, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        full_end_to_end_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        full_end_to_end_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -810,9 +858,9 @@ mod tests {
     fn single_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_equation_test::<_, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        single_equation_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        single_equation_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -820,9 +868,9 @@ mod tests {
     fn two_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        two_equation_test::<_, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        two_equation_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        two_equation_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -830,10 +878,10 @@ mod tests {
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_equation_test::<_, PC_Bls12_377>(num_vars)
+        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(num_vars)
             .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, PC_Bls12_381>(num_vars)
+        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(num_vars)
             .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }

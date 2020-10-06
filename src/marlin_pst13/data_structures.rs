@@ -1,16 +1,24 @@
-use crate::{BTreeMap, MultiPolynomial, PolyVars};
+use crate::{BTreeMap, MVPolynomial};
 use crate::{PCCommitterKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey};
 use algebra_core::{PairingEngine, ToBytes, Zero};
-use core::ops::{Add, AddAssign};
+use core::{
+    marker::PhantomData,
+    ops::{Add, AddAssign, Index},
+};
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct UniversalParams<E: PairingEngine> {
+pub struct UniversalParams<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `max_degree` evaluated at `\beta`
-    pub powers_of_g: BTreeMap<PolyVars, E::G1Affine>,
+    pub powers_of_g: BTreeMap<P::Term, E::G1Affine>,
     /// `\gamma` times the generater of G1
     pub gamma_g: E::G1Affine,
     /// Group elements of the form `{ \beta_i^j \gamma G }`, where `i` ranges
@@ -33,7 +41,12 @@ pub struct UniversalParams<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
+impl<E, P> PCUniversalParams for UniversalParams<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -48,10 +61,15 @@ impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `supported_degree` evaluated at `\beta`
-    pub powers_of_g: BTreeMap<PolyVars, E::G1Affine>,
+    pub powers_of_g: BTreeMap<P::Term, E::G1Affine>,
     /// `\gamma` times the generater of G1
     pub gamma_g: E::G1Affine,
     /// Group elements of the form `{ \beta_i^j \gamma G }`, where `i` ranges
@@ -67,7 +85,12 @@ pub struct CommitterKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
+impl<E, P> PCCommitterKey for CommitterKey<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -126,12 +149,23 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine> {
+pub struct Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     /// A multivariate polynomial where each monomial is univariate with random coefficient
-    pub blinding_polynomial: MultiPolynomial<E::Fr>,
+    pub blinding_polynomial: P,
+    _engine: PhantomData<E>,
 }
 
-impl<E: PairingEngine> Randomness<E> {
+impl<E, P> Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
@@ -146,10 +180,16 @@ impl<E: PairingEngine> Randomness<E> {
     }
 }
 
-impl<E: PairingEngine> PCRandomness for Randomness<E> {
+impl<E, P> PCRandomness for Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     fn empty() -> Self {
         Self {
-            blinding_polynomial: MultiPolynomial::zero(),
+            blinding_polynomial: P::zero(),
+            _engine: PhantomData,
         }
     }
 
@@ -161,12 +201,18 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
     ) -> Self {
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
         Randomness {
-            blinding_polynomial: MultiPolynomial::rand(num_vars.unwrap(), hiding_poly_degree, rng),
+            blinding_polynomial: P::rand(hiding_poly_degree, num_vars, rng),
+            _engine: PhantomData,
         }
     }
 }
 
-impl<'a, E: PairingEngine> Add<&'a Randomness<E>> for Randomness<E> {
+impl<'a, E: PairingEngine, P: MVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     type Output = Self;
 
     #[inline]
@@ -176,26 +222,41 @@ impl<'a, E: PairingEngine> Add<&'a Randomness<E>> for Randomness<E> {
     }
 }
 
-impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, E, P> Add<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
+    fn add(mut self, other: (E::Fr, &'a Randomness<E, P>)) -> Self {
         self += other;
         self
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<&'a Randomness<E>> for Randomness<E> {
+impl<'a, E, P> AddAssign<&'a Randomness<E, P>> for Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, E, P> AddAssign<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
+where
+    E: PairingEngine,
+    P: MVPolynomial<E::Fr>,
+    P::Domain: Index<usize, Output = E::Fr>,
+{
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
+    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E, P>)) {
         self.blinding_polynomial += (f, &other.blinding_polynomial);
     }
 }

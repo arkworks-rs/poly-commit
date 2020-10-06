@@ -1,5 +1,5 @@
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet, UniPolynomial};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
@@ -31,12 +31,13 @@ use digest::Digest;
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct InnerProductArgPC<G: AffineCurve, D: Digest> {
+pub struct InnerProductArgPC<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> {
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
+    _poly: PhantomData<P>,
 }
 
-impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
+impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArgPC<G, D, P> {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
 
@@ -182,7 +183,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
 
     fn check_degrees_and_bounds(
         supported_degree: usize,
-        p: &LabeledPolynomial<G::ScalarField>,
+        p: &LabeledPolynomial<G::ScalarField, P>,
     ) -> Result<(), Error> {
         if p.degree() < 1 {
             return Err(Error::DegreeIsZero);
@@ -207,18 +208,14 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
         Ok(())
     }
 
-    fn shift_polynomial(
-        ck: &CommitterKey<G>,
-        p: &UniPolynomial<G::ScalarField>,
-        degree_bound: usize,
-    ) -> UniPolynomial<G::ScalarField> {
+    fn shift_polynomial(ck: &CommitterKey<G>, p: &P, degree_bound: usize) -> P {
         if p.is_zero() {
-            UniPolynomial::zero()
+            P::zero()
         } else {
             let mut shifted_polynomial_coeffs =
                 vec![G::ScalarField::zero(); ck.supported_degree() - degree_bound];
-            shifted_polynomial_coeffs.extend_from_slice(&p.coeffs);
-            UniPolynomial::from_coefficients_vec(shifted_polynomial_coeffs)
+            shifted_polynomial_coeffs.extend_from_slice(&p.coeffs());
+            P::from_coefficients_vec(shifted_polynomial_coeffs)
         }
     }
 
@@ -304,7 +301,12 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
     }
 }
 
-impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerProductArgPC<G, D> {
+impl<G, D, P> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P>
+where
+    G: AffineCurve,
+    D: Digest,
+    P: UVPolynomial<G::ScalarField, Domain = G::ScalarField>,
+{
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
@@ -375,7 +377,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     /// Outputs a commitment to `polynomial`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -383,7 +385,10 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             Vec<Self::Randomness>,
         ),
         Self::Error,
-    > {
+    >
+    where
+        P: 'a,
+    {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let mut comms = Vec::new();
         let mut rands = Vec::new();
@@ -392,7 +397,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         for labeled_polynomial in polynomials {
             Self::check_degrees_and_bounds(ck.supported_degree(), labeled_polynomial)?;
 
-            let polynomial: &UniPolynomial<_> = labeled_polynomial.polynomial().try_into()?;
+            let polynomial: &P = labeled_polynomial.polynomial();
             let label = labeled_polynomial.label();
             let hiding_bound = labeled_polynomial.hiding_bound();
             let degree_bound = labeled_polynomial.degree_bound();
@@ -413,7 +418,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
             let comm = Self::cm_commit(
                 &ck.comm_key[..(polynomial.degree() + 1)],
-                &polynomial.coeffs,
+                &polynomial.coeffs(),
                 Some(ck.s),
                 Some(randomness.rand),
             )
@@ -422,7 +427,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let shifted_comm = degree_bound.map(|d| {
                 Self::cm_commit(
                     &ck.comm_key[(ck.supported_degree() - d)..],
-                    &polynomial.coeffs,
+                    &polynomial.coeffs(),
                     Some(ck.s),
                     randomness.shifted_rand,
                 )
@@ -444,9 +449,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a [G::ScalarField],
+        point: &'a P::Domain,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -454,8 +459,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     where
         Self::Commitment: 'a,
         Self::Randomness: 'a,
+        P: 'a,
     {
-        let mut combined_polynomial = UniPolynomial::zero();
+        let mut combined_polynomial = P::zero();
         let mut combined_rand = G::ScalarField::zero();
         let mut combined_commitment_proj = G::Projective::zero();
 
@@ -464,8 +470,6 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let polys_iter = labeled_polynomials.into_iter();
         let rands_iter = rands.into_iter();
         let comms_iter = commitments.into_iter();
-
-        let point = point.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?;
 
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
         let mut cur_challenge = opening_challenge;
@@ -476,7 +480,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             assert_eq!(labeled_polynomial.label(), labeled_commitment.label());
             Self::check_degrees_and_bounds(ck.supported_degree(), labeled_polynomial)?;
 
-            let polynomial = labeled_polynomial.polynomial().try_into()?;
+            let polynomial = labeled_polynomial.polynomial();
             let degree_bound = labeled_polynomial.degree_bound();
             let hiding_bound = labeled_polynomial.hiding_bound();
             let commitment = labeled_commitment.commitment();
@@ -527,7 +531,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         end_timer!(combine_time);
 
-        let combined_v = combined_polynomial.evaluate(*point);
+        let combined_v = combined_polynomial.evaluate(point);
 
         // Pad the coefficients to the appropriate vector size
         let d = ck.supported_degree();
@@ -541,14 +545,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-            let mut hiding_polynomial = UniPolynomial::rand(d, &mut rng);
-            hiding_polynomial -=
-                &UniPolynomial::from_coefficients_slice(&[hiding_polynomial.evaluate(*point)]);
+            let mut hiding_polynomial = P::rand(d, None, &mut rng);
+            hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 
             let hiding_rand = G::ScalarField::rand(rng);
             let hiding_commitment_proj = Self::cm_commit(
                 ck.comm_key.as_slice(),
-                hiding_polynomial.coeffs.as_slice(),
+                hiding_polynomial.coeffs(),
                 Some(ck.s),
                 Some(hiding_rand),
             );
@@ -596,7 +599,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
         // Pads the coefficients with zeroes to get the number of coeff to be d+1
-        let mut coeffs = combined_polynomial.coeffs;
+        let mut coeffs = combined_polynomial.coeffs().to_vec();
         if coeffs.len() < d + 1 {
             for _ in coeffs.len()..(d + 1) {
                 coeffs.push(G::ScalarField::zero());
@@ -685,7 +688,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a [G::ScalarField],
+        point: &'a P::Domain,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
         opening_challenge: G::ScalarField,
@@ -711,14 +714,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             ));
         }
 
-        let check_poly = Self::succinct_check(
-            vk,
-            commitments,
-            *point.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?,
-            values,
-            proof,
-            opening_challenge,
-        );
+        let check_poly =
+            Self::succinct_check(vk, commitments, *point, values, proof, opening_challenge);
 
         if check_poly.is_none() {
             return Ok(false);
@@ -742,8 +739,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<G::ScalarField>,
-        values: &Evaluations<G::ScalarField>,
+        query_set: &QuerySet<P::Domain>,
+        values: &Evaluations<G::ScalarField, P::Domain>,
         proof: &Self::BatchProof,
         opening_challenge: G::ScalarField,
         rng: &mut R,
@@ -763,7 +760,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let mut randomizer = G::ScalarField::one();
 
-        let mut combined_check_poly = UniPolynomial::zero();
+        let mut combined_check_poly = P::zero();
         let mut combined_final_key = G::Projective::zero();
 
         for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
@@ -789,7 +786,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let check_poly = Self::succinct_check(
                 vk,
                 comms.into_iter(),
-                *query.get(0).ok_or(Self::Error::EmptyEvaluationPoint)?,
+                *query,
                 vals.into_iter(),
                 p,
                 opening_challenge,
@@ -799,8 +796,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 return Ok(false);
             }
 
-            let check_poly =
-                UniPolynomial::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
+            let check_poly = P::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
             combined_check_poly += (randomizer, &check_poly);
             combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
 
@@ -811,7 +807,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let proof_time = start_timer!(|| "Checking batched proof");
         let final_key = Self::cm_commit(
             vk.comm_key.as_slice(),
-            combined_check_poly.coeffs.as_slice(),
+            combined_check_poly.coeffs(),
             None,
             None,
         );
@@ -827,16 +823,17 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<G::ScalarField>,
+        query_set: &QuerySet<P::Domain>,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<G::ScalarField, Self>, Self::Error>
+    ) -> Result<BatchLCProof<G::ScalarField, P, Self>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
+        P: 'a,
     {
         let label_poly_map = polynomials
             .into_iter()
@@ -852,7 +849,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         for lc in lc_s {
             let lc_label = lc.label().clone();
-            let mut poly = UniPolynomial::zero();
+            let mut poly = P::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
 
@@ -883,7 +880,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial().try_into()?);
+                poly += (*coeff, cur_poly.polynomial());
 
                 combined_rand += &(cur_rand.rand * coeff);
                 combined_shifted_rand = Self::combine_shifted_rand(
@@ -902,7 +899,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             }
 
             let lc_poly =
-                LabeledPolynomial::new(lc_label.clone(), poly.into(), degree_bound, hiding_bound);
+                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(Randomness {
                 rand: combined_rand,
@@ -923,7 +920,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             ck,
             lc_polynomials.iter(),
             lc_commitments.iter(),
-            &query_set,
+            query_set,
             opening_challenge,
             lc_randomness.iter(),
             rng,
@@ -938,8 +935,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
-        evaluations: &Evaluations<G::ScalarField>,
-        proof: &BatchLCProof<G::ScalarField, Self>,
+        evaluations: &Evaluations<G::ScalarField, P::Domain>,
+        proof: &BatchLCProof<G::ScalarField, P, Self>,
         opening_challenge: G::ScalarField,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -1026,77 +1023,82 @@ mod tests {
     use super::InnerProductArgPC;
 
     use algebra::ed_on_bls12_381::EdwardsAffine;
+    use algebra::AffineCurve;
     use blake2::Blake2s;
+    use ff_fft::univariate::DensePolynomial as DensePoly;
 
-    type PC<E, D> = InnerProductArgPC<E, D>;
-    type PC_JJB2S = PC<EdwardsAffine, Blake2s>;
+    type UniPoly = DensePoly<<EdwardsAffine as AffineCurve>::ScalarField>;
+    type PC<E, D, P> = InnerProductArgPC<E, D, P>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly>;
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_test::<_, _, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_JJB2S>()
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, PC_JJB2S>()
+        linear_poly_degree_bound_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, PC_JJB2S>()
+        single_poly_degree_bound_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, PC_JJB2S>()
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, PC_JJB2S>()
+        two_polys_degree_bound_single_query_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        full_end_to_end_test::<_, _, PC_JJB2S>(None)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        single_equation_test::<_, _, PC_JJB2S>(None)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        two_equation_test::<_, _, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, PC_JJB2S>()
+        two_equation_degree_bound_test::<_, _, PC_JJB2S>()
             .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
@@ -1104,7 +1106,7 @@ mod tests {
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, PC_JJB2S>(None)
+        full_end_to_end_equation_test::<_, _, PC_JJB2S>(None)
             .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
@@ -1113,7 +1115,7 @@ mod tests {
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        bad_degree_bound_test::<_, _, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 }
