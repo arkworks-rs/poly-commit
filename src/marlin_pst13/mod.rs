@@ -516,14 +516,14 @@ where
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<'a, R: RngCore>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Domain,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
-        _rng: &mut R,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
