@@ -50,6 +50,14 @@ pub use data_structures::*;
 pub mod error;
 pub use error::*;
 
+/// Univariate and multivariate polynomial commitment schemes
+/// which (optionally) enable hiding commitments by following
+/// the approach outlined in [[CHMMVW20, "Marlin"]][marlin].
+///
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod marlin;
+pub use marlin::*;
+
 /// A random number generator that bypasses some limitations of the Rust borrow
 /// checker.
 pub mod optional_rng;
@@ -70,7 +78,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod marlin_pc;
+pub use marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
 /// modified to obtain batching and to enforce strict
@@ -97,7 +105,7 @@ pub mod ipa_pc;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub mod marlin_pst13;
+pub use marlin_pst13_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`

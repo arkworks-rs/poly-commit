@@ -1,11 +1,10 @@
-use crate::{kzg10, PCCommitterKey};
-use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
+use crate::{kzg10, marlin::Marlin, PCCommitterKey};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
-
-use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
-use core::{convert::TryInto, marker::PhantomData, ops::Div};
+use crate::{ToString, Vec};
+use algebra_core::{AffineCurve, Field, PairingEngine, ProjectiveCurve, Zero};
+use core::{marker::PhantomData, ops::Div};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -46,107 +45,6 @@ pub(crate) fn shift_polynomial<E: PairingEngine, P: UVPolynomial<E::Fr>>(
             vec![E::Fr::zero(); largest_enforced_degree_bound - degree_bound];
         shifted_polynomial_coeffs.extend_from_slice(&p.coeffs());
         P::from_coefficients_vec(shifted_polynomial_coeffs)
-    }
-}
-
-impl<E: PairingEngine, P: UVPolynomial<E::Fr>> MarlinKZG10<E, P> {
-    /// MSM for `commitments` and `coeffs`
-    fn combine_commitments<'a>(
-        coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a Commitment<E>)>,
-    ) -> (E::G1Projective, Option<E::G1Projective>) {
-        let mut combined_comm = E::G1Projective::zero();
-        let mut combined_shifted_comm = None;
-        for (coeff, comm) in coeffs_and_comms {
-            if coeff.is_one() {
-                combined_comm.add_assign_mixed(&comm.comm.0);
-            } else {
-                combined_comm += &comm.comm.0.mul(coeff);
-            }
-
-            if let Some(shifted_comm) = &comm.shifted_comm {
-                let cur = shifted_comm.0.mul(coeff);
-                combined_shifted_comm = Some(combined_shifted_comm.map_or(cur, |c| c + cur));
-            }
-        }
-        (combined_comm, combined_shifted_comm)
-    }
-
-    fn normalize_commitments<'a>(
-        commitments: Vec<(E::G1Projective, Option<E::G1Projective>)>,
-    ) -> Vec<Commitment<E>> {
-        let mut comms = Vec::with_capacity(commitments.len());
-        let mut s_comms = Vec::with_capacity(commitments.len());
-        let mut s_flags = Vec::with_capacity(commitments.len());
-        for (comm, s_comm) in commitments {
-            comms.push(comm);
-            if let Some(c) = s_comm {
-                s_comms.push(c);
-                s_flags.push(true);
-            } else {
-                s_comms.push(E::G1Projective::zero());
-                s_flags.push(false);
-            }
-        }
-        let comms = E::G1Projective::batch_normalization_into_affine(&comms);
-        let s_comms = E::G1Projective::batch_normalization_into_affine(&mut s_comms);
-        comms
-            .into_iter()
-            .zip(s_comms)
-            .zip(s_flags)
-            .map(|((c, s_c), flag)| {
-                let shifted_comm = if flag {
-                    Some(kzg10::Commitment(s_c))
-                } else {
-                    None
-                };
-                Commitment {
-                    comm: kzg10::Commitment(c),
-                    shifted_comm,
-                }
-            })
-            .collect()
-    }
-
-    /// Accumulate `commitments` and `values` according to `opening_challenge`.
-    fn accumulate_commitments_and_values<'a>(
-        vk: &VerifierKey<E>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
-        values: impl IntoIterator<Item = E::Fr>,
-        opening_challenge: E::Fr,
-    ) -> Result<(E::G1Projective, E::Fr), Error> {
-        let acc_time = start_timer!(|| "Accumulating commitments and values");
-        let mut combined_comm = E::G1Projective::zero();
-        let mut combined_value = E::Fr::zero();
-        let mut challenge_i = E::Fr::one();
-        for (labeled_commitment, value) in commitments.into_iter().zip(values) {
-            let degree_bound = labeled_commitment.degree_bound();
-            let commitment = labeled_commitment.commitment();
-            assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
-
-            combined_comm += &commitment.comm.0.mul(challenge_i);
-            combined_value += &(value * &challenge_i);
-
-            if let Some(degree_bound) = degree_bound {
-                let challenge_i_1 = challenge_i * &opening_challenge;
-                let shifted_comm = commitment
-                    .shifted_comm
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .into_projective();
-
-                let shift_power = vk
-                    .get_shift_power(degree_bound)
-                    .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
-                let mut adjusted_comm = shifted_comm - &shift_power.mul(value);
-                adjusted_comm *= challenge_i_1;
-                combined_comm += &adjusted_comm;
-            }
-            challenge_i *= &opening_challenge.square();
-        }
-
-        end_timer!(acc_time);
-        Ok((combined_comm, combined_value))
     }
 }
 
@@ -357,8 +255,10 @@ where
         let mut shifted_r_witness = P::zero();
 
         let mut enforce_degree_bound = false;
-        for (j, (polynomial, rand)) in labeled_polynomials.into_iter().zip(rands).enumerate() {
+        let mut challenge_j = opening_challenge;
+        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             let degree_bound = polynomial.degree_bound();
+            assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
             let enforced_degree_bounds: Option<&[usize]> = ck
                 .enforced_degree_bounds
@@ -370,11 +270,6 @@ where
                 enforced_degree_bounds,
                 &polynomial,
             )?;
-
-            // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenge.pow([2 * j as u64]);
-
-            assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
             p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, &rand.rand);
@@ -396,6 +291,9 @@ where
                 if let Some(shifted_rand_witness) = shifted_rand_witness {
                     shifted_r_witness += (challenge_j_1, &shifted_rand_witness);
                 }
+                challenge_j *= &opening_challenge.square();
+            } else {
+                challenge_j *= &opening_challenge;
             }
         }
         let proof_time = start_timer!(|| "Creating proof for unshifted polynomials");
@@ -442,8 +340,12 @@ where
         Self::Commitment: 'a,
     {
         let check_time = start_timer!(|| "Checking evaluations");
-        let (combined_comm, combined_value) =
-            Self::accumulate_commitments_and_values(vk, commitments, values, opening_challenge)?;
+        let (combined_comm, combined_value) = Marlin::accumulate_commitments_and_values(
+            commitments,
+            values,
+            opening_challenge,
+            Some(vk),
+        )?;
         let combined_comm = kzg10::Commitment(combined_comm.into());
         let result = kzg10::KZG10::check(&vk.vk, &combined_comm, *point, combined_value, proof)?;
         end_timer!(check_time);
@@ -462,60 +364,14 @@ where
     where
         Self::Commitment: 'a,
     {
-        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
-        let mut query_to_labels_map = BTreeMap::new();
-
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
-        }
-        assert_eq!(proof.len(), query_to_labels_map.len());
-
-        let mut combined_comms = Vec::new();
-        let mut combined_queries = Vec::new();
-        let mut combined_evals = Vec::new();
-        for (query, labels) in query_to_labels_map.into_iter() {
-            let lc_time =
-                start_timer!(|| format!("Randomly combining {} commitments", labels.len()));
-            let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
-            let mut values_to_combine = Vec::new();
-            for label in labels.into_iter() {
-                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
-                    label: label.to_string(),
-                })?;
-                let degree_bound = commitment.degree_bound();
-                assert_eq!(
-                    degree_bound.is_some(),
-                    commitment.commitment().shifted_comm.is_some()
-                );
-
-                let v_i = values.get(&(label.clone(), query.clone())).ok_or(
-                    Error::MissingEvaluation {
-                        label: label.to_string(),
-                    },
-                )?;
-
-                comms_to_combine.push(commitment);
-                values_to_combine.push(*v_i);
-            }
-            let (c, v) = Self::accumulate_commitments_and_values(
-                vk,
-                comms_to_combine,
-                values_to_combine,
-                opening_challenge,
-            )?;
-            end_timer!(lc_time);
-            combined_comms.push(c);
-            combined_queries.push(*query);
-            combined_evals.push(v);
-        }
-        let norm_time = start_timer!(|| "Normalizaing combined commitments");
-        E::G1Projective::batch_normalization(&mut combined_comms);
-        let combined_comms = combined_comms
-            .into_iter()
-            .map(|c| kzg10::Commitment(c.into()))
-            .collect::<Vec<_>>();
-        end_timer!(norm_time);
+        let (combined_comms, combined_queries, combined_evals) = Marlin::combine_and_normalize(
+            commitments,
+            query_set,
+            values,
+            opening_challenge,
+            Some(vk),
+        )?;
+        assert_eq!(proof.len(), combined_queries.len());
         let proof_time = start_timer!(|| "Checking KZG10::Proof");
         let result = kzg10::KZG10::batch_check(
             &vk.vk,
@@ -544,85 +400,16 @@ where
         Self::Commitment: 'a,
         P: 'a,
     {
-        let label_map = polynomials
-            .into_iter()
-            .zip(rands)
-            .zip(commitments)
-            .map(|((p, r), c)| (p.label(), (p, r, c)))
-            .collect::<BTreeMap<_, _>>();
-
-        let mut lc_polynomials = Vec::new();
-        let mut lc_randomness = Vec::new();
-        let mut lc_commitments = Vec::new();
-        let mut lc_info = Vec::new();
-
-        for lc in lc_s {
-            let lc_label = lc.label().clone();
-            let mut poly = P::zero();
-            let mut degree_bound = None;
-            let mut hiding_bound = None;
-
-            let mut randomness = Self::Randomness::empty();
-            assert!(randomness.shifted_rand.is_none());
-
-            let mut coeffs_and_comms = Vec::new();
-
-            let num_polys = lc.len();
-            for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
-                let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand, cur_comm) =
-                    label_map.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                if num_polys == 1 && cur_poly.degree_bound().is_some() {
-                    assert!(
-                        coeff.is_one(),
-                        "Coefficient must be one for degree-bounded equations"
-                    );
-                    degree_bound = cur_poly.degree_bound();
-                } else if cur_poly.degree_bound().is_some() {
-                    eprintln!("Degree bound when number of equations is non-zero");
-                    return Err(Self::Error::EquationHasDegreeBounds(lc_label));
-                }
-
-                // Some(_) > None, always.
-                hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial());
-                randomness += (*coeff, cur_rand);
-                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
-
-                if degree_bound.is_none() {
-                    assert!(randomness.shifted_rand.is_none());
-                }
-            }
-
-            let lc_poly =
-                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
-            lc_polynomials.push(lc_poly);
-            lc_randomness.push(randomness);
-            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
-            lc_info.push((lc_label, degree_bound));
-        }
-
-        let comms = Self::normalize_commitments(lc_commitments);
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
-
-        let proof = Self::batch_open(
+        Marlin::open_combinations(
             ck,
-            lc_polynomials.iter(),
-            lc_commitments.iter(),
-            &query_set,
+            lc_s,
+            polynomials,
+            commitments,
+            query_set,
             opening_challenge,
-            lc_randomness.iter(),
+            rands,
             rng,
-        )?;
-
-        Ok(BatchLCProof { proof, evals: None })
+        )
     }
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
@@ -640,74 +427,84 @@ where
     where
         Self::Commitment: 'a,
     {
-        let BatchLCProof { proof, .. } = proof;
-        let label_comm_map = commitments
-            .into_iter()
-            .map(|c| (c.label(), c))
-            .collect::<BTreeMap<_, _>>();
-
-        let mut lc_commitments = Vec::new();
-        let mut lc_info = Vec::new();
-        let mut evaluations = evaluations.clone();
-
-        let lc_processing_time = start_timer!(|| "Combining commitments");
-        for lc in lc_s {
-            let lc_label = lc.label().clone();
-            let num_polys = lc.len();
-
-            let mut degree_bound = None;
-            let mut coeffs_and_comms = Vec::new();
-
-            for (coeff, label) in lc.iter() {
-                if label.is_one() {
-                    for (&(ref label, _), ref mut eval) in evaluations.iter_mut() {
-                        if label == &lc_label {
-                            **eval -= coeff;
-                        }
-                    }
-                } else {
-                    let label: &String = label.try_into().unwrap();
-                    let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                    if num_polys == 1 && cur_comm.degree_bound().is_some() {
-                        assert!(
-                            coeff.is_one(),
-                            "Coefficient must be one for degree-bounded equations"
-                        );
-                        degree_bound = cur_comm.degree_bound();
-                    } else if cur_comm.degree_bound().is_some() {
-                        return Err(Self::Error::EquationHasDegreeBounds(lc_label));
-                    }
-                    coeffs_and_comms.push((*coeff, cur_comm.commitment()));
-                }
-            }
-            let lc_time =
-                start_timer!(|| format!("Combining {} commitments for {}", num_polys, lc_label));
-            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
-            end_timer!(lc_time);
-            lc_info.push((lc_label, degree_bound));
-        }
-        end_timer!(lc_processing_time);
-        let combined_comms_norm_time = start_timer!(|| "Normalizing commitments");
-        let comms = Self::normalize_commitments(lc_commitments);
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
-        end_timer!(combined_comms_norm_time);
-
-        Self::batch_check(
+        Marlin::check_combinations(
             vk,
-            &lc_commitments,
-            &query_set,
-            &evaluations,
+            lc_s,
+            commitments,
+            query_set,
+            evaluations,
             proof,
             opening_challenge,
             rng,
         )
+        //let BatchLCProof { proof, .. } = proof;
+        //let label_comm_map = commitments
+        //    .into_iter()
+        //    .map(|c| (c.label(), c))
+        //    .collect::<BTreeMap<_, _>>();
+
+        //let mut lc_commitments = Vec::new();
+        //let mut lc_info = Vec::new();
+        //let mut evaluations = evaluations.clone();
+
+        //let lc_processing_time = start_timer!(|| "Combining commitments");
+        //for lc in lc_s {
+        //    let lc_label = lc.label().clone();
+        //    let num_polys = lc.len();
+
+        //    let mut degree_bound = None;
+        //    let mut coeffs_and_comms = Vec::new();
+
+        //    for (coeff, label) in lc.iter() {
+        //        if label.is_one() {
+        //            for (&(ref label, _), ref mut eval) in evaluations.iter_mut() {
+        //                if label == &lc_label {
+        //                    **eval -= coeff;
+        //                }
+        //            }
+        //        } else {
+        //            let label: &String = label.try_into().unwrap();
+        //            let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
+        //                label: label.to_string(),
+        //            })?;
+
+        //            if num_polys == 1 && cur_comm.degree_bound().is_some() {
+        //                assert!(
+        //                    coeff.is_one(),
+        //                    "Coefficient must be one for degree-bounded equations"
+        //                );
+        //                degree_bound = cur_comm.degree_bound();
+        //            } else if cur_comm.degree_bound().is_some() {
+        //                return Err(Self::Error::EquationHasDegreeBounds(lc_label));
+        //            }
+        //            coeffs_and_comms.push((*coeff, cur_comm.commitment()));
+        //        }
+        //    }
+        //    let lc_time =
+        //        start_timer!(|| format!("Combining {} commitments for {}", num_polys, lc_label));
+        //    lc_commitments.push(Marlin::combine_commitments(coeffs_and_comms));
+        //    end_timer!(lc_time);
+        //    lc_info.push((lc_label, degree_bound));
+        //}
+        //end_timer!(lc_processing_time);
+        //let combined_comms_norm_time = start_timer!(|| "Normalizing commitments");
+        //let comms = Marlin::normalize_commitments(lc_commitments);
+        //let lc_commitments = lc_info
+        //    .into_iter()
+        //    .zip(comms)
+        //    .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
+        //    .collect::<Vec<_>>();
+        //end_timer!(combined_comms_norm_time);
+
+        //Self::batch_check(
+        //    vk,
+        //    &lc_commitments,
+        //    &query_set,
+        //    &evaluations,
+        //    proof,
+        //    opening_challenge,
+        //    rng,
+        //)
     }
 }
 

@@ -1,14 +1,15 @@
 use crate::kzg10;
-use crate::{BTreeMap, BTreeSet, MVPolynomial, String, Term, ToString, Vec};
+use crate::marlin::{marlin_pc, Marlin};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
+use crate::{MVPolynomial, Term, ToString, Vec};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
 use algebra_core::{
     AffineCurve, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
 use combinations::Combinations;
-use core::{convert::TryInto, marker::PhantomData, ops::Index};
+use core::{marker::PhantomData, ops::Index};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -27,7 +28,6 @@ pub struct MarlinPST13<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
 {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
@@ -37,48 +37,7 @@ impl<E, P> MarlinPST13<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
 {
-    /// MSM for `commitments` and `coeffs`
-    fn combine_commitments<'a>(
-        coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a kzg10::Commitment<E>)>,
-    ) -> E::G1Projective {
-        let mut combined_comm = E::G1Projective::zero();
-        for (coeff, comm) in coeffs_and_comms {
-            if coeff.is_one() {
-                combined_comm.add_assign_mixed(&comm.0);
-            } else {
-                combined_comm += &comm.0.mul(coeff);
-            }
-        }
-        combined_comm
-    }
-
-    fn normalize_commitments<'a>(commitments: Vec<E::G1Projective>) -> Vec<kzg10::Commitment<E>> {
-        let norm_comms = E::G1Projective::batch_normalization_into_affine(&commitments);
-        norm_comms.into_iter().map(kzg10::Commitment).collect()
-    }
-
-    /// Accumulate `commitments` and `values` according to `opening_challenge`.
-    fn accumulate_commitments_and_values<'a>(
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<kzg10::Commitment<E>>>,
-        values: impl IntoIterator<Item = E::Fr>,
-        opening_challenge: E::Fr,
-    ) -> Result<(E::G1Projective, E::Fr), Error> {
-        let acc_time = start_timer!(|| "Accumulating commitments and values");
-        let mut combined_comm = E::G1Projective::zero();
-        let mut combined_value = E::Fr::zero();
-        let mut challenge_i = E::Fr::one();
-        for (labeled_commitment, value) in commitments.into_iter().zip(values) {
-            let commitment = labeled_commitment.commitment();
-            challenge_i *= &opening_challenge;
-            combined_comm += &commitment.0.mul(challenge_i);
-            combined_value += &(value * &challenge_i);
-        }
-        end_timer!(acc_time);
-        Ok((combined_comm, combined_value))
-    }
-
     /// Check that the powers support the hiding bound
     fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Error> {
         if hiding_poly_degree == 0 {
@@ -135,7 +94,7 @@ where
     type UniversalParams = UniversalParams<E, P>;
     type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
-    type Commitment = kzg10::Commitment<E>;
+    type Commitment = marlin_pc::Commitment<E>;
     type Randomness = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
@@ -409,7 +368,11 @@ where
             // Mask commitment with random poly
             commitment.add_assign_mixed(&random_commitment);
 
-            let comm = kzg10::Commitment(commitment.into());
+            let comm = Self::Commitment {
+                comm: kzg10::Commitment(commitment.into()),
+                shifted_comm: None,
+            };
+
             commitments.push(LabeledCommitment::new(label.to_string(), comm, None));
             randomness.push(rand);
             end_timer!(commit_time);
@@ -530,8 +493,12 @@ where
         // TODO: More comments to benchmark individual speeds here
         let check_time = start_timer!(|| "Checking evaluations");
         // Accumulate commitments and values
-        let (combined_comm, combined_value) =
-            Self::accumulate_commitments_and_values(commitments, values, opening_challenge)?;
+        let (combined_comm, combined_value) = Marlin::accumulate_commitments_and_values(
+            commitments,
+            values,
+            opening_challenge,
+            None,
+        )?;
         // Compute both sides of the pairing equation
         let mut inner = combined_comm.into().into_projective() - &vk.g.mul(combined_value);
         if let Some(random_v) = proof.random_v {
@@ -568,63 +535,14 @@ where
     where
         Self::Commitment: 'a,
     {
-        let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
-        let mut query_to_labels_map = BTreeMap::new();
-
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
-        }
-        assert_eq!(proof.len(), query_to_labels_map.len());
-
-        let mut combined_comms = Vec::new();
-        let mut combined_queries = Vec::new();
-        let mut combined_evals = Vec::new();
-        for (query, labels) in query_to_labels_map.into_iter() {
-            let lc_time =
-                start_timer!(|| format!("Randomly combining {} commitments", labels.len()));
-            let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
-            let mut values_to_combine = Vec::new();
-            for label in labels.into_iter() {
-                let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
-                    label: label.to_string(),
-                })?;
-
-                let v_i = values.get(&(label.clone(), query.clone())).ok_or(
-                    Error::MissingEvaluation {
-                        label: label.to_string(),
-                    },
-                )?;
-
-                comms_to_combine.push(commitment);
-                values_to_combine.push(*v_i);
-            }
-            let (c, v) = Self::accumulate_commitments_and_values(
-                comms_to_combine,
-                values_to_combine,
-                opening_challenge,
-            )?;
-            end_timer!(lc_time);
-            combined_comms.push(c);
-            combined_queries.push(query);
-            combined_evals.push(v);
-        }
-        let norm_time = start_timer!(|| "Normalizaing combined commitments");
-        E::G1Projective::batch_normalization(&mut combined_comms);
-        let combined_comms = combined_comms
-            .into_iter()
-            .map(|c| kzg10::Commitment::<E>(c.into()))
-            .collect::<Vec<_>>();
-        end_timer!(norm_time);
-
+        let (combined_comms, combined_queries, combined_evals) =
+            Marlin::combine_and_normalize(commitments, query_set, values, opening_challenge, None)?;
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
-
         let mut total_c = <E::G1Projective>::zero();
         let mut total_w = vec![<E::G1Projective>::zero(); vk.num_vars];
-
         let combination_time = start_timer!(|| "Combining commitments and proofs");
         let mut randomizer = E::Fr::one();
         // Instead of multiplying g and gamma_g in each turn, we simply accumulate
@@ -659,12 +577,13 @@ where
         total_c -= &gamma_g.mul(gamma_g_multiplier);
         end_timer!(combination_time);
 
-        // Converting results for pairing
+        let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
         let mut pairings = Vec::new();
         total_w.into_iter().enumerate().for_each(|(j, w_j)| {
             pairings.push(((-w_j).into_affine().into(), vk.prepared_beta_h[j].clone()))
         });
         pairings.push((total_c.into_affine().into(), vk.prepared_h.clone()));
+        end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
         let result = E::product_of_pairings(&pairings).is_one();
@@ -688,63 +607,16 @@ where
         Self::Commitment: 'a,
         P: 'a,
     {
-        let label_map = polynomials
-            .into_iter()
-            .zip(rands)
-            .zip(commitments)
-            .map(|((p, r), c)| (p.label(), (p, r, c)))
-            .collect::<BTreeMap<_, _>>();
-
-        let mut lc_polynomials = Vec::new();
-        let mut lc_randomness = Vec::new();
-        let mut lc_commitments = Vec::new();
-        let mut lc_info = Vec::new();
-
-        for lc in lc_s {
-            let lc_label = lc.label().clone();
-            let mut poly = P::zero();
-            let mut hiding_bound = None;
-            let mut randomness = Self::Randomness::empty();
-            let mut coeffs_and_comms = Vec::new();
-
-            for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
-                let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand, cur_comm) =
-                    label_map.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                // Some(_) > None, always.
-                hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (*coeff, cur_poly.polynomial());
-                randomness += (*coeff, cur_rand);
-                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
-            }
-            let lc_poly = LabeledPolynomial::new_owned(lc_label.clone(), poly, None, hiding_bound);
-            lc_polynomials.push(lc_poly);
-            lc_randomness.push(randomness);
-            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
-            lc_info.push((lc_label, None));
-        }
-
-        let comms = Self::normalize_commitments(lc_commitments);
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
-
-        let proof = Self::batch_open(
+        Marlin::open_combinations(
             ck,
-            lc_polynomials.iter(),
-            lc_commitments.iter(),
-            &query_set,
+            lc_s,
+            polynomials,
+            commitments,
+            query_set,
             opening_challenge,
-            lc_randomness.iter(),
+            rands,
             rng,
-        )?;
-
-        Ok(BatchLCProof { proof, evals: None })
+        )
     }
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
@@ -762,55 +634,12 @@ where
     where
         Self::Commitment: 'a,
     {
-        let BatchLCProof { proof, .. } = proof;
-        let label_comm_map = commitments
-            .into_iter()
-            .map(|c| (c.label(), c))
-            .collect::<BTreeMap<_, _>>();
-
-        let mut lc_commitments = Vec::new();
-        let mut lc_info = Vec::new();
-        let mut evaluations = evaluations.clone();
-
-        let lc_processing_time = start_timer!(|| "Combining commitments");
-        for lc in lc_s {
-            let lc_label = lc.label().clone();
-            let mut coeffs_and_comms = Vec::new();
-            for (coeff, label) in lc.iter() {
-                if label.is_one() {
-                    for (&(ref label, _), ref mut eval) in evaluations.iter_mut() {
-                        if label == &lc_label {
-                            **eval -= coeff;
-                        }
-                    }
-                } else {
-                    let label: &String = label.try_into().unwrap();
-                    let &cur_comm = label_comm_map.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-                    coeffs_and_comms.push((*coeff, cur_comm.commitment()));
-                }
-            }
-            let lc_time = start_timer!(|| format!("Combining commitments for {}", lc_label));
-            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
-            end_timer!(lc_time);
-            lc_info.push((lc_label, None));
-        }
-        end_timer!(lc_processing_time);
-        let combined_comms_norm_time = start_timer!(|| "Normalizing commitments");
-        let comms = Self::normalize_commitments(lc_commitments);
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
-        end_timer!(combined_comms_norm_time);
-
-        Self::batch_check(
+        Marlin::check_combinations(
             vk,
-            &lc_commitments,
-            &query_set,
-            &evaluations,
+            lc_s,
+            commitments,
+            query_set,
+            evaluations,
             proof,
             opening_challenge,
             rng,
