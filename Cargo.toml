@@ -21,12 +21,9 @@ bench-utils = { git = "https://github.com/arkworks-rs/utils" }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
 ark-poly = { git = "https://github.com/arkworks-rs/algebra" }
-ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 
-ark-snark = { git = "https://github.com/arkworks-rs/snark" }
 ark-relations = { git = "https://github.com/arkworks-rs/snark" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", branch = "update-to-ark" }
-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
 
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
