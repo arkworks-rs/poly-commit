@@ -207,7 +207,6 @@ impl core::fmt::Display for Error {
             Error::NoneError => write!(f, "{}", "NoneError"),
         }
     }
-    
 }
 
-impl algebra_core::Error for Error {}
+impl ark_std::error::Error for Error {}

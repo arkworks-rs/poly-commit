@@ -1,7 +1,8 @@
 extern crate std;
 
 use crate::*;
-use algebra_core::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve, ToBytes, Zero};
+use ark_ff::{PrimeField, ToBytes, ToConstraintField, Zero   };
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use std::borrow::Cow;
 use std::ops::{Add, AddAssign};
 
@@ -76,6 +77,26 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        // TODO: gamma_g is omitted because our constraint system does not use. This is a little bit problematic
+        // The order should accommodate the one in the constraints.rs, which takes g, h, and beta_h.
+        let mut res = Vec::new();
+
+        res.append(&mut self.g.to_field_elements()?);
+        res.append(&mut self.h.to_field_elements()?);
+        res.append(&mut self.beta_h.to_field_elements()?);
+
+        Some(res)
+    }
+}
+
 /// `PreparedVerifierKey` is the fully prepared version for checking evaluation proofs for a given commitment.
 /// We omit gamma here for simplicity.
 #[derive(Derivative)]
@@ -127,8 +148,19 @@ pub struct Commitment<E: PairingEngine>(
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        self.0.to_field_elements()
     }
 }
 
@@ -143,7 +175,7 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
     }
 }
 
@@ -176,7 +208,10 @@ impl<E: PairingEngine> PreparedCommitment<E> {
     pub fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
         let mut cur = E::G1Projective::from(comm.0.clone());
-        for _ in 0..128 {
+
+        let supported_bits = E::Fr::size_in_bits();
+
+        for _ in 0..supported_bits {
             prepared_comm.push(cur.clone().into());
             cur.double_in_place();
         }
@@ -286,17 +321,17 @@ pub struct Proof<E: PairingEngine> {
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
-            algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+            ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
         } else {
             0
         };
-        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
+        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
     }
 }
 
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.w.write(&mut writer)?;
         self.random_v
             .as_ref()

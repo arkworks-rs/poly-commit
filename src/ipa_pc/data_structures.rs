@@ -1,6 +1,7 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::{AffineCurve, Field, ToBytes, UniformRand, Zero};
+use ark_ff::{Field, ToBytes, UniformRand, Zero};
+use ark_ec::AffineCurve;
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
@@ -46,6 +47,31 @@ pub struct CommitterKey<G: AffineCurve> {
     /// The maximum degree supported by the parameters
     /// this key was derived from.
     pub max_degree: usize,
+}
+
+impl<G: AffineCurve> ToConstraintField<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>
+    for CommitterKey<G>
+where
+    G: ToConstraintField<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+
+        for elem in self.comm_key.iter() {
+            res.append(&mut elem.to_field_elements()?);
+        }
+
+        res.append(&mut self.h.to_field_elements()?);
+        res.append(&mut self.s.to_field_elements()?);
+
+        let max_degree_elem: <<G as AffineCurve>::BaseField as Field>::BasePrimeField =
+            (self.max_degree as u64).into();
+        res.push(max_degree_elem);
+
+        Some(res)
+    }
 }
 
 impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
@@ -115,13 +141,33 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![G::zero()].unwrap().len() / 2
+        ark_ff::to_bytes![G::zero()].unwrap().len() / 2
+    }
+}
+
+impl<G: AffineCurve> ToConstraintField<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>
+    for Commitment<G>
+where
+    G: ToConstraintField<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<<G as AffineCurve>::BaseField as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+
+        res.append(&mut self.comm.to_field_elements()?);
+
+        if self.shifted_comm.is_some() {
+            res.append(&mut self.shifted_comm.unwrap().to_field_elements()?);
+        }
+
+        Some(res)
     }
 }
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -212,13 +258,13 @@ pub struct Proof<G: AffineCurve> {
 
 impl<G: AffineCurve> PCProof for Proof<G> {
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![self].unwrap().len()
+        ark_ff::to_bytes![self].unwrap().len()
     }
 }
 
 impl<G: AffineCurve> ToBytes for Proof<G> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.l_vec.write(&mut writer)?;
         self.r_vec.write(&mut writer)?;
         self.final_comm_key.write(&mut writer)?;

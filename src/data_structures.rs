@@ -1,8 +1,8 @@
-use crate::{Cow, String, Vec};
-use algebra_core::Field;
+use crate::{Rc, String, Vec};
+use ark_ff::{Field, ToConstraintField};
 use core::borrow::Borrow;
 use core::ops::{AddAssign, MulAssign, SubAssign};
-pub use ff_fft::DensePolynomial as Polynomial;
+pub use ark_poly::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -41,12 +41,12 @@ pub trait PCVerifierKey: Clone + core::fmt::Debug {
 /// commitment scheme.
 pub trait PCPreparedVerifierKey<UNPREPARED: PCVerifierKey> {
     /// prepare
-    fn prepare(vk: &UNPREPARED) -> Self;
+fn prepare(vk: &UNPREPARED) -> Self;
 }
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + algebra_core::ToBytes {
+pub trait PCCommitment: Clone + ark_ff::ToBytes {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -79,7 +79,7 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + algebra_core::ToBytes {
+pub trait PCProof: Clone + ark_ff::ToBytes {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
 }
@@ -88,14 +88,14 @@ pub trait PCProof: Clone + algebra_core::ToBytes {
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
 #[derive(Debug, Clone)]
-pub struct LabeledPolynomial<'a, F: Field> {
+pub struct LabeledPolynomial<F: Field> {
     label: PolynomialLabel,
-    polynomial: Cow<'a, Polynomial<F>>,
+    polynomial: Rc<Polynomial<F>>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
 }
 
-impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<'a, F> {
+impl<F: Field> core::ops::Deref for LabeledPolynomial<F> {
     type Target = Polynomial<F>;
 
     fn deref(&self) -> &Self::Target {
@@ -103,9 +103,9 @@ impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<'a, F> {
     }
 }
 
-impl<'a, F: Field> LabeledPolynomial<'a, F> {
-    /// Construct a new labeled polynomial by consuming `polynomial`.
-    pub fn new_owned(
+impl<F: Field> LabeledPolynomial<F> {
+    /// Construct a new labeled polynomial.
+    pub fn new(
         label: PolynomialLabel,
         polynomial: Polynomial<F>,
         degree_bound: Option<usize>,
@@ -113,24 +113,9 @@ impl<'a, F: Field> LabeledPolynomial<'a, F> {
     ) -> Self {
         Self {
             label,
-            polynomial: Cow::Owned(polynomial),
+            polynomial: Rc::new(polynomial),
             degree_bound,
 
-            hiding_bound,
-        }
-    }
-
-    /// Construct a new labeled polynomial.
-    pub fn new(
-        label: PolynomialLabel,
-        polynomial: &'a Polynomial<F>,
-        degree_bound: Option<usize>,
-        hiding_bound: Option<usize>,
-    ) -> Self {
-        Self {
-            label,
-            polynomial: Cow::Borrowed(polynomial),
-            degree_bound,
             hiding_bound,
         }
     }
@@ -200,9 +185,17 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 }
 
-impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
+impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
+    for LabeledCommitment<C>
+{
+    fn to_field_elements(&self) -> Option<Vec<F>> {
+        self.commitment.to_field_elements()
+    }
+}
+
+impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.commitment.write(writer)
     }
 }

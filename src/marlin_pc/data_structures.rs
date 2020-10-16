@@ -1,12 +1,14 @@
 use crate::{
-    PCPreparedCommitment, PCPreparedVerifierKey,
-    PCCommitment, PCCommitterKey, PCRandomness, PCVerifierKey, Vec
+    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
+    PCVerifierKey, Vec,
 };
-use algebra_core::{PrimeField, PairingEngine, ToBytes, ProjectiveCurve};
+use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
+use ark_ec::{PairingEngine, ProjectiveCurve};
 use core::ops::{Add, AddAssign};
 use rand_core::RngCore;
 
 use crate::kzg10;
+
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 
@@ -54,18 +56,15 @@ impl<E: PairingEngine> CommitterKey<E> {
         degree_bound: impl Into<Option<usize>>,
     ) -> Option<kzg10::Powers<'a, E>> {
         self.shifted_powers.as_ref().map(|shifted_powers| {
+            let mut sorted_degree_bounds = Vec::new();
+            for enforced_degree_bound in self.enforced_degree_bounds.as_ref().unwrap().iter() {
+                sorted_degree_bounds.push(enforced_degree_bound.clone());
+            }
+            sorted_degree_bounds.sort();
+
             let powers_range = if let Some(degree_bound) = degree_bound.into() {
-                assert!(self
-                    .enforced_degree_bounds
-                    .as_ref()
-                    .unwrap()
-                    .contains(&degree_bound));
-                let max_bound = self
-                    .enforced_degree_bounds
-                    .as_ref()
-                    .unwrap()
-                    .last()
-                    .unwrap();
+                assert!(sorted_degree_bounds.contains(&degree_bound));
+                let max_bound = sorted_degree_bounds.last().unwrap();
                 (max_bound - degree_bound)..
             } else {
                 0..
@@ -97,7 +96,6 @@ pub struct VerifierKey<E: PairingEngine> {
     pub vk: kzg10::VerifierKey<E>,
     /// Information required to enforce degree bounds. Each pair
     /// is of the form `(degree_bound, shifting_advice)`.
-    /// The vector is sorted in ascending order of `degree_bound`.
     /// This is `None` if `self` does not support enforcing any degree bounds.
     pub degree_bounds_and_shift_powers: Option<Vec<(usize, E::G1Affine)>>,
     /// The maximum degree supported by the `UniversalParams` `self` was derived
@@ -112,10 +110,42 @@ impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, bound: usize) -> Option<E::G1Affine> {
         self.degree_bounds_and_shift_powers.as_ref().and_then(|v| {
-            v.binary_search_by(|(d, _)| d.cmp(&bound))
-                .ok()
-                .map(|i| v[i].1)
+            let mut found_shift_power: Option<E::G1Affine> = None;
+            for (this_bound, this_shift_power) in v {
+                if *this_bound == bound {
+                    found_shift_power = Some(this_shift_power.clone());
+                    //break;
+                }
+            }
+            found_shift_power
         })
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+
+        res.append(&mut self.vk.to_field_elements()?);
+
+        if self.degree_bounds_and_shift_powers.as_ref().is_some() {
+            let list = self.degree_bounds_and_shift_powers.as_ref().unwrap();
+            for (d, shift_power) in list.iter() {
+                let d_elem: <E::Fq as Field>::BasePrimeField = (d.clone() as u64).into();
+                let mut shift_power_elem = shift_power.to_field_elements()?;
+
+                res.push(d_elem);
+                res.append(&mut shift_power_elem);
+            }
+        }
+
+        Some(res)
     }
 }
 
@@ -137,7 +167,6 @@ pub struct PreparedVerifierKey<E: PairingEngine> {
     pub prepared_vk: kzg10::PreparedVerifierKey<E>,
     /// Information required to enforce degree bounds. Each pair
     /// is of the form `(degree_bound, shifting_advice)`.
-    /// The vector is sorted in ascending order of `degree_bound`.
     /// This is `None` if `self` does not support enforcing any degree bounds.
     pub prepared_degree_bounds_and_shift_powers: Option<Vec<(usize, Vec<E::G1Affine>)>>,
     /// The maximum degree supported by the `UniversalParams` `self` was derived
@@ -206,7 +235,7 @@ pub struct Commitment<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -232,6 +261,25 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
 
     fn size_in_bytes(&self) -> usize {
         self.comm.size_in_bytes() + self.shifted_comm.as_ref().map_or(0, |c| c.size_in_bytes())
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+
+        res.append(&mut self.comm.to_field_elements()?);
+
+        if self.shifted_comm.is_some() {
+            res.append(&mut self.shifted_comm.unwrap().to_field_elements()?);
+        }
+
+        Some(res)
     }
 }
 

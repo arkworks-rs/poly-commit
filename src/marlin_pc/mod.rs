@@ -4,7 +4,8 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
+use ark_ff::{Field, One, Zero};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
@@ -42,7 +43,10 @@ pub(crate) fn shift_polynomial<E: PairingEngine>(
             .enforced_degree_bounds
             .as_ref()
             .expect("Polynomial requires degree bounds, but `ck` does not support any");
-        let largest_enforced_degree_bound = enforced_degree_bounds.last().unwrap();
+
+        let mut sorted_enforced_degree_bounds = enforced_degree_bounds.clone();
+        sorted_enforced_degree_bounds.sort();
+        let largest_enforced_degree_bound = sorted_enforced_degree_bounds.last().unwrap();
 
         let mut shifted_polynomial_coeffs =
             vec![E::Fr::zero(); largest_enforced_degree_bound - degree_bound];
@@ -111,7 +115,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
     }
 
     /// Accumulate `commitments` and `values` according to `opening_challenge`.
-    fn accumulate_commitments_and_values_internal<'a>(
+    fn accumulate_commitments_and_values_individual_opening_challenges<'a>(
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         values: impl IntoIterator<Item = E::Fr>,
@@ -146,7 +150,9 @@ impl<E: PairingEngine> MarlinKZG10<E> {
                 let shift_power = vk
                     .get_shift_power(degree_bound)
                     .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
+
                 let mut adjusted_comm = shifted_comm - &shift_power.mul(value.clone());
+
                 adjusted_comm *= challenge_i_1;
                 combined_comm += &adjusted_comm;
             }
@@ -155,11 +161,349 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         end_timer!(acc_time);
         Ok((combined_comm, combined_value))
     }
+}
+
+impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
+    type UniversalParams = UniversalParams<E>;
+    type CommitterKey = CommitterKey<E>;
+    type VerifierKey = VerifierKey<E>;
+    type PreparedVerifierKey = PreparedVerifierKey<E>;
+    type Commitment = Commitment<E>;
+    type PreparedCommitment = PreparedCommitment<E>;
+    type Randomness = Randomness<E>;
+    type Proof = kzg10::Proof<E>;
+    type BatchProof = Vec<Self::Proof>;
+    type Error = Error;
+
+    /// Constructs public parameters when given as input the maximum degree `max_degree`
+    /// for the polynomial commitment scheme.
+    fn setup<R: RngCore>(
+        max_degree: usize,
+        rng: &mut R,
+    ) -> Result<Self::UniversalParams, Self::Error> {
+        kzg10::KZG10::setup(max_degree, false, rng).map_err(Into::into)
+    }
+
+    // TODO: should trim also take in the hiding_bounds? That way we don't
+    // have to store many powers of gamma_g.
+    // TODO: add an optional hiding_bound.
+    fn trim(
+        pp: &Self::UniversalParams,
+        supported_degree: usize,
+        enforced_degree_bounds: Option<&[usize]>,
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
+        let max_degree = pp.max_degree();
+        if supported_degree > max_degree {
+            return Err(Error::TrimmingDegreeTooLarge);
+        }
+
+        // Construct the KZG10 committer key for committing to unshifted polynomials.
+        let ck_time = start_timer!(|| format!(
+            "Constructing `powers` of size {} for unshifted polys",
+            supported_degree
+        ));
+        let powers = pp.powers_of_g[..=supported_degree].to_vec();
+        // We want to support making up to supported_degree queries to committed
+        // polynomials.
+        let powers_of_gamma_g = pp.powers_of_gamma_g[..=(supported_degree + 1)].to_vec();
+        end_timer!(ck_time);
+
+        // Construct the core KZG10 verifier key.
+        let vk = kzg10::VerifierKey {
+            g: pp.powers_of_g[0].clone(),
+            gamma_g: pp.powers_of_gamma_g[0].clone(),
+            h: pp.h.clone(),
+            beta_h: pp.beta_h.clone(),
+            prepared_h: pp.prepared_h.clone(),
+            prepared_beta_h: pp.prepared_beta_h.clone(),
+        };
+
+        let enforced_degree_bounds = match enforced_degree_bounds {
+            Some(v) => Some(v.to_vec()),
+            None => None,
+        };
+
+        // Check whether we have some degree bounds to enforce
+        let (shifted_powers, degree_bounds_and_shift_powers) =
+            if let Some(enforced_degree_bounds) = enforced_degree_bounds.as_ref() {
+                if enforced_degree_bounds.is_empty() {
+                    (None, None)
+                } else {
+                    let mut sorted_enforced_degree_bounds = enforced_degree_bounds.clone();
+                    sorted_enforced_degree_bounds.sort();
+
+                    let lowest_shifted_power = max_degree
+                        - sorted_enforced_degree_bounds
+                            .last()
+                            .ok_or(Error::EmptyDegreeBounds)?;
+
+                    let shifted_ck_time = start_timer!(|| format!(
+                        "Constructing `shifted_powers` of size {}",
+                        max_degree - lowest_shifted_power + 1
+                    ));
+
+                    let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
+                    end_timer!(shifted_ck_time);
+
+                    let degree_bounds_and_shift_powers = enforced_degree_bounds
+                        .iter()
+                        .map(|d| (*d, pp.powers_of_g[max_degree - *d]))
+                        .collect();
+                    (Some(shifted_powers), Some(degree_bounds_and_shift_powers))
+                }
+            } else {
+                (None, None)
+            };
+
+        let ck = CommitterKey {
+            powers,
+            shifted_powers,
+            powers_of_gamma_g,
+            enforced_degree_bounds: enforced_degree_bounds,
+            max_degree,
+        };
+
+        let vk = VerifierKey {
+            vk,
+            degree_bounds_and_shift_powers,
+            supported_degree,
+            max_degree,
+        };
+        Ok((ck, vk))
+    }
+
+    /// Outputs a commitment to `polynomial`.
+    fn commit<'a>(
+        ck: &Self::CommitterKey,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<
+        (
+            Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::Randomness>,
+        ),
+        Self::Error,
+    > {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let commit_time = start_timer!(|| "Committing to polynomials");
+
+        let mut commitments = Vec::new();
+        let mut randomness = Vec::new();
+
+        for p in polynomials {
+            let label = p.label();
+            let degree_bound = p.degree_bound();
+            let hiding_bound = p.hiding_bound();
+            let polynomial = p.polynomial();
+
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
+            kzg10::KZG10::<E>::check_degrees_and_bounds(
+                ck.supported_degree(),
+                ck.max_degree,
+                enforced_degree_bounds,
+                &p,
+            )?;
+
+            let commit_time = start_timer!(|| format!(
+                "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
+                label,
+                polynomial.degree(),
+                degree_bound,
+                hiding_bound,
+            ));
+
+            let (comm, rand) =
+                kzg10::KZG10::commit(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
+            let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
+                let shifted_powers = ck
+                    .shifted_powers(degree_bound)
+                    .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
+                let (shifted_comm, shifted_rand) =
+                    kzg10::KZG10::commit(&shifted_powers, &polynomial, hiding_bound, Some(rng))?;
+                (Some(shifted_comm), Some(shifted_rand))
+            } else {
+                (None, None)
+            };
+
+            let comm = Commitment { comm, shifted_comm };
+            let rand = Randomness { rand, shifted_rand };
+            commitments.push(LabeledCommitment::new(
+                label.to_string(),
+                comm,
+                degree_bound,
+            ));
+            randomness.push(rand);
+            end_timer!(commit_time);
+        }
+        end_timer!(commit_time);
+        Ok((commitments, randomness))
+    }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open_internal<'a>(
+    fn open<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        point: E::Fr,
+        opening_challenge: E::Fr,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<Self::Proof, Self::Error>
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::open_individual_opening_challenges(
+            ck,
+            labeled_polynomials,
+            commitments,
+            point,
+            &opening_challenges,
+            rands,
+            rng,
+        )
+    }
+
+    /// Verifies that `value` is the evaluation at `x` of the polynomial
+    /// committed inside `comm`.
+    fn check<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        point: E::Fr,
+        values: impl IntoIterator<Item = E::Fr>,
+        proof: &Self::Proof,
+        opening_challenge: E::Fr,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::check_individual_opening_challenges(
+            vk,
+            commitments,
+            point,
+            values,
+            proof,
+            &opening_challenges,
+            rng,
+        )
+    }
+
+    fn batch_check<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<E::Fr>,
+        evaluations: &Evaluations<E::Fr>,
+        proof: &Self::BatchProof,
+        opening_challenge: E::Fr,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::batch_check_individual_opening_challenges(
+            vk,
+            commitments,
+            query_set,
+            evaluations,
+            proof,
+            &opening_challenges,
+            rng,
+        )
+    }
+
+    fn open_combinations<'a>(
+        ck: &Self::CommitterKey,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<E::Fr>,
+        opening_challenge: E::Fr,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::open_combinations_individual_opening_challenges(
+            ck,
+            lc_s,
+            polynomials,
+            commitments,
+            query_set,
+            &opening_challenges,
+            rands,
+            rng,
+        )
+    }
+
+    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
+    /// committed in `labeled_commitments`.
+    fn check_combinations<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<E::Fr>,
+        evaluations: &Evaluations<E::Fr>,
+        proof: &BatchLCProof<E::Fr, Self>,
+        opening_challenge: E::Fr,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::check_combinations_individual_opening_challenges(
+            vk,
+            lc_s,
+            commitments,
+            query_set,
+            evaluations,
+            proof,
+            &opening_challenges,
+            rng,
+        )
+    }
+
+    // On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
+    /// of the polynomials at the points in the query set.
+    fn batch_open<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<E::Fr>,
+        opening_challenge: E::Fr,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<Self::BatchProof, Self::Error>
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        let opening_challenges = |j| opening_challenge.pow([j as u64]);
+        Self::batch_open_individual_opening_challenges(
+            ck,
+            labeled_polynomials,
+            commitments,
+            query_set,
+            &opening_challenges,
+            rands,
+            rng,
+        )
+    }
+
+    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
+    fn open_individual_opening_challenges<'a>(
         ck: &CommitterKey<E>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: E::Fr,
         opening_challenges: &dyn Fn(usize) -> E::Fr,
@@ -252,7 +596,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check_internal<'a, R: RngCore>(
+    fn check_individual_opening_challenges<'a, R: RngCore>(
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: E::Fr,
@@ -265,19 +609,20 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         Commitment<E>: 'a,
     {
         let check_time = start_timer!(|| "Checking evaluations");
-        let (combined_comm, combined_value) = Self::accumulate_commitments_and_values_internal(
-            vk,
-            commitments,
-            values,
-            opening_challenges,
-        )?;
+        let (combined_comm, combined_value) =
+            Self::accumulate_commitments_and_values_individual_opening_challenges(
+                vk,
+                commitments,
+                values,
+                opening_challenges,
+            )?;
         let combined_comm = kzg10::Commitment(combined_comm.into());
         let result = kzg10::KZG10::check(&vk.vk, &combined_comm, point, combined_value, proof)?;
         end_timer!(check_time);
         Ok(result)
     }
 
-    fn batch_check_internal<'a, R: RngCore>(
+    fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
@@ -292,16 +637,18 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
         }
         assert_eq!(proof.len(), query_to_labels_map.len());
 
         let mut combined_comms = Vec::new();
         let mut combined_queries = Vec::new();
         let mut combined_evals = Vec::new();
-        for (query, labels) in query_to_labels_map.into_iter() {
+        for (_, (point, labels)) in query_to_labels_map.into_iter() {
             let lc_time =
                 start_timer!(|| format!("Randomly combining {} commitments", labels.len()));
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
@@ -318,7 +665,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
                 let v_i =
                     evaluations
-                        .get(&(label.clone(), *query))
+                        .get(&(label.clone(), *point))
                         .ok_or(Error::MissingEvaluation {
                             label: label.to_string(),
                         })?;
@@ -327,15 +674,16 @@ impl<E: PairingEngine> MarlinKZG10<E> {
                 values_to_combine.push(*v_i);
             }
 
-            let (c, v) = Self::accumulate_commitments_and_values_internal(
+            let (c, v) = Self::accumulate_commitments_and_values_individual_opening_challenges(
                 vk,
                 comms_to_combine,
                 values_to_combine,
                 opening_challenges,
             )?;
             end_timer!(lc_time);
+
             combined_comms.push(c);
-            combined_queries.push(*query);
+            combined_queries.push(*point);
             combined_evals.push(v);
         }
         let norm_time = start_timer!(|| "Normalizaing combined commitments");
@@ -358,10 +706,10 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         Ok(result)
     }
 
-    fn open_combinations_internal<'a>(
+    fn open_combinations_individual_opening_challenges<'a>(
         ck: &CommitterKey<E>,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenges: &dyn Fn(usize) -> E::Fr,
@@ -426,7 +774,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             }
 
             let lc_poly =
-                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
+                LabeledPolynomial::new(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(randomness);
             lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
@@ -440,7 +788,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
             .collect::<Vec<_>>();
 
-        let proof = Self::batch_open_internal(
+        let proof = Self::batch_open_individual_opening_challenges(
             ck,
             lc_polynomials.iter(),
             lc_commitments.iter(),
@@ -455,7 +803,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn check_combinations_internal<'a, R: RngCore>(
+    fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &VerifierKey<E>,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
@@ -527,7 +875,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             .collect::<Vec<_>>();
         end_timer!(combined_comms_norm_time);
 
-        Self::batch_check_internal(
+        Self::batch_check_individual_opening_challenges(
             vk,
             &lc_commitments,
             &query_set,
@@ -540,9 +888,9 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
     // On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
     /// of the polynomials at the points in the query set.
-    fn batch_open_internal<'a>(
+    fn batch_open_individual_opening_challenges<'a>(
         ck: &CommitterKey<E>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenges: &dyn Fn(usize) -> E::Fr,
@@ -569,20 +917,22 @@ impl<E: PairingEngine> MarlinKZG10<E> {
 
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
         }
 
         let mut proofs = Vec::new();
-        for (query, labels) in query_to_labels_map.into_iter() {
-            let mut query_polys: Vec<&'a LabeledPolynomial<'a, _>> = Vec::new();
+        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
+            let mut query_polys: Vec<&'a LabeledPolynomial<_>> = Vec::new();
             let mut query_rands: Vec<&'a Randomness<E>> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Commitment<E>>> = Vec::new();
 
             for label in labels {
                 let (polynomial, rand, comm) =
-                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
+                    poly_rand_comm.get(&label).ok_or(Error::MissingPolynomial {
                         label: label.to_string(),
                     })?;
 
@@ -592,11 +942,11 @@ impl<E: PairingEngine> MarlinKZG10<E> {
             }
 
             let proof_time = start_timer!(|| "Creating proof");
-            let proof = Self::open_internal(
+            let proof = Self::open_individual_opening_challenges(
                 ck,
                 query_polys,
                 query_comms,
-                *query,
+                point.clone(),
                 opening_challenges,
                 query_rands,
                 Some(rng),
@@ -612,350 +962,13 @@ impl<E: PairingEngine> MarlinKZG10<E> {
     }
 }
 
-impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
-    type UniversalParams = UniversalParams<E>;
-    type CommitterKey = CommitterKey<E>;
-    type VerifierKey = VerifierKey<E>;
-    type PreparedVerifierKey = PreparedVerifierKey<E>;
-    type Commitment = Commitment<E>;
-    type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E>;
-    type Proof = kzg10::Proof<E>;
-    type BatchProof = Vec<Self::Proof>;
-    type Error = Error;
-
-    /// Constructs public parameters when given as input the maximum degree `max_degree`
-    /// for the polynomial commitment scheme.
-    fn setup<R: RngCore>(
-        max_degree: usize,
-        rng: &mut R,
-    ) -> Result<Self::UniversalParams, Self::Error> {
-        kzg10::KZG10::setup(max_degree, false, rng).map_err(Into::into)
-    }
-
-    // TODO: should trim also take in the hiding_bounds? That way we don't
-    // have to store many powers of gamma_g.
-    // TODO: add an optional hiding_bound.
-    fn trim(
-        pp: &Self::UniversalParams,
-        supported_degree: usize,
-        enforced_degree_bounds: Option<&[usize]>,
-    ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        let max_degree = pp.max_degree();
-        if supported_degree > max_degree {
-            return Err(Error::TrimmingDegreeTooLarge);
-        }
-
-        // Construct the KZG10 committer key for committing to unshifted polynomials.
-        let ck_time = start_timer!(|| format!(
-            "Constructing `powers` of size {} for unshifted polys",
-            supported_degree
-        ));
-        let powers = pp.powers_of_g[..=supported_degree].to_vec();
-        // We want to support making up to supported_degree queries to committed
-        // polynomials.
-        let powers_of_gamma_g = pp.powers_of_gamma_g[..=(supported_degree + 1)].to_vec();
-        end_timer!(ck_time);
-
-        // Construct the core KZG10 verifier key.
-        let vk = kzg10::VerifierKey {
-            g: pp.powers_of_g[0].clone(),
-            gamma_g: pp.powers_of_gamma_g[0].clone(),
-            h: pp.h.clone(),
-            beta_h: pp.beta_h.clone(),
-            prepared_h: pp.prepared_h.clone(),
-            prepared_beta_h: pp.prepared_beta_h.clone(),
-        };
-
-        let enforced_degree_bounds = enforced_degree_bounds.map(|v| {
-            let mut v = v.to_vec();
-            v.sort();
-            v.dedup();
-            v
-        });
-
-        // Check whether we have some degree bounds to enforce
-        let (shifted_powers, degree_bounds_and_shift_powers) =
-            if let Some(enforced_degree_bounds) = enforced_degree_bounds.as_ref() {
-                if enforced_degree_bounds.is_empty() {
-                    (None, None)
-                } else {
-                    let lowest_shifted_power = max_degree
-                        - *enforced_degree_bounds
-                            .last()
-                            .ok_or(Error::EmptyDegreeBounds)?;
-
-                    let shifted_ck_time = start_timer!(|| format!(
-                        "Constructing `shifted_powers` of size {}",
-                        max_degree - lowest_shifted_power + 1
-                    ));
-
-                    let shifted_powers = pp.powers_of_g[lowest_shifted_power..].to_vec();
-                    end_timer!(shifted_ck_time);
-
-                    let degree_bounds_and_shift_powers = enforced_degree_bounds
-                        .iter()
-                        .map(|d| (*d, pp.powers_of_g[max_degree - *d]))
-                        .collect();
-                    (Some(shifted_powers), Some(degree_bounds_and_shift_powers))
-                }
-            } else {
-                (None, None)
-            };
-
-        let ck = CommitterKey {
-            powers,
-            shifted_powers,
-            powers_of_gamma_g,
-            enforced_degree_bounds: enforced_degree_bounds,
-            max_degree,
-        };
-
-        let vk = VerifierKey {
-            vk,
-            degree_bounds_and_shift_powers,
-            supported_degree,
-            max_degree,
-        };
-        Ok((ck, vk))
-    }
-
-    /// Outputs a commitment to `polynomial`.
-    fn commit<'a>(
-        ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<
-        (
-            Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
-        ),
-        Self::Error,
-    > {
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
-        let commit_time = start_timer!(|| "Committing to polynomials");
-
-        let mut commitments = Vec::new();
-        let mut randomness = Vec::new();
-
-        for p in polynomials {
-            let label = p.label();
-            let degree_bound = p.degree_bound();
-            let hiding_bound = p.hiding_bound();
-            let polynomial = p.polynomial();
-
-            let enforced_degree_bounds: Option<&[usize]> = ck
-                .enforced_degree_bounds
-                .as_ref()
-                .map(|bounds| bounds.as_slice());
-            kzg10::KZG10::<E>::check_degrees_and_bounds(
-                ck.supported_degree(),
-                ck.max_degree,
-                enforced_degree_bounds,
-                &p,
-            )?;
-
-            let commit_time = start_timer!(|| format!(
-                "Polynomial {} of degree {}, degree bound {:?}, and hiding bound {:?}",
-                label,
-                polynomial.degree(),
-                degree_bound,
-                hiding_bound,
-            ));
-
-            let (comm, rand) =
-                kzg10::KZG10::commit(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
-            let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
-                let shifted_powers = ck
-                    .shifted_powers(degree_bound)
-                    .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
-                let (shifted_comm, shifted_rand) =
-                    kzg10::KZG10::commit(&shifted_powers, &polynomial, hiding_bound, Some(rng))?;
-                (Some(shifted_comm), Some(shifted_rand))
-            } else {
-                (None, None)
-            };
-
-            let comm = Commitment { comm, shifted_comm };
-            let rand = Randomness { rand, shifted_rand };
-            commitments.push(LabeledCommitment::new(
-                label.to_string(),
-                comm,
-                degree_bound,
-            ));
-            randomness.push(rand);
-            end_timer!(commit_time);
-        }
-        end_timer!(commit_time);
-        Ok((commitments, randomness))
-    }
-
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<Self::Proof, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::open_internal(
-            ck,
-            labeled_polynomials,
-            commitments,
-            point,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// Verifies that `value` is the evaluation at `x` of the polynomial
-    /// committed inside `comm`.
-    fn check<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
-        values: impl IntoIterator<Item = E::Fr>,
-        proof: &Self::Proof,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::check_internal(
-            vk,
-            commitments,
-            point,
-            values,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    fn batch_check<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &Self::BatchProof,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::batch_check_internal(
-            vk,
-            commitments,
-            query_set,
-            evaluations,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    fn open_combinations<'a>(
-        ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::open_combinations_internal(
-            ck,
-            lc_s,
-            polynomials,
-            commitments,
-            query_set,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
-    /// committed in `labeled_commitments`.
-    fn check_combinations<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self>,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::check_combinations_internal(
-            vk,
-            lc_s,
-            commitments,
-            query_set,
-            evaluations,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    // On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
-    /// of the polynomials at the points in the query set.
-    fn batch_open<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<Self::BatchProof, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::batch_open_internal(
-            ck,
-            labeled_polynomials,
-            commitments,
-            query_set,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
 
     use super::MarlinKZG10;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
 
     type PC<E> = MarlinKZG10<E>;
     type PC_Bls12_381 = PC<Bls12_381>;

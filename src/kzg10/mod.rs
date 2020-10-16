@@ -9,14 +9,10 @@
 
 extern crate std;
 
-use crate::{Error, PCRandomness, LabeledPolynomial, Polynomial, ToString, Vec};
-use algebra::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra_core::{
-    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
-    fields::PrimeField,
-    groups::Group,
-    One, UniformRand, Zero,
-};
+use crate::{Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};
+use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
+use ark_ff::{PrimeField, One, UniformRand, Zero};
+use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use core::marker::PhantomData;
 use rand_core::RngCore;
 use rayon::prelude::*;
@@ -301,7 +297,10 @@ impl<E: PairingEngine> KZG10<E> {
         let check_time = start_timer!(|| "Checking evaluation");
         let inner = comm.0.into_projective()
             - &vk.g.into_projective().mul(value.into_repr())
-            - &vk.gamma_g.into_projective().mul(proof.random_v.ok_or(Error::NoneError)?.into_repr());
+            - &vk
+                .gamma_g
+                .into_projective()
+                .mul(proof.random_v.ok_or(Error::NoneError)?.into_repr());
 
         let lhs = E::pairing(inner, vk.h);
 
@@ -385,13 +384,13 @@ impl<E: PairingEngine> KZG10<E> {
         supported_degree: usize,
         max_degree: usize,
         enforced_degree_bounds: Option<&[usize]>,
-        p: &'a LabeledPolynomial<'a, E::Fr>,
+        p: &'a LabeledPolynomial<E::Fr>,
     ) -> Result<(), Error> {
         if let Some(bound) = p.degree_bound() {
             let enforced_degree_bounds =
                 enforced_degree_bounds.ok_or(Error::UnsupportedDegreeBound(bound))?;
-    
-            if enforced_degree_bounds.binary_search(&bound).is_err() {
+
+            if !enforced_degree_bounds.contains(&bound) {
                 Err(Error::UnsupportedDegreeBound(bound))
             } else if bound < p.degree() || bound > max_degree {
                 return Err(Error::IncorrectDegreeBound {
@@ -406,7 +405,7 @@ impl<E: PairingEngine> KZG10<E> {
         } else {
             Ok(())
         }
-    }    
+    }
 }
 
 fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
@@ -433,9 +432,13 @@ mod tests {
     use crate::kzg10::*;
     use crate::*;
 
-    use algebra::{mnt4_298::MNT4_298, mnt4_753::MNT4_753, mnt6_298::MNT6_298, mnt6_753::MNT6_753};
+    use ark_mnt4_298::MNT4_298;
+    use ark_mnt4_753::MNT4_753;
+    use ark_mnt6_298::MNT6_298;
+    use ark_mnt6_753::MNT6_753;
 
-    use algebra_core::{PairingEngine, UniformRand};
+    use ark_ff::UniformRand;
+    use ark_ec::PairingEngine;
     use rand::thread_rng;
 
     impl<E: PairingEngine> KZG10<E> {

@@ -1,6 +1,7 @@
 use crate::kzg10;
-use crate::{PCCommitterKey, PCVerifierKey, PCPreparedCommitment, PCPreparedVerifierKey, Vec};
-use algebra_core::{PairingEngine, ProjectiveCurve};
+use crate::{PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec};
+use ark_ff::{Field, ToConstraintField};
+use ark_ec::{PairingEngine, ProjectiveCurve};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
@@ -27,7 +28,6 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
         Self { 0: prepared_comm }
     }
 }
-
 
 /// `ComitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
@@ -151,6 +151,40 @@ pub struct VerifierKey<E: PairingEngine> {
     /// The maximum degree supported by the `UniversalParams` `self` was derived
     /// from.
     pub max_degree: usize,
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(
+        &self,
+    ) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+
+        res.append(&mut self.g.to_field_elements()?);
+        res.append(&mut self.gamma_g.to_field_elements()?);
+        res.append(&mut self.h.to_field_elements()?);
+        res.append(&mut self.beta_h.to_field_elements()?);
+
+        if self
+            .degree_bounds_and_prepared_neg_powers_of_h
+            .as_ref()
+            .is_some()
+        {
+            let list = self
+                .degree_bounds_and_prepared_neg_powers_of_h
+                .as_ref()
+                .unwrap();
+            for (d, _) in list.iter() {
+                let d_elem: <E::Fq as Field>::BasePrimeField = (d.clone() as u64).into();
+                res.push(d_elem);
+            }
+        }
+
+        Some(res)
+    }
 }
 
 impl<E: PairingEngine> VerifierKey<E> {

@@ -1,15 +1,7 @@
 [package]
 name = "poly-commit"
 version = "0.1.0"
-authors = [
-  "Alessandro Chiesa <alexch@berkeley.edu>",
-  "Mary Maller <mary.maller.15@ucl.ac.uk>",
-  "Yuncong Hu <huyuncongh@gmail.com>",
-  "William Lin",
-  "Pratyush Mishra <pratyush@berkeley.edu>",
-  "Noah Vesely <noah.vesely.18@ucl.ac.uk>",
-  "Nicholas Ward <npward@berkeley.edu>",
-]
+authors = [ "arkworks contributors" ]
 description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
 repository = "https://github.com/scipr-lab/poly-commit"
 documentation = "https://docs.rs/poly-commit/"
@@ -20,19 +12,36 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-algebra = { path = "../zexe_with_ledger/algebra", features = [ "ed_on_bls12_381", "mnt4_298", "mnt4_753", "mnt6_298", "mnt6_753", "bls12_377" ] }
-algebra-benches = { path = "../zexe_with_ledger/algebra-benches" }
-algebra-core = { path = "../zexe_with_ledger/algebra-core" }
-ff-fft = { path = "../zexe_with_ledger/ff-fft" }
+#ark-algebra = { git = "https://github.com/arkworks-rs/algebra" }
+#algebra-benches = { git = "https://github.com/arkworks-rs/algebra" }
+
+ark-std = { git = "https://github.com/arkworks-rs/utils" }
+bench-utils = { git = "https://github.com/arkworks-rs/utils" }
+
+ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
+
+ark-snark = { git = "https://github.com/arkworks-rs/snark" }
+ark-relations = { git = "https://github.com/arkworks-rs/snark" }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", branch = "update-to-ark" }
+crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
+
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
+ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
+ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt4-298 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt6-298 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves" }
+
 rand_core = { version = "0.5" }
-r1cs-core = { path = "../zexe_with_ledger/r1cs-core" }
-r1cs-std = { path = "../zexe_with_ledger/r1cs-std", features = [  "mnt4_298", "mnt4_753", "mnt6_298", "mnt6_753" ] }
-bench-utils = { path = "../zexe_with_ledger/bench-utils" }
 num-traits = { version = "0.2", default-features = false }
 digest = "0.8"
 rayon = { version = "1", optional = true }
 derivative = { version = "2", features = [ "use_core" ] }
-nonnative = { version = "0.0.4", path = "../perfect-constraints/marlin/nonnative" }
+nonnative = { git = "ssh://git@github.com/arkworks-rs/nonnative.git", version = "0.0.4" }
 
 [dev-dependencies]
 rand = { version = "0.7", default-features = false }
@@ -52,6 +61,6 @@ debug = true
 
 [features]
 default = ["std", "parallel"]
-std = [ "algebra-core/std", "ff-fft/std", ]
-print-trace = [ "bench-utils/print-trace" ]
-parallel = [ "std", "algebra-core/parallel", "ff-fft/parallel", "rayon" ]
+std = [ "ark-ff/std", ]
+#print-trace = [ "bench-utils/print-trace" ]
+parallel = [ "std", "ark-ff/parallel", "rayon" ]
