@@ -4,8 +4,8 @@
 #![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut)]
-#![deny(missing_docs)]
-#![deny(unused_imports)]
+#![warn(missing_docs)]
+#![warn(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
@@ -82,6 +82,8 @@ pub mod sonic_pc;
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
+
+pub mod lh_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of

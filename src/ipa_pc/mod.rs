@@ -833,6 +833,7 @@ where
         Ok(true)
     }
 
+    /*
     fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
@@ -1027,6 +1028,8 @@ where
             rng,
         )
     }
+
+     */
 }
 
 #[cfg(test)]
