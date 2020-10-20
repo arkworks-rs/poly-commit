@@ -1,6 +1,8 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::{AffineCurve, Field, ToBytes, UniformRand, Zero};
+use ark_ec::AffineCurve;
+use ark_ff::{Field, ToBytes, UniformRand, Zero};
+use ark_std::vec;
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
@@ -105,13 +107,13 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![G::zero()].unwrap().len() / 2
+        ark_ff::to_bytes![G::zero()].unwrap().len() / 2
     }
 }
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -192,13 +194,13 @@ pub struct Proof<G: AffineCurve> {
 
 impl<G: AffineCurve> PCProof for Proof<G> {
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![self].unwrap().len()
+        ark_ff::to_bytes![self].unwrap().len()
     }
 }
 
 impl<G: AffineCurve> ToBytes for Proof<G> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.l_vec.write(&mut writer)?;
         self.r_vec.write(&mut writer)?;
         self.final_comm_key.write(&mut writer)?;

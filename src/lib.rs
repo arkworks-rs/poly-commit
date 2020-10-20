@@ -15,27 +15,14 @@ extern crate derivative;
 #[macro_use]
 extern crate bench_utils;
 
-use algebra_core::Field;
-use core::iter::FromIterator;
-pub use ff_fft::DensePolynomial as Polynomial;
+use ark_ff::Field;
+pub use ark_poly::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::{
+use ark_std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    string::{String, ToString},
-    vec::Vec,
-};
-
-#[cfg(feature = "std")]
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    iter::FromIterator,
     string::{String, ToString},
     vec::Vec,
 };
@@ -131,7 +118,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: algebra_core::Error + From<Error>;
+    type Error: ark_std::error::Error + From<Error>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
@@ -477,7 +464,7 @@ fn lc_query_set_to_poly_query_set<'a, F: 'a + Field>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use algebra::{test_rng, Field};
+    use ark_ff::{test_rng, Field};
     use rand::{distributions::Distribution, Rng};
 
     #[derive(Default)]

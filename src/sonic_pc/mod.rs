@@ -4,7 +4,9 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra_core::{AffineCurve, One, PairingEngine, ProjectiveCurve, UniformRand, Zero};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{One, UniformRand, Zero};
+use ark_std::vec;
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
@@ -659,8 +661,8 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::SonicKZG10;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
 
     type PC<E> = SonicKZG10<E>;
     type PC_Bls12_377 = PC<Bls12_377>;
