@@ -4,7 +4,9 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
-use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{Field, One, Zero};
+use ark_std::vec;
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
@@ -704,8 +706,9 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::MarlinKZG10;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
+
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
 
     type PC<E> = MarlinKZG10<E>;
     type PC_Bls12_381 = PC<Bls12_381>;

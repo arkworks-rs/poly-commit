@@ -1,5 +1,6 @@
 use crate::*;
-use algebra_core::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve, ToBytes, Zero};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{PrimeField, ToBytes, Zero};
 use core::ops::{Add, AddAssign};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -75,7 +76,7 @@ pub struct VerifierKey<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.g.write(&mut writer)?;
         self.gamma_g.write(&mut writer)?;
         self.h.write(&mut writer)?;
@@ -103,7 +104,7 @@ pub struct Commitment<E: PairingEngine>(
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
     }
 }
@@ -119,7 +120,7 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
     }
 }
 
@@ -233,17 +234,17 @@ pub struct Proof<E: PairingEngine> {
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
-            algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+            ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
         } else {
             0
         };
-        algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
+        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
     }
 }
 
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.w.write(&mut writer)?;
         self.random_v
             .as_ref()

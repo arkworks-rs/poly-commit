@@ -1,8 +1,8 @@
 use crate::{Cow, String, Vec};
-use algebra_core::Field;
+use ark_ff::Field;
+pub use ark_poly::DensePolynomial as Polynomial;
 use core::borrow::Borrow;
 use core::ops::{AddAssign, MulAssign, SubAssign};
-pub use ff_fft::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -39,7 +39,7 @@ pub trait PCVerifierKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + algebra_core::ToBytes {
+pub trait PCCommitment: Clone + ark_ff::ToBytes {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -65,7 +65,7 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + algebra_core::ToBytes {
+pub trait PCProof: Clone + ark_ff::ToBytes {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
 }
@@ -186,9 +186,9 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 }
 
-impl<C: PCCommitment> algebra_core::ToBytes for LabeledCommitment<C> {
+impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.commitment.write(writer)
     }
 }

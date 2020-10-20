@@ -6,14 +6,15 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, Polynomial, ToString, Vec};
-use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra_core::{
-    AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
-};
+use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
+use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{One, PrimeField, UniformRand, Zero};
+
 use rand_core::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+use ark_std::{format, vec};
 use core::marker::PhantomData;
 
 mod data_structures;
@@ -341,7 +342,7 @@ impl<E: PairingEngine> KZG10<E> {
             let mut temp = w.mul(*z);
             temp.add_assign_mixed(&c.0);
             let c = temp;
-            g_multiplier += &(randomizer * &v);
+            g_multiplier += &(randomizer * v);
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
@@ -457,7 +458,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField>(
 
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-    let coeffs = ff_fft::cfg_iter!(p)
+    let coeffs = ark_std::cfg_iter!(p)
         .map(|s| s.into_repr())
         .collect::<Vec<_>>();
     end_timer!(to_bigint_time);
@@ -470,10 +471,10 @@ mod tests {
     use crate::kzg10::*;
     use crate::*;
 
-    use algebra::bls12_381::Fr;
-    use algebra::test_rng;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
+    use ark_bls12_381::Fr;
+    use ark_ff::test_rng;
 
     type KZG_Bls12_381 = KZG10<Bls12_381>;
 
