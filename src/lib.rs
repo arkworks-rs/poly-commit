@@ -470,7 +470,7 @@ pub fn evaluate_query_set<'a, F, P, T>(
 where
     F: Field,
     P: 'a + Polynomial<F, Domain = T>,
-    T: Clone + Debug + Ord,
+    T: Clone + Debug + Ord + Sync,
 {
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::<F, T>::new();
@@ -484,7 +484,7 @@ where
     evaluations
 }
 
-fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
+fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord + Sync>(
     linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
     query_set: &QuerySet<'a, T>,
 ) -> QuerySet<'a, T> {

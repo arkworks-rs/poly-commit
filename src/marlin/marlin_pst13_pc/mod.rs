@@ -76,11 +76,9 @@ where
 
     /// Convert polynomial coefficients to `BigInt`
     fn convert_to_bigints(p: &P) -> Vec<<E::Fr as PrimeField>::BigInt> {
-        let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
         let plain_coeffs = ff_fft::cfg_into_iter!(p.terms())
             .map(|(_, coeff)| coeff.into_repr())
             .collect();
-        end_timer!(to_bigint_time);
         plain_coeffs
     }
 }
@@ -133,29 +131,27 @@ where
             .flat_map(|var| vec![var; max_degree])
             .collect();
         // Generate all possible monomials with `1 <= degree <= max_degree`
-        let (powers_of_beta, mut powers_of_beta_terms): (Vec<_>, Vec<_>) =
-            ff_fft::cfg_into_iter!(1..=max_degree)
-                .flat_map(|degree| {
-                    // Sample all combinations of `degree` variables from `variable_set`
-                    let terms: Vec<Vec<usize>> = if variable_set.len() == degree {
-                        vec![variable_set.clone()]
-                    } else {
-                        Combinations::new(variable_set.clone(), degree).collect()
-                    };
-                    // For each multiset in `terms` evaluate the corresponding monomial at the
-                    // trapdoor and generate a `P::Term` object to index it
-                    terms
-                        .into_iter()
-                        .map(|term| {
-                            let value: E::Fr = term.iter().map(|e| betas[*e]).product();
-                            let term = (0..num_vars)
-                                .map(|var| (var, term.iter().filter(|e| **e == var).count()))
-                                .collect();
-                            (value, P::Term::new(term))
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unzip();
+        let (powers_of_beta, mut powers_of_beta_terms): (Vec<_>, Vec<_>) = (1..=max_degree)
+            .flat_map(|degree| {
+                // Sample all combinations of `degree` variables from `variable_set`
+                let terms: Vec<Vec<usize>> = if variable_set.len() == degree {
+                    vec![variable_set.clone()]
+                } else {
+                    Combinations::new(variable_set.clone(), degree).collect()
+                };
+                // For each multiset in `terms` evaluate the corresponding monomial at the
+                // trapdoor and generate a `P::Term` object to index it
+                ff_fft::cfg_into_iter!(terms)
+                    .map(|term| {
+                        let value: E::Fr = term.iter().map(|e| betas[*e]).product();
+                        let term = (0..num_vars)
+                            .map(|var| (var, term.iter().filter(|e| **e == var).count()))
+                            .collect();
+                        (value, P::Term::new(term))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unzip();
 
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
@@ -319,13 +315,13 @@ where
                 )
             });
             // Get the powers of `G` corresponding to the terms of `polynomial`
-            let powers_of_g = polynomial
-                .terms()
-                .iter()
+            let powers_of_g = ff_fft::cfg_iter!(polynomial.terms())
                 .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
                 .collect::<Vec<_>>();
             // Convert coefficients of `polynomial` to BigInts
+            let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
             let plain_ints = Self::convert_to_bigints(&polynomial);
+            end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
             let mut commitment = VariableBaseMSM::multi_scalar_mul(&powers_of_g, &plain_ints);
@@ -358,7 +354,9 @@ where
                 })
                 .collect::<Vec<_>>();
             // Convert coefficients of `rand` to BigInt
+            let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
             let random_ints = Self::convert_to_bigints(&rand.blinding_polynomial);
+            end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment =
@@ -418,12 +416,11 @@ where
         end_timer!(witness_time);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomials");
-        let mut w = ff_fft::cfg_into_iter!(witnesses)
+        let mut w = witnesses
+            .iter()
             .map(|w| {
                 // Get the powers of `G` corresponding to the witness poly
-                let powers_of_g = w
-                    .terms()
-                    .iter()
+                let powers_of_g = ff_fft::cfg_iter!(w.terms())
                     .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
                     .collect::<Vec<_>>();
                 // Convert coefficients to BigInt
@@ -507,9 +504,7 @@ where
         let lhs = E::pairing(inner, vk.h);
 
         // Create a list of elements corresponding to each pairing in the product on the rhs
-        let rhs_product: Vec<(E::G1Prepared, E::G2Prepared)> = proof
-            .w
-            .iter()
+        let rhs_product: Vec<(E::G1Prepared, E::G2Prepared)> = ff_fft::cfg_iter!(proof.w)
             .enumerate()
             .map(|(j, w_j)| {
                 let beta_minus_z: E::G2Affine =
@@ -538,7 +533,7 @@ where
         let (combined_comms, combined_queries, combined_evals) =
             Marlin::combine_and_normalize(commitments, query_set, values, opening_challenge, None)?;
         let check_time =
-            start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
+            start_timer!(|| format!("Checking {} evaluation proofs", combined_comms.len()));
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
         let mut total_c = <E::G1Projective>::zero();
@@ -556,8 +551,10 @@ where
             .zip(proof)
         {
             let w = &proof.w;
-            let mut temp: E::G1Projective =
-                w.iter().enumerate().map(|(j, w_j)| w_j.mul(z[j])).sum();
+            let mut temp: E::G1Projective = ff_fft::cfg_iter!(w)
+                .enumerate()
+                .map(|(j, w_j)| w_j.mul(z[j]))
+                .sum();
             temp.add_assign_mixed(&c.0);
             let c = temp;
             g_multiplier += &(randomizer * &v);
@@ -565,8 +562,7 @@ where
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
             total_c += &c.mul(randomizer);
-            total_w
-                .iter_mut()
+            ff_fft::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
             // We don't need to sample randomizers from the full field,

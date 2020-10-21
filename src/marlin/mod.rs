@@ -132,7 +132,7 @@ impl<E: PairingEngine> Marlin<E> {
     }
 
     /// Combine and normalize a set of commitments
-    fn combine_and_normalize<'a, D: Clone + Ord>(
+    fn combine_and_normalize<'a, D: Clone + Ord + Sync>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         query_set: &QuerySet<D>,
         values: &Evaluations<E::Fr, D>,
@@ -213,7 +213,7 @@ impl<E: PairingEngine> Marlin<E> {
     ) -> Result<BatchLCProof<E::Fr, P, PC>, Error>
     where
         P: 'a + Polynomial<E::Fr, Domain = D>,
-        D: Clone + Ord + Debug,
+        D: Debug + Clone + Ord + Sync,
         PC: PolynomialCommitment<E::Fr, P, Commitment = marlin_pc::Commitment<E>, Error = Error>,
         PC::Randomness: 'a + AddAssign<(E::Fr, &'a PC::Randomness)>,
         PC::Commitment: 'a,
@@ -295,7 +295,7 @@ impl<E: PairingEngine> Marlin<E> {
     where
         R: RngCore,
         P: Polynomial<E::Fr, Domain = D>,
-        D: Clone + Ord + Debug,
+        D: Debug + Clone + Ord + Sync,
         PC: PolynomialCommitment<E::Fr, P, Commitment = marlin_pc::Commitment<E>, Error = Error>,
         PC::Commitment: 'a,
     {
