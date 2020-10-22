@@ -72,6 +72,16 @@ impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     }
 }
 
+/// Nothing to do to prepare this verifier key (for now).
+pub type PreparedVerifierKey<G> = VerifierKey<G>;
+
+impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierKey<G> {
+    /// prepare `PreparedVerifierKey` from `VerifierKey`
+    fn prepare(vk: &VerifierKey<G>) -> Self {
+        vk.clone()
+    }
+}
+
 /// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(
@@ -121,6 +131,16 @@ impl<G: AffineCurve> ToBytes for Commitment<G> {
             .as_ref()
             .unwrap_or(&G::zero())
             .write(&mut writer)
+    }
+}
+
+/// Nothing to do to prepare this commitment (for now).
+pub type PreparedCommitment<E> = Commitment<E>;
+
+impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<G> {
+    /// prepare `PreparedCommitment` from `Commitment`
+    fn prepare(vk: &Commitment<G>) -> Self {
+        vk.clone()
     }
 }
 

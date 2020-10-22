@@ -306,7 +306,9 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
+    type PreparedVerifierKey = PreparedVerifierKey<G>;
     type Commitment = Commitment<G>;
+    type PreparedCommitment = PreparedCommitment<G>;
     type Randomness = Randomness<G>;
     type Proof = Proof<G>;
     type BatchProof = Vec<Self::Proof>;
@@ -372,7 +374,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     /// Outputs a commitment to `polynomial`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -441,7 +443,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
         opening_challenge: G::ScalarField,
@@ -677,14 +679,14 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         })
     }
 
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
         opening_challenge: G::ScalarField,
-        _rng: Option<&mut dyn RngCore>,
+        _rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -743,9 +745,11 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
         }
 
         assert_eq!(proof.len(), query_to_labels_map.len());
@@ -755,7 +759,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let mut combined_check_poly = Polynomial::zero();
         let mut combined_final_key = G::Projective::zero();
 
-        for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
+        for ((_point_label, (point, labels)), p) in query_to_labels_map.into_iter().zip(proof) {
             let lc_time =
                 start_timer!(|| format!("Randomly combining {} commitments", labels.len()));
             let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
@@ -766,7 +770,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 })?;
 
                 let v_i = values
-                    .get(&(label.clone(), *query))
+                    .get(&(label.clone(), *point))
                     .ok_or(Error::MissingEvaluation {
                         label: label.to_string(),
                     })?;
@@ -778,7 +782,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             let check_poly = Self::succinct_check(
                 vk,
                 comms.into_iter(),
-                *query,
+                *point,
                 vals.into_iter(),
                 p,
                 opening_challenge,
@@ -816,7 +820,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
         opening_challenge: G::ScalarField,
@@ -891,7 +895,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
             }
 
             let lc_poly =
-                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
+                LabeledPolynomial::new(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
             lc_randomness.push(Randomness {
                 rand: combined_rand,
