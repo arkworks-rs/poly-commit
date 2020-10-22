@@ -16,11 +16,24 @@ extern crate derivative;
 extern crate bench_utils;
 
 use ark_ff::Field;
-pub use ark_poly::DensePolynomial as Polynomial;
 use core::iter::FromIterator;
+pub use ark_poly::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
-use ark_std::{
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
+
+#[cfg(feature = "std")]
+use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     string::{String, ToString},
@@ -60,6 +73,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
+// TODO: add "Prepared" to marlin_pc
 pub mod marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
@@ -79,6 +93,7 @@ pub mod sonic_pc;
 /// The construction is detailed in [[BCMS20]][pcdas].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
+// TODO: add "Prepared" to marlin_pc
 pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
@@ -115,9 +130,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey;
+    type VerifierKey: PCVerifierKey + Default;
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Default + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The prepared commitment to a polynomial.
@@ -210,16 +225,64 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let opening_challenges = |pow| opening_challenge.pow(&[pow]);
-        Self::batch_open_individual_opening_challenges(
-            ck,
-            labeled_polynomials,
-            commitments,
-            query_set,
-            &opening_challenges,
-            rands,
-            rng,
-        )
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .zip(commitments.into_iter())
+            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
+            .collect();
+
+        let open_time = start_timer!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            poly_rand_comm.len(),
+            query_set.len(),
+        ));
+
+        let mut query_to_labels_map = BTreeMap::new();
+
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
+        }
+
+        let mut proofs = Vec::new();
+        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
+            let mut query_polys: Vec<&'a LabeledPolynomial<_>> = Vec::new();
+            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
+
+            for label in labels {
+                let (polynomial, rand, comm) =
+                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
+
+                query_polys.push(polynomial);
+                query_rands.push(rand);
+                query_comms.push(comm);
+            }
+
+            let proof_time = start_timer!(|| "Creating proof");
+            let proof = Self::open(
+                ck,
+                query_polys,
+                query_comms,
+                *point,
+                opening_challenge,
+                query_rands,
+                Some(rng),
+            )?;
+
+            end_timer!(proof_time);
+
+            proofs.push(proof);
+        }
+        end_timer!(open_time);
+
+        Ok(proofs.into())
     }
 
     /// Verifies that `values` are the evaluations at `point` of the polynomials
@@ -528,7 +591,8 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         Ok(true)
     }
 
-    /// batch_open with individual challenges
+    /// batch_open but with individual challenges
+    /// By default, we downgrade them to only use the first individual opening challenges
     fn batch_open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
@@ -542,64 +606,15 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
-        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
-            .into_iter()
-            .zip(rands)
-            .zip(commitments.into_iter())
-            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
-            .collect();
-
-        let open_time = start_timer!(|| format!(
-            "Opening {} polynomials at query set of size {}",
-            poly_rand_comm.len(),
-            query_set.len(),
-        ));
-
-        let mut query_to_labels_map = BTreeMap::new();
-
-        for (label, (point_label, point)) in query_set.iter() {
-            let labels = query_to_labels_map
-                .entry(point_label)
-                .or_insert((point, BTreeSet::new()));
-            labels.1.insert(label);
-        }
-
-        let mut proofs = Vec::new();
-        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
-            let mut query_polys: Vec<&'a LabeledPolynomial<_>> = Vec::new();
-            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
-            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
-
-            for label in labels {
-                let (polynomial, rand, comm) =
-                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                query_polys.push(polynomial);
-                query_rands.push(rand);
-                query_comms.push(comm);
-            }
-
-            let proof_time = start_timer!(|| "Creating proof");
-            let proof = Self::open_individual_opening_challenges(
-                ck,
-                query_polys,
-                query_comms,
-                *point,
-                opening_challenges,
-                query_rands,
-                Some(rng),
-            )?;
-
-            end_timer!(proof_time);
-
-            proofs.push(proof);
-        }
-        end_timer!(open_time);
-
-        Ok(proofs.into())
+        Self::batch_open(
+            ck,
+            labeled_polynomials,
+            commitments,
+            query_set,
+            opening_challenges(0),
+            rands,
+            rng,
+        )
     }
 }
 

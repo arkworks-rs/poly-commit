@@ -92,7 +92,7 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct PreparedVerifierKey<E: PairingEngine> {
-    /// The generator of G1, prepared for power series.
+    /// The generator of G1.
     pub prepared_g: Vec<E::G1Affine>,
     /// The generator of G2, prepared for use in pairings.
     pub prepared_h: E::G2Prepared,
