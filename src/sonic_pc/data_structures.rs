@@ -1,6 +1,6 @@
 use crate::kzg10;
 use crate::{BTreeMap, PCCommitterKey, PCVerifierKey, Vec};
-use algebra_core::PairingEngine;
+use ark_ec::PairingEngine;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;

@@ -3,10 +3,9 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use algebra_core::{
-    to_bytes, AffineCurve, Field, One, PrimeField, ProjectiveCurve, UniformRand, VariableBaseMSM,
-    Zero,
-};
+use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
+use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_std::{format, vec};
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
 
@@ -49,7 +48,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         hiding_generator: Option<G>,
         randomizer: Option<G::ScalarField>,
     ) -> G::Projective {
-        let scalars_bigint = ff_fft::cfg_iter!(scalars)
+        let scalars_bigint = ark_std::cfg_iter!(scalars)
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
 
@@ -67,7 +66,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let mut i = 0u64;
         let mut challenge = None;
         while challenge.is_none() {
-            let hash_input = algebra_core::to_bytes![bytes, i].unwrap();
+            let hash_input = ark_ff::to_bytes![bytes, i].unwrap();
             let hash = D::digest(&hash_input);
             challenge = <G::ScalarField as Field>::from_random_bytes(&hash);
 
@@ -79,7 +78,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
     #[inline]
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
-        ff_fft::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
+        ark_std::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
     }
 
     /// The succinct portion of `PC::check`. This algorithm runs in time
@@ -97,7 +96,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let d = vk.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = algebra_core::log2(d + 1) as usize;
+        let log_d = ark_std::log2(d + 1) as usize;
 
         let mut combined_commitment_proj = G::Projective::zero();
         let mut combined_v = G::ScalarField::zero();
@@ -132,8 +131,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
             let rand = proof.rand.unwrap();
 
             let hiding_challenge = Self::compute_random_oracle_challenge(
-                &algebra_core::to_bytes![combined_commitment, point, combined_v, hiding_comm]
-                    .unwrap(),
+                &ark_ff::to_bytes![combined_commitment, point, combined_v, hiding_comm].unwrap(),
             );
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
@@ -142,7 +140,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
         let mut round_challenge = Self::compute_random_oracle_challenge(
-            &algebra_core::to_bytes![combined_commitment, point, combined_v].unwrap(),
+            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
         );
 
         let h_prime = vk.h.mul(round_challenge);
@@ -154,7 +152,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         for (l, r) in l_iter.zip(r_iter) {
             round_challenge = Self::compute_random_oracle_challenge(
-                &algebra_core::to_bytes![round_challenge, l, r].unwrap(),
+                &ark_ff::to_bytes![round_challenge, l, r].unwrap(),
             );
             round_challenges.push(round_challenge);
             round_commitment_proj +=
@@ -281,7 +279,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
     }
 
     fn sample_generators(num_generators: usize) -> Vec<G> {
-        let generators: Vec<_> = ff_fft::cfg_into_iter!(0..num_generators)
+        let generators: Vec<_> = ark_std::cfg_into_iter!(0..num_generators)
             .map(|i| {
                 let i = i as u64;
                 let mut hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i].unwrap());
@@ -305,7 +303,7 @@ impl<G, D, P> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D
 where
     G: AffineCurve,
     D: Digest,
-    P: UVPolynomial<G::ScalarField, Domain = G::ScalarField>,
+    P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
 {
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
@@ -451,7 +449,7 @@ where
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -537,7 +535,7 @@ where
         let d = ck.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = algebra_core::log2(d + 1) as usize;
+        let log_d = ark_std::log2(d + 1) as usize;
 
         let mut combined_commitment;
         let mut hiding_commitment = None;
@@ -545,7 +543,7 @@ where
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-            let mut hiding_polynomial = P::rand(d, None, &mut rng);
+            let mut hiding_polynomial = P::rand(d, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 
             let hiding_rand = G::ScalarField::rand(rng);
@@ -564,7 +562,7 @@ where
             combined_commitment = batch.pop().unwrap();
 
             let hiding_challenge = Self::compute_random_oracle_challenge(
-                &algebra_core::to_bytes![
+                &ark_ff::to_bytes![
                     combined_commitment,
                     point,
                     combined_v,
@@ -593,7 +591,7 @@ where
 
         // ith challenge
         let mut round_challenge = Self::compute_random_oracle_challenge(
-            &algebra_core::to_bytes![combined_commitment, point, combined_v].unwrap(),
+            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
         );
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
@@ -647,19 +645,19 @@ where
             r_vec.push(lr[1]);
 
             round_challenge = Self::compute_random_oracle_challenge(
-                &algebra_core::to_bytes![round_challenge, lr[0], lr[1]].unwrap(),
+                &ark_ff::to_bytes![round_challenge, lr[0], lr[1]].unwrap(),
             );
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
-            ff_fft::cfg_iter_mut!(coeffs_l)
+            ark_std::cfg_iter_mut!(coeffs_l)
                 .zip(coeffs_r)
-                .for_each(|(c_l, c_r)| *c_l += &(round_challenge_inv * &c_r));
+                .for_each(|(c_l, c_r)| *c_l += &(round_challenge_inv * &*c_r));
 
-            ff_fft::cfg_iter_mut!(z_l)
+            ark_std::cfg_iter_mut!(z_l)
                 .zip(z_r)
-                .for_each(|(z_l, z_r)| *z_l += &(round_challenge * &z_r));
+                .for_each(|(z_l, z_r)| *z_l += &(round_challenge * &*z_r));
 
-            ff_fft::cfg_iter_mut!(key_proj_l)
+            ark_std::cfg_iter_mut!(key_proj_l)
                 .zip(key_r)
                 .for_each(|(k_l, k_r)| *k_l += &(k_r.mul(round_challenge)));
 
@@ -688,7 +686,7 @@ where
     fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
         opening_challenge: G::ScalarField,
@@ -701,7 +699,7 @@ where
         let d = vk.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = algebra_core::log2(d + 1) as usize;
+        let log_d = ark_std::log2(d + 1) as usize;
 
         if proof.l_vec.len() != proof.r_vec.len() || proof.l_vec.len() != log_d {
             return Err(Error::IncorrectInputLength(
@@ -739,8 +737,8 @@ where
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        values: &Evaluations<G::ScalarField, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
         opening_challenge: G::ScalarField,
         rng: &mut R,
@@ -825,7 +823,7 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
+        query_set: &QuerySet<P::Point>,
         opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -935,7 +933,7 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
-        evaluations: &Evaluations<G::ScalarField, P::Domain>,
+        evaluations: &Evaluations<G::ScalarField, P::Point>,
         proof: &BatchLCProof<G::ScalarField, P, Self>,
         opening_challenge: G::ScalarField,
         rng: &mut R,
@@ -1021,93 +1019,148 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::InnerProductArgPC;
-
-    use algebra::ed_on_bls12_381::EdwardsAffine;
-    use algebra::AffineCurve;
+    use ark_ec::AffineCurve;
+    use ark_ed_on_bls12_381::EdwardsAffine;
+    use ark_ff::UniformRand;
+    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
     use blake2::Blake2s;
-    use ff_fft::univariate::DensePolynomial as DensePoly;
 
     type UniPoly = DensePoly<<EdwardsAffine as AffineCurve>::ScalarField>;
     type PC<E, D, P> = InnerProductArgPC<E, D, P>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly>;
 
+    fn rand_poly<A: AffineCurve>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<A::ScalarField> {
+        DensePoly::<A::ScalarField>::rand(degree, rng)
+    }
+
+    fn rand_point<A: AffineCurve>(
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> A::ScalarField {
+        A::ScalarField::rand(rng)
+    }
+
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, _, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_test::<_, _, PC_JJB2S>(
+            None,
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        linear_poly_degree_bound_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_degree_bound_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        two_polys_degree_bound_single_query_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, _, PC_JJB2S>(None)
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        full_end_to_end_test::<_, _, PC_JJB2S>(
+            None,
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, _, PC_JJB2S>(None)
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        single_equation_test::<_, _, PC_JJB2S>(
+            None,
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, _, PC_JJB2S>(None).expect("test failed for ed_on_bls12_381-blake2s");
+        two_equation_test::<_, _, PC_JJB2S>(
+            None,
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, _, PC_JJB2S>()
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        two_equation_degree_bound_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, _, PC_JJB2S>(None)
-            .expect("test failed for ed_on_bls12_381-blake2s");
+        full_end_to_end_equation_test::<_, _, PC_JJB2S>(
+            None,
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
@@ -1115,7 +1168,11 @@ mod tests {
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, _, PC_JJB2S>().expect("test failed for ed_on_bls12_381-blake2s");
+        bad_degree_bound_test::<_, _, PC_JJB2S>(
+            rand_poly::<EdwardsAffine>,
+            rand_point::<EdwardsAffine>,
+        )
+        .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 }

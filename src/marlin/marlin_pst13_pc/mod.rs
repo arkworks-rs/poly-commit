@@ -4,12 +4,13 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{MVPolynomial, Term, ToString, Vec};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
-use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra_core::{
-    AffineCurve, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
+use ark_ec::{
+    msm::{FixedBaseMSM, VariableBaseMSM},
+    AffineCurve, PairingEngine, ProjectiveCurve,
 };
+use ark_ff::{One, PrimeField, UniformRand, Zero};
+use ark_std::{marker::PhantomData, ops::Index, vec};
 use combinations::Combinations;
-use core::{marker::PhantomData, ops::Index};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -38,6 +39,61 @@ where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
 {
+    /// Given some point `z`, compute the quotients `w_i(X)` s.t
+    ///
+    /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
+    ///
+    /// These quotients can always be found with no remainder.
+    fn divide_at_point(p: &P, point: &P::Point) -> Vec<P>
+    where
+        P::Point: Index<usize, Output = E::Fr>,
+    {
+        let num_vars = p.num_vars();
+        if p.is_zero() {
+            return vec![P::zero(); num_vars];
+        }
+        let mut quotients = Vec::with_capacity(num_vars);
+        // `cur` represents the current dividend
+        let mut cur = p.clone();
+        // Divide `cur` by `X_i - z_i`
+        for i in 0..num_vars {
+            let mut quotient_terms = Vec::new();
+            let mut remainder_terms = Vec::new();
+            for (mut coeff, term) in cur.terms() {
+                // Since the final remainder is guaranteed to be 0, all the constant terms
+                // cancel out so we don't need to keep track of them
+                if term.is_constant() {
+                    continue;
+                }
+                // If the current term contains `X_i` then divide appropiately,
+                // otherwise add it to the remainder
+                let mut term_vec = (&*term).to_vec();
+                match term_vec.binary_search_by(|(var, _)| var.cmp(&i)) {
+                    Ok(idx) => {
+                        // Repeatedly divide the term by `X_i - z_i` until the remainder
+                        // doesn't contain any `X_i`s
+                        while term_vec[idx].1 > 1 {
+                            // First divide by `X_i` and add the term to the quotient
+                            term_vec[idx] = (i, term_vec[idx].1 - 1);
+                            quotient_terms.push((coeff, P::Term::new(term_vec.clone())));
+                            // Then compute the remainder term in-place
+                            coeff *= &point[i];
+                        }
+                        // Since `X_i` is power 1, we can remove it entirely
+                        term_vec.remove(idx);
+                        quotient_terms.push((coeff, P::Term::new(term_vec.clone())));
+                        remainder_terms.push((point[i] * &coeff, P::Term::new(term_vec)));
+                    }
+                    Err(_) => remainder_terms.push((coeff, term.clone())),
+                }
+            }
+            quotients.push(P::from_coefficients_vec(num_vars, quotient_terms));
+            // Set the current dividend to be the remainder of this division
+            cur = P::from_coefficients_vec(num_vars, remainder_terms);
+        }
+        quotients
+    }
+
     /// Check that the powers support the hiding bound
     fn check_hiding_bound(hiding_poly_degree: usize, num_powers: usize) -> Result<(), Error> {
         if hiding_poly_degree == 0 {
@@ -76,8 +132,8 @@ where
 
     /// Convert polynomial coefficients to `BigInt`
     fn convert_to_bigints(p: &P) -> Vec<<E::Fr as PrimeField>::BigInt> {
-        let plain_coeffs = ff_fft::cfg_into_iter!(p.terms())
-            .map(|(_, coeff)| coeff.into_repr())
+        let plain_coeffs = ark_std::cfg_into_iter!(p.terms())
+            .map(|(coeff, _)| coeff.into_repr())
             .collect();
         plain_coeffs
     }
@@ -87,7 +143,7 @@ impl<E, P> PolynomialCommitment<E::Fr, P> for MarlinPST13<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     type UniversalParams = UniversalParams<E, P>;
     type CommitterKey = CommitterKey<E, P>;
@@ -141,7 +197,7 @@ where
                 };
                 // For each multiset in `terms` evaluate the corresponding monomial at the
                 // trapdoor and generate a `P::Term` object to index it
-                ff_fft::cfg_into_iter!(terms)
+                ark_std::cfg_into_iter!(terms)
                     .map(|term| {
                         let value: E::Fr = term.iter().map(|e| betas[*e]).product();
                         let term = (0..num_vars)
@@ -174,7 +230,7 @@ where
         // containing `betas[i]^j \gamma G` for `j` from 1 to `max_degree+1` to support
         // up to `max_degree` queries
         let mut powers_of_gamma_g = vec![Vec::new(); num_vars];
-        ff_fft::cfg_iter_mut!(powers_of_gamma_g)
+        ark_std::cfg_iter_mut!(powers_of_gamma_g)
             .enumerate()
             .for_each(|(i, v)| {
                 let mut powers_of_beta = Vec::with_capacity(max_degree);
@@ -315,8 +371,8 @@ where
                 )
             });
             // Get the powers of `G` corresponding to the terms of `polynomial`
-            let powers_of_g = ff_fft::cfg_iter!(polynomial.terms())
-                .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
+            let powers_of_g = ark_std::cfg_iter!(polynomial.terms())
+                .map(|(_, term)| *ck.powers_of_g.get(term).unwrap())
                 .collect::<Vec<_>>();
             // Convert coefficients of `polynomial` to BigInts
             let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
@@ -344,12 +400,12 @@ where
                 .blinding_polynomial
                 .terms()
                 .iter()
-                .map(|(v, _)| {
+                .map(|(_, term)| {
                     // Implicit Assumption: Each monomial in `rand` is univariate
-                    let vars = v.vars();
-                    match v.is_constant() {
+                    let vars = term.vars();
+                    match term.is_constant() {
                         true => ck.gamma_g,
-                        false => ck.powers_of_gamma_g[vars[0]][v.degree() - 1],
+                        false => ck.powers_of_gamma_g[vars[0]][term.degree() - 1],
                     }
                 })
                 .collect::<Vec<_>>();
@@ -384,7 +440,7 @@ where
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &P::Domain,
+        point: &P::Point,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
@@ -407,9 +463,9 @@ where
 
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
         let witness_time = start_timer!(|| "Computing witness polynomials");
-        let witnesses = p.divide_at_point(point);
+        let witnesses = Self::divide_at_point(&p, point);
         let hiding_witnesses = if r.is_hiding() {
-            Some(r.blinding_polynomial.divide_at_point(point))
+            Some(Self::divide_at_point(&r.blinding_polynomial, point))
         } else {
             None
         };
@@ -420,8 +476,8 @@ where
             .iter()
             .map(|w| {
                 // Get the powers of `G` corresponding to the witness poly
-                let powers_of_g = ff_fft::cfg_iter!(w.terms())
-                    .map(|(term, _)| *ck.powers_of_g.get(term).unwrap())
+                let powers_of_g = ark_std::cfg_iter!(w.terms())
+                    .map(|(_, term)| *ck.powers_of_g.get(term).unwrap())
                     .collect::<Vec<_>>();
                 // Convert coefficients to BigInt
                 let witness_ints = Self::convert_to_bigints(&w);
@@ -436,7 +492,7 @@ where
         let random_v = if let Some(hiding_witnesses) = hiding_witnesses {
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to hiding witness polynomials");
-            ff_fft::cfg_iter_mut!(w)
+            ark_std::cfg_iter_mut!(w)
                 .enumerate()
                 .for_each(|(i, witness)| {
                     let hiding_witness = &hiding_witnesses[i];
@@ -444,12 +500,12 @@ where
                     let powers_of_gamma_g = hiding_witness
                         .terms()
                         .iter()
-                        .map(|(v, _)| {
+                        .map(|(_, term)| {
                             // Implicit Assumption: Each monomial in `hiding_witness` is univariate
-                            let vars = v.vars();
-                            match v.is_constant() {
+                            let vars = term.vars();
+                            match term.is_constant() {
                                 true => ck.gamma_g,
-                                false => ck.powers_of_gamma_g[vars[0]][v.degree() - 1],
+                                false => ck.powers_of_gamma_g[vars[0]][term.degree() - 1],
                             }
                         })
                         .collect::<Vec<_>>();
@@ -478,7 +534,7 @@ where
     fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &P::Domain,
+        point: &P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
@@ -504,7 +560,7 @@ where
         let lhs = E::pairing(inner, vk.h);
 
         // Create a list of elements corresponding to each pairing in the product on the rhs
-        let rhs_product: Vec<(E::G1Prepared, E::G2Prepared)> = ff_fft::cfg_iter!(proof.w)
+        let rhs_product: Vec<(E::G1Prepared, E::G2Prepared)> = ark_std::cfg_iter!(proof.w)
             .enumerate()
             .map(|(j, w_j)| {
                 let beta_minus_z: E::G2Affine =
@@ -521,8 +577,8 @@ where
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        values: &Evaluations<E::Fr, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -551,7 +607,7 @@ where
             .zip(proof)
         {
             let w = &proof.w;
-            let mut temp: E::G1Projective = ff_fft::cfg_iter!(w)
+            let mut temp: E::G1Projective = ark_std::cfg_iter!(w)
                 .enumerate()
                 .map(|(j, w_j)| w_j.mul(z[j]))
                 .sum();
@@ -562,7 +618,7 @@ where
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
             total_c += &c.mul(randomizer);
-            ff_fft::cfg_iter_mut!(total_w)
+            ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
             // We don't need to sample randomizers from the full field,
@@ -593,7 +649,7 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
+        query_set: &QuerySet<P::Point>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -621,8 +677,8 @@ where
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        evaluations: &Evaluations<E::Fr, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -647,11 +703,14 @@ where
 mod tests {
     #![allow(non_camel_case_types)]
     use super::MarlinPST13;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
-    use algebra::PairingEngine;
-
-    use ff_fft::multivariate::{SparsePolynomial as SparsePoly, SparseTerm};
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::PairingEngine;
+    use ark_ff::UniformRand;
+    use ark_poly::{
+        multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
+        MVPolynomial,
+    };
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
@@ -660,21 +719,61 @@ mod tests {
     type PC_Bls12_381 = PC<Bls12_381, MVPoly_381>;
     type PC_Bls12_377 = PC<Bls12_377, MVPoly_377>;
 
+    fn rand_poly<E: PairingEngine>(
+        degree: usize,
+        num_vars: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> SparsePoly<E::Fr, SparseTerm> {
+        SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
+    }
+
+    fn rand_point<E: PairingEngine>(
+        num_vars: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> Vec<E::Fr> {
+        let num_vars = num_vars.unwrap();
+        let mut point = Vec::with_capacity(num_vars);
+        for _ in 0..num_vars {
+            point.push(E::Fr::rand(rng));
+        }
+        point
+    }
+
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_poly_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
-        single_poly_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        single_poly_test::<_, _, PC_Bls12_377>(
+            num_vars,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_test::<_, _, PC_Bls12_381>(
+            num_vars,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        full_end_to_end_test::<_, _, PC_Bls12_377>(
+            num_vars,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        full_end_to_end_test::<_, _, PC_Bls12_381>(
+            num_vars,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -682,9 +781,19 @@ mod tests {
     fn single_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_equation_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        single_equation_test::<_, _, PC_Bls12_377>(
+            num_vars,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        single_equation_test::<_, _, PC_Bls12_381>(
+            num_vars,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -692,9 +801,19 @@ mod tests {
     fn two_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        two_equation_test::<_, _, PC_Bls12_377>(num_vars).expect("test failed for bls12-377");
+        two_equation_test::<_, _, PC_Bls12_377>(
+            num_vars,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, _, PC_Bls12_381>(num_vars).expect("test failed for bls12-381");
+        two_equation_test::<_, _, PC_Bls12_381>(
+            num_vars,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -702,11 +821,19 @@ mod tests {
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(num_vars)
-            .expect("test failed for bls12-377");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(
+            num_vars,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(num_vars)
-            .expect("test failed for bls12-381");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(
+            num_vars,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 }

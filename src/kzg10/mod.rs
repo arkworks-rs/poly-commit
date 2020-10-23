@@ -5,15 +5,16 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG11](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, UVPolynomial, Vec};
-use algebra_core::msm::{FixedBaseMSM, VariableBaseMSM};
-use algebra_core::{
-    AffineCurve, Group, One, PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
-};
+use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
+use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
+use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{One, PrimeField, UniformRand, Zero};
+use ark_poly::UVPolynomial;
 use rand_core::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+use ark_std::{format, vec};
 use core::marker::PhantomData;
 use core::ops::Div;
 
@@ -32,7 +33,7 @@ pub struct KZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
 impl<E, P> KZG10<E, P>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Domain = E::Fr>,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
     /// Constructs public parameters when given as input the maximum degree `degree`
@@ -204,7 +205,7 @@ where
     /// p(z) is the remainder term. We can therefore omit p(z) when computing the quotient.
     pub fn compute_witness_polynomial(
         p: &P,
-        point: P::Domain,
+        point: P::Point,
         randomness: &Randomness<E, P>,
     ) -> Result<(P, Option<P>), Error> {
         let divisor = P::from_coefficients_vec(vec![-point, E::Fr::one()]);
@@ -229,7 +230,7 @@ where
 
     pub(crate) fn open_with_witness_polynomial<'a>(
         powers: &Powers<E>,
-        point: P::Domain,
+        point: P::Point,
         randomness: &Randomness<E, P>,
         witness_polynomial: &P,
         hiding_witness_polynomial: Option<&P>,
@@ -274,7 +275,7 @@ where
     pub(crate) fn open<'a>(
         powers: &Powers<E>,
         p: &P,
-        point: P::Domain,
+        point: P::Point,
         rand: &Randomness<E, P>,
     ) -> Result<Proof<E>, Error> {
         Self::check_degree_is_within_bounds(p.degree(), powers.size())?;
@@ -348,7 +349,7 @@ where
             let mut temp = w.mul(*z);
             temp.add_assign_mixed(&c.0);
             let c = temp;
-            g_multiplier += &(randomizer * &v);
+            g_multiplier += &(randomizer * v);
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
@@ -467,7 +468,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
 
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
-    let coeffs = ff_fft::cfg_iter!(p)
+    let coeffs = ark_std::cfg_iter!(p)
         .map(|s| s.into_repr())
         .collect::<Vec<_>>();
     end_timer!(to_bigint_time);
@@ -480,16 +481,31 @@ mod tests {
     use crate::kzg10::*;
     use crate::*;
 
-    use algebra::bls12_381::Fr;
-    use algebra::test_rng;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
-
-    use ff_fft::univariate::DensePolynomial as DensePoly;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
+    use ark_bls12_381::Fr;
+    use ark_ec::PairingEngine;
+    use ark_ff::test_rng;
+    use ark_poly::univariate::DensePolynomial as DensePoly;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
+
+    fn rand_poly<E: PairingEngine, P: UVPolynomial<E::Fr>>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> P {
+        P::rand(degree, rng)
+    }
+
+    fn rand_point<E: PairingEngine, P: UVPolynomial<E::Fr, Point = E::Fr>>(
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> P::Point {
+        E::Fr::rand(rng)
+    }
 
     impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
@@ -552,7 +568,7 @@ mod tests {
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Domain = E::Fr>,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -563,10 +579,10 @@ mod tests {
             }
             let pp = KZG10::<E, P>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, degree)?;
-            let p = P::rand(degree, None, rng);
+            let p = rand_poly::<E, P>(degree, None, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = P::rand_domain_point(None, rng);
+            let point = rand_point::<E, P>(None, rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -583,7 +599,7 @@ mod tests {
     fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Domain = E::Fr>,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -591,10 +607,10 @@ mod tests {
             let degree = 50;
             let pp = KZG10::<E, P>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, 2)?;
-            let p = P::rand(1, None, rng);
+            let p = rand_poly::<E, P>(1, None, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = P::rand_domain_point(None, rng);
+            let point = rand_point::<E, P>(None, rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -611,7 +627,7 @@ mod tests {
     fn batch_check_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Domain = E::Fr>,
+        P: UVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -627,10 +643,10 @@ mod tests {
             let mut points = Vec::new();
             let mut proofs = Vec::new();
             for _ in 0..10 {
-                let p = P::rand(degree, None, rng);
+                let p = rand_poly::<E, P>(degree, None, rng);
                 let hiding_bound = Some(1);
                 let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-                let point = P::rand_domain_point(None, rng);
+                let point = rand_point::<E, P>(None, rng);
                 let value = p.evaluate(&point);
                 let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
 

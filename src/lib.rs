@@ -16,28 +16,15 @@ extern crate derivative;
 extern crate bench_utils;
 extern crate combinations;
 
-use algebra_core::Field;
-use core::fmt::Debug;
-use core::iter::FromIterator;
-pub use ff_fft::{multivariate::Term, MVPolynomial, Polynomial, UVPolynomial};
+use ark_ff::Field;
+pub use ark_poly::{multivariate::Term, MVPolynomial, Polynomial, UVPolynomial};
 use rand_core::RngCore;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::{
+use ark_std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    string::{String, ToString},
-    vec::Vec,
-};
-
-#[cfg(feature = "std")]
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    iter::FromIterator,
     string::{String, ToString},
     vec::Vec,
 };
@@ -149,7 +136,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     /// The evaluation proof for a query set.
     type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
     /// The error type for the scheme.
-    type Error: algebra_core::Error + From<Error>;
+    type Error: ark_std::error::Error + From<Error>;
 
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme. `num_vars` specifies the number of
@@ -198,7 +185,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -214,7 +201,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
+        query_set: &QuerySet<P::Point>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -287,7 +274,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         opening_challenge: F,
@@ -301,8 +288,8 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        evaluations: &Evaluations<F, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        evaluations: &Evaluations<F, P::Point>,
         proof: &Self::BatchProof,
         opening_challenge: F,
         rng: &mut R,
@@ -364,7 +351,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
+        query_set: &QuerySet<P::Point>,
         opening_challenge: F,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -400,8 +387,8 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        eqn_query_set: &QuerySet<P::Domain>,
-        eqn_evaluations: &Evaluations<F, P::Domain>,
+        eqn_query_set: &QuerySet<P::Point>,
+        eqn_evaluations: &Evaluations<F, P::Point>,
         proof: &BatchLCProof<F, P, Self>,
         opening_challenge: F,
         rng: &mut R,
@@ -469,7 +456,7 @@ pub fn evaluate_query_set<'a, F, P, T>(
 ) -> Evaluations<'a, F, T>
 where
     F: Field,
-    P: 'a + Polynomial<F, Domain = T>,
+    P: 'a + Polynomial<F, Point = T>,
     T: Clone + Debug + Ord + Sync,
 {
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
@@ -506,8 +493,8 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord + Sync>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use algebra::{test_rng, Field};
-    use ff_fft::Polynomial;
+    use ark_ff::{test_rng, Field};
+    use ark_poly::Polynomial;
     use rand::{distributions::Distribution, Rng};
 
     #[derive(Default)]
@@ -522,7 +509,10 @@ pub mod tests {
         num_equations: Option<usize>,
     }
 
-    pub fn bad_degree_bound_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn bad_degree_bound_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -551,7 +541,7 @@ pub mod tests {
                 degree_bounds.push(degree_bound);
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
-                    P::rand(supported_degree, None, rng),
+                    rand_poly(supported_degree, None, rng),
                     Some(degree_bound),
                     hiding_bound,
                 ));
@@ -576,7 +566,7 @@ pub mod tests {
 
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
-            let point = P::rand_domain_point(None, rng);
+            let point = rand_point(None, rng);
             for (i, label) in labels.iter().enumerate() {
                 query_set.insert((label.clone(), point.clone()));
                 let value = polynomials[i].evaluate(&point);
@@ -608,7 +598,11 @@ pub mod tests {
         Ok(())
     }
 
-    fn test_template<F, P, PC>(info: TestInfo) -> Result<(), PC::Error>
+    fn test_template<F, P, PC>(
+        info: TestInfo,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -674,7 +668,7 @@ pub mod tests {
 
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
-                    P::rand(degree, num_vars, rng).into(),
+                    rand_poly(degree, num_vars, rng).into(),
                     degree_bound,
                     hiding_bound,
                 ))
@@ -701,7 +695,7 @@ pub mod tests {
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
             for _ in 0..num_points_in_query_set {
-                let point = P::rand_domain_point(num_vars, rng);
+                let point = rand_point(num_vars, rng);
                 for (i, label) in labels.iter().enumerate() {
                     query_set.insert((label.clone(), point.clone()));
                     let value = polynomials[i].evaluate(&point);
@@ -744,7 +738,11 @@ pub mod tests {
         Ok(())
     }
 
-    fn equation_test_template<F, P, PC>(info: TestInfo) -> Result<(), PC::Error>
+    fn equation_test_template<F, P, PC>(
+        info: TestInfo,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -815,7 +813,7 @@ pub mod tests {
 
                 polynomials.push(LabeledPolynomial::new_owned(
                     label,
-                    P::rand(degree, num_vars, rng),
+                    rand_poly(degree, num_vars, rng),
                     degree_bound,
                     hiding_bound,
                 ))
@@ -841,7 +839,7 @@ pub mod tests {
             let mut query_set = QuerySet::new();
             let mut values = Evaluations::new();
             for i in 0..num_points_in_query_set {
-                let point = P::rand_domain_point(num_vars, rng);
+                let point = rand_point(num_vars, rng);
                 for j in 0..num_equations.unwrap() {
                     let label = format!("query {} eqn {}", i, j);
                     let mut lc = LinearCombination::empty(label.clone());
@@ -920,7 +918,11 @@ pub mod tests {
         Ok(())
     }
 
-    pub fn single_poly_test<F, P, PC>(num_vars: Option<usize>) -> Result<(), PC::Error>
+    pub fn single_poly_test<F, P, PC>(
+        num_vars: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -936,10 +938,13 @@ pub mod tests {
             max_num_queries: 1,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn linear_poly_degree_bound_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn linear_poly_degree_bound_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -955,10 +960,13 @@ pub mod tests {
             max_num_queries: 1,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn single_poly_degree_bound_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn single_poly_degree_bound_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -974,10 +982,13 @@ pub mod tests {
             max_num_queries: 1,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -993,10 +1004,13 @@ pub mod tests {
             max_num_queries: 2,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1012,10 +1026,13 @@ pub mod tests {
             max_num_queries: 2,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn two_polys_degree_bound_single_query_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn two_polys_degree_bound_single_query_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1031,10 +1048,14 @@ pub mod tests {
             max_num_queries: 1,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn full_end_to_end_test<F, P, PC>(num_vars: Option<usize>) -> Result<(), PC::Error>
+    pub fn full_end_to_end_test<F, P, PC>(
+        num_vars: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1050,10 +1071,14 @@ pub mod tests {
             max_num_queries: 5,
             ..Default::default()
         };
-        test_template::<F, P, PC>(info)
+        test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn full_end_to_end_equation_test<F, P, PC>(num_vars: Option<usize>) -> Result<(), PC::Error>
+    pub fn full_end_to_end_equation_test<F, P, PC>(
+        num_vars: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1069,10 +1094,14 @@ pub mod tests {
             max_num_queries: 5,
             num_equations: Some(10),
         };
-        equation_test_template::<F, P, PC>(info)
+        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn single_equation_test<F, P, PC>(num_vars: Option<usize>) -> Result<(), PC::Error>
+    pub fn single_equation_test<F, P, PC>(
+        num_vars: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1088,10 +1117,14 @@ pub mod tests {
             max_num_queries: 1,
             num_equations: Some(1),
         };
-        equation_test_template::<F, P, PC>(info)
+        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn two_equation_test<F, P, PC>(num_vars: Option<usize>) -> Result<(), PC::Error>
+    pub fn two_equation_test<F, P, PC>(
+        num_vars: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1107,10 +1140,13 @@ pub mod tests {
             max_num_queries: 1,
             num_equations: Some(2),
         };
-        equation_test_template::<F, P, PC>(info)
+        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 
-    pub fn two_equation_degree_bound_test<F, P, PC>() -> Result<(), PC::Error>
+    pub fn two_equation_degree_bound_test<F, P, PC>(
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    ) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -1126,6 +1162,6 @@ pub mod tests {
             max_num_queries: 1,
             num_equations: Some(2),
         };
-        equation_test_template::<F, P, PC>(info)
+        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
     }
 }

@@ -3,8 +3,9 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
-use algebra_core::{AffineCurve, Field, PairingEngine, ProjectiveCurve, Zero};
-use core::{marker::PhantomData, ops::Div};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{Field, Zero};
+use ark_std::{marker::PhantomData, ops::Div, vec};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -51,7 +52,7 @@ pub(crate) fn shift_polynomial<E: PairingEngine, P: UVPolynomial<E::Fr>>(
 impl<E, P> PolynomialCommitment<E::Fr, P> for MarlinKZG10<E, P>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Domain = E::Fr>,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
     type UniversalParams = UniversalParams<E>;
@@ -238,7 +239,7 @@ where
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
@@ -330,7 +331,7 @@ where
     fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &'a P::Domain,
+        point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
@@ -355,8 +356,8 @@ where
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        values: &Evaluations<E::Fr, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -390,7 +391,7 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
+        query_set: &QuerySet<P::Point>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
@@ -418,8 +419,8 @@ where
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        evaluations: &Evaluations<E::Fr, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -443,12 +444,12 @@ where
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-
     use super::MarlinKZG10;
-    use algebra::Bls12_377;
-    use algebra::Bls12_381;
-    use algebra::PairingEngine;
-    use ff_fft::univariate::DensePolynomial as DensePoly;
+    use ark_bls12_377::Bls12_377;
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::PairingEngine;
+    use ark_ff::UniformRand;
+    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
@@ -457,98 +458,200 @@ mod tests {
     type PC_Bls12_381 = PC<Bls12_381, UniPoly_381>;
     type PC_Bls12_377 = PC<Bls12_377, UniPoly_377>;
 
+    fn rand_poly<E: PairingEngine>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<E::Fr> {
+        DensePoly::<E::Fr>::rand(degree, rng)
+    }
+
+    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> E::Fr {
+        E::Fr::rand(rng)
+    }
+
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, _, PC_Bls12_377>(None).expect("test failed for bls12-377");
-        single_poly_test::<_, _, PC_Bls12_381>(None).expect("test failed for bls12-381");
+        single_poly_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, _, PC_Bls12_377>().expect("test failed for bls12-377");
-        linear_poly_degree_bound_test::<_, _, PC_Bls12_381>().expect("test failed for bls12-381");
+        linear_poly_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        linear_poly_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, _, PC_Bls12_377>().expect("test failed for bls12-377");
-        single_poly_degree_bound_test::<_, _, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, _, PC_Bls12_377>(None).expect("test failed for bls12-377");
+        full_end_to_end_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, _, PC_Bls12_381>(None).expect("test failed for bls12-381");
+        full_end_to_end_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, _, PC_Bls12_377>(None).expect("test failed for bls12-377");
+        single_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, _, PC_Bls12_381>(None).expect("test failed for bls12-381");
+        single_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, _, PC_Bls12_377>(None).expect("test failed for bls12-377");
+        two_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, _, PC_Bls12_381>(None).expect("test failed for bls12-381");
+        two_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, _, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_degree_bound_test::<_, _, PC_Bls12_381>().expect("test failed for bls12-381");
+        two_equation_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(None)
-            .expect("test failed for bls12-377");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(None)
-            .expect("test failed for bls12-381");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -556,9 +659,17 @@ mod tests {
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, _, PC_Bls12_377>().expect("test failed for bls12-377");
+        bad_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        bad_degree_bound_test::<_, _, PC_Bls12_381>().expect("test failed for bls12-381");
+        bad_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 }

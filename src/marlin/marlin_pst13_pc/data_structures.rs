@@ -1,10 +1,12 @@
 use crate::{BTreeMap, MVPolynomial, Vec};
 use crate::{PCCommitterKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey};
-use algebra_core::{PairingEngine, ToBytes, Zero};
-use core::{
+use ark_ec::PairingEngine;
+use ark_ff::{ToBytes, Zero};
+use ark_std::{
     marker::PhantomData,
     ops::{Add, AddAssign, Index},
 };
+
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
@@ -14,7 +16,7 @@ pub struct UniversalParams<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `max_degree` evaluated at `\beta`
@@ -45,7 +47,7 @@ impl<E, P> PCUniversalParams for UniversalParams<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     fn max_degree(&self) -> usize {
         self.max_degree
@@ -65,7 +67,7 @@ pub struct CommitterKey<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `supported_degree` evaluated at `\beta`
@@ -89,7 +91,7 @@ impl<E, P> PCCommitterKey for CommitterKey<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     fn max_degree(&self) -> usize {
         self.max_degree
@@ -153,7 +155,7 @@ pub struct Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     /// A multivariate polynomial where each monomial is univariate with random coefficient
     pub blinding_polynomial: P,
@@ -164,7 +166,7 @@ impl<E, P> Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
@@ -184,7 +186,7 @@ impl<E, P> PCRandomness for Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     fn empty() -> Self {
         Self {
@@ -201,7 +203,7 @@ where
     ) -> Self {
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
         Randomness {
-            blinding_polynomial: P::rand(hiding_poly_degree, num_vars, rng),
+            blinding_polynomial: P::rand(hiding_poly_degree, num_vars.unwrap(), rng),
             _engine: PhantomData,
         }
     }
@@ -211,7 +213,7 @@ impl<'a, E: PairingEngine, P: MVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     type Output = Self;
 
@@ -226,7 +228,7 @@ impl<'a, E, P> Add<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     type Output = Self;
 
@@ -241,7 +243,7 @@ impl<'a, E, P> AddAssign<&'a Randomness<E, P>> for Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
@@ -253,7 +255,7 @@ impl<'a, E, P> AddAssign<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr>,
-    P::Domain: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::Fr>,
 {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E, P>)) {
@@ -282,18 +284,17 @@ pub struct Proof<E: PairingEngine> {
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
-            algebra_core::to_bytes![E::Fr::zero()].unwrap().len()
+            ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
         } else {
             0
         };
-        (self.w.len() * algebra_core::to_bytes![E::G1Affine::zero()].unwrap().len()) / 2
-            + hiding_size
+        (self.w.len() * ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len()) / 2 + hiding_size
     }
 }
 
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
-    fn write<W: algebra_core::io::Write>(&self, mut writer: W) -> algebra_core::io::Result<()> {
+    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.w
             .iter()
             .map(|e| e.write(&mut writer))

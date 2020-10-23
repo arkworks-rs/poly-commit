@@ -3,8 +3,9 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
-use algebra_core::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
-use core::{convert::TryInto, ops::AddAssign};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{Field, One, Zero};
+use ark_std::{convert::TryInto, ops::AddAssign};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by
@@ -212,7 +213,7 @@ impl<E: PairingEngine> Marlin<E> {
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, P, PC>, Error>
     where
-        P: 'a + Polynomial<E::Fr, Domain = D>,
+        P: 'a + Polynomial<E::Fr, Point = D>,
         D: Debug + Clone + Ord + Sync,
         PC: PolynomialCommitment<E::Fr, P, Commitment = marlin_pc::Commitment<E>, Error = Error>,
         PC::Randomness: 'a + AddAssign<(E::Fr, &'a PC::Randomness)>,
@@ -286,15 +287,15 @@ impl<E: PairingEngine> Marlin<E> {
         vk: &PC::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
-        query_set: &QuerySet<P::Domain>,
-        evaluations: &Evaluations<E::Fr, P::Domain>,
+        query_set: &QuerySet<P::Point>,
+        evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, P, PC>,
         opening_challenge: E::Fr,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
         R: RngCore,
-        P: Polynomial<E::Fr, Domain = D>,
+        P: Polynomial<E::Fr, Point = D>,
         D: Debug + Clone + Ord + Sync,
         PC: PolynomialCommitment<E::Fr, P, Commitment = marlin_pc::Commitment<E>, Error = Error>,
         PC::Commitment: 'a,
