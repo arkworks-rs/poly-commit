@@ -610,7 +610,7 @@ where
         let mut cur_z: G::ScalarField = G::ScalarField::one();
         for _ in 0..(d + 1) {
             z.push(cur_z);
-            cur_z *= &point;
+            cur_z *= point;
         }
         let mut z = z.as_mut_slice();
 
