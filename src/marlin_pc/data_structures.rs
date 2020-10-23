@@ -1,6 +1,6 @@
 use crate::{
-    PCCommitment, PCPreparedCommitment, PCCommitterKey, PCRandomness, PCVerifierKey,
-    PCPreparedVerifierKey, Vec,
+    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
+    PCVerifierKey, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};

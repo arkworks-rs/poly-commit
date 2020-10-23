@@ -218,7 +218,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             v.sort();
             v.dedup();
             v
-        });        
+        });
 
         // Check whether we have some degree bounds to enforce
         let (shifted_powers, degree_bounds_and_shift_powers) =
