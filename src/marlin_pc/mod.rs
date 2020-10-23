@@ -13,6 +13,9 @@ use rand_core::RngCore;
 mod data_structures;
 pub use data_structures::*;
 
+mod constraints;
+pub use constraints::*;
+
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
 /// and (optional) hiding property taken from [[CHMMVW20, “Marlin”]][marlin].
 ///
@@ -563,7 +566,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
             }
         }
         let proof_time = start_timer!(|| "Creating proof for unshifted polynomials");
-        let proof = kzg10::KZG10::open(&ck.powers(), &p, point.clone(), &r)?;
+        let proof = kzg10::KZG10::open(&ck.powers(), &p, point, &r)?;
         let mut w = proof.w.into_projective();
         let mut random_v = proof.random_v;
         end_timer!(proof_time);
@@ -761,9 +764,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
-                poly += (coeff.clone(), cur_poly.polynomial());
-                randomness += (coeff.clone(), cur_rand);
-                coeffs_and_comms.push((coeff.clone(), cur_comm.commitment()));
+                poly += (*coeff, cur_poly.polynomial());
+                randomness += (*coeff, cur_rand);
+                coeffs_and_comms.push((*coeff, cur_comm.commitment()));
 
                 if degree_bound.is_none() {
                     assert!(randomness.shifted_rand.is_none());

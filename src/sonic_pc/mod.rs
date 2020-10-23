@@ -480,7 +480,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 opening_challenges,
                 Some(randomizer),
             );
-
+            
             randomizer = u128::rand(rng).into();
         }
 

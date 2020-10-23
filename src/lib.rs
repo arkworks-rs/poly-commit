@@ -20,20 +20,7 @@ use core::iter::FromIterator;
 pub use ark_poly::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-    string::{String, ToString},
-    vec::Vec,
-};
-
-#[cfg(feature = "std")]
-use std::{
+use ark_std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     string::{String, ToString},
@@ -43,6 +30,9 @@ use std::{
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
 pub use data_structures::*;
+
+mod pc_constraints;
+pub use pc_constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
@@ -73,7 +63,6 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-// TODO: add "Prepared" to marlin_pc
 pub mod marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
@@ -93,7 +82,6 @@ pub mod sonic_pc;
 /// The construction is detailed in [[BCMS20]][pcdas].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
-// TODO: add "Prepared" to marlin_pc
 pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations

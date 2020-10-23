@@ -28,8 +28,13 @@ ark-poly = { git = "https://github.com/arkworks-rs/algebra", default-features = 
 
 ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = false }
 
-bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
+ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
 
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
+
+ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative" }
+
+bench-utils = { git = "https://github.com/arkworks-rs/utils" }
 rand_core = { version = "0.5", default-features = false }
 digest = "0.8"
 rayon = { version = "1", optional = true }
