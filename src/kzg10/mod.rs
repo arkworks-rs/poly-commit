@@ -10,6 +10,7 @@ use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
 use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::UVPolynomial;
+
 use rand_core::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
