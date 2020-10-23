@@ -16,8 +16,8 @@ extern crate derivative;
 extern crate bench_utils;
 
 use ark_ff::Field;
-use core::iter::FromIterator;
 pub use ark_poly::DensePolynomial as Polynomial;
+use core::iter::FromIterator;
 use rand_core::RngCore;
 
 use ark_std::{

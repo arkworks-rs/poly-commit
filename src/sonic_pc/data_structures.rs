@@ -1,5 +1,7 @@
 use crate::kzg10;
-use crate::{BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec};
+use crate::{
+    BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
+};
 use ark_ec::{PairingEngine, ProjectiveCurve};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
