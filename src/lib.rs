@@ -20,20 +20,7 @@ use core::iter::FromIterator;
 pub use ark_poly::DensePolynomial as Polynomial;
 use rand_core::RngCore;
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-    string::{String, ToString},
-    vec::Vec,
-};
-
-#[cfg(feature = "std")]
-use std::{
+use ark_std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     string::{String, ToString},
@@ -43,6 +30,9 @@ use std::{
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
 pub use data_structures::*;
+
+mod pc_constraints;
+pub use pc_constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
@@ -73,7 +63,6 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-// TODO: add "Prepared" to marlin_pc
 pub mod marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
@@ -93,7 +82,6 @@ pub mod sonic_pc;
 /// The construction is detailed in [[BCMS20]][pcdas].
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
-// TODO: add "Prepared" to marlin_pc
 pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
@@ -109,20 +97,12 @@ pub type QuerySet<'a, F> = BTreeSet<(String, (String, F))>;
 pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
 
 /// A proof of satisfaction of linear combinations.
+#[derive(Clone)]
 pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
     /// Evaluations required to verify the proof.
     pub evals: Option<Vec<F>>,
-}
-
-impl<F: Field, PC: PolynomialCommitment<F>> Clone for BatchLCProof<F, PC> {
-    fn clone(&self) -> Self {
-        BatchLCProof {
-            proof: self.proof.clone(),
-            evals: self.evals.clone(),
-        }
-    }
 }
 
 /// Describes the interface for a polynomial commitment scheme that allows
@@ -282,14 +262,14 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
     /// Verifies that `values` are the evaluations at `point` of the polynomials
     /// committed inside `commitments`.
-    fn check<'a, R: RngCore>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: F,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         opening_challenge: F,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a;
@@ -344,7 +324,15 @@ pub trait PolynomialCommitment<F: Field>: Sized {
             }
 
             let proof_time = start_timer!(|| "Checking per-query proof");
-            result &= Self::check(vk, comms, *point, values, &proof, opening_challenge, rng)?;
+            result &= Self::check(
+                vk,
+                comms,
+                *point,
+                values,
+                &proof,
+                opening_challenge,
+                Some(rng),
+            )?;
             end_timer!(proof_time);
         }
         Ok(result)
@@ -487,14 +475,14 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
     /// check but with individual challenges
     /// By default, we downgrade them to only use the first individual opening challenges
-    fn check_individual_opening_challenges<'a, R: RngCore>(
+    fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: F,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         opening_challenges: &dyn Fn(usize) -> F,
-        rng: &mut R,
+        rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

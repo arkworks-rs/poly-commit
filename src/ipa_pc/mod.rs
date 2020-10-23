@@ -679,14 +679,14 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         })
     }
 
-    fn check<'a, R: RngCore>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
         opening_challenge: G::ScalarField,
-        _rng: &mut R,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

@@ -24,8 +24,16 @@ edition = "2018"
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra", default-features = false, features = [ "derive" ] }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
-ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = false }
 ark-poly = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
+
+ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = false }
+
+ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
+
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
+
+nonnative = { git = "ssh://git@github.com/arkworks-rs/nonnative.git" }
+
 bench-utils = { git = "https://github.com/arkworks-rs/utils" }
 rand_core = { version = "0.5", default-features = false }
 digest = "0.8"
