@@ -115,9 +115,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey + Default;
+    type VerifierKey: PCVerifierKey;
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Default + Clone;
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The prepared commitment to a polynomial.
@@ -576,8 +576,151 @@ pub trait PolynomialCommitment<F: Field>: Sized {
         Ok(true)
     }
 
+    /// open but with individual challenges
+    /// the non-individual version `open` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
+    fn open_individual_opening_challenges<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        point: F,
+        opening_challenges: &dyn Fn(usize) -> F,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<Self::Proof, Self::Error>
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        Self::open(
+            ck,
+            labeled_polynomials,
+            commitments,
+            point,
+            opening_challenges(0),
+            rands,
+            rng,
+        )
+    }
+
+    /// check but with individual challenges
+    /// The non-individual version `check` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
+    fn check_individual_opening_challenges<'a>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        point: F,
+        values: impl IntoIterator<Item = F>,
+        proof: &Self::Proof,
+        opening_challenges: &dyn Fn(usize) -> F,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        Self::check(
+            vk,
+            commitments,
+            point,
+            values,
+            proof,
+            opening_challenges(0),
+            rng,
+        )
+    }
+
+    /// batch_check but with individual challenges
+    /// The non-individual version `batch_check` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
+    fn batch_check_individual_opening_challenges<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<F>,
+        evaluations: &Evaluations<F>,
+        proof: &Self::BatchProof,
+        opening_challenges: &dyn Fn(usize) -> F,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        Self::batch_check(
+            vk,
+            commitments,
+            query_set,
+            evaluations,
+            proof,
+            opening_challenges(0),
+            rng,
+        )
+    }
+
+    /// open_combinations but with individual challenges
+    /// The non-individual version `open_combinations` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
+    fn open_combinations_individual_opening_challenges<'a>(
+        ck: &Self::CommitterKey,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<F>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<F>,
+        opening_challenges: &dyn Fn(usize) -> F,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<BatchLCProof<F, Self>, Self::Error>
+    where
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        Self::open_combinations(
+            ck,
+            lc_s,
+            polynomials,
+            commitments,
+            query_set,
+            opening_challenges(0),
+            rands,
+            rng,
+        )
+    }
+
+    /// check_combinations but with individual challenges
+    /// The non-individual version `check_combinations` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
+    fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
+        vk: &Self::VerifierKey,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<F>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<F>,
+        evaluations: &Evaluations<F>,
+        proof: &BatchLCProof<F, Self>,
+        opening_challenges: &dyn Fn(usize) -> F,
+        rng: &mut R,
+    ) -> Result<bool, Self::Error>
+    where
+        Self::Commitment: 'a,
+    {
+        Self::check_combinations(
+            vk,
+            lc_s,
+            commitments,
+            query_set,
+            evaluations,
+            proof,
+            opening_challenges(0),
+            rng,
+        )
+    }
+
     /// batch_open but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `batch_open` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn batch_open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
