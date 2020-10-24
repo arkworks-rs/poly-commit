@@ -148,7 +148,7 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
 
 /// `PreparedVerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct PreparedVerifierKey<E: PairingEngine> {
     /// The verification key for the underlying KZG10 scheme.
     pub prepared_vk: kzg10::PreparedVerifierKey<E>,
@@ -259,7 +259,6 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
 /// Prepared commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = ""),

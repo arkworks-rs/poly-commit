@@ -82,8 +82,9 @@ pub mod sonic_pc;
 pub mod ipa_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
-/// `p` that have previously been committed to. Each element of a `QuerySet` is a `(label, query)`
-/// pair, where `label` is the label of a polynomial in `p`, and `query` is the field element
+/// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
+/// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
+/// `point_label` is the label for the point (e.g., "beta"), and  and `point` is the field element
 /// that `p[label]` is to be queried at.
 pub type QuerySet<'a, F> = BTreeSet<(String, (String, F))>;
 
@@ -114,9 +115,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey + Default;
+    type VerifierKey: PCVerifierKey;
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Default + Clone;
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The prepared commitment to a polynomial.
@@ -445,7 +446,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// open but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// the non-individual version `open` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
@@ -471,7 +474,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// check but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `check` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -496,7 +501,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// batch_check but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `batch_check` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -521,7 +528,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// open_combinations but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `open_combinations` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -549,7 +558,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// check_combinations but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `check_combinations` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -576,7 +587,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// batch_open but with individual challenges
-    /// By default, we downgrade them to only use the first individual opening challenges
+    /// The non-individual version `batch_open` should call this method with
+    /// `opening_challenges = |pow| opening_challenge.pow(&[pow]);`,
+    /// i.e., the same impl as in MarlinKZG.
     fn batch_open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
