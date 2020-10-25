@@ -539,15 +539,15 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
-            p += (challenge_j.clone(), polynomial.polynomial());
-            r += (challenge_j.clone(), &rand.rand);
+            p += (challenge_j, polynomial.polynomial());
+            r += (challenge_j, &rand.rand);
 
             if let Some(degree_bound) = degree_bound {
                 enforce_degree_bound = true;
                 let shifted_rand = rand.shifted_rand.as_ref().unwrap();
                 let (witness, shifted_rand_witness) = kzg10::KZG10::compute_witness_polynomial(
                     polynomial.polynomial(),
-                    point.clone(),
+                    point,
                     &shifted_rand,
                 )?;
                 let challenge_j_1 = opening_challenges(opening_challenge_counter);
@@ -555,10 +555,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
 
                 let shifted_witness = shift_polynomial(ck, &witness, degree_bound);
 
-                shifted_w += (challenge_j_1.clone(), &shifted_witness);
-                shifted_r += (challenge_j_1.clone(), shifted_rand);
+                shifted_w += (challenge_j_1, &shifted_witness);
+                shifted_r += (challenge_j_1, shifted_rand);
                 if let Some(shifted_rand_witness) = shifted_rand_witness {
-                    shifted_r_witness += (challenge_j_1.clone(), &shifted_rand_witness);
+                    shifted_r_witness += (challenge_j_1, &shifted_rand_witness);
                 }
             }
         }
