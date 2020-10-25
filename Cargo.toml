@@ -32,8 +32,11 @@ ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features
 
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
 
+<<<<<<< HEAD
 ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative" }
 
+=======
+>>>>>>> remove the dependency of nonnative for now
 bench-utils = { git = "https://github.com/arkworks-rs/utils" }
 rand_core = { version = "0.5", default-features = false }
 digest = "0.8"
