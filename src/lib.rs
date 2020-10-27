@@ -31,6 +31,10 @@ use ark_std::{
 pub mod data_structures;
 pub use data_structures::*;
 
+/// Constraints for recursion.
+mod pc_constraints;
+pub use pc_constraints::*;
+
 /// Errors pertaining to query sets.
 pub mod error;
 pub use error::*;
