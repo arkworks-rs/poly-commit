@@ -1,5 +1,5 @@
 use crate::{Rc, String, Vec};
-use ark_ff::Field;
+use ark_ff::{Field, ToConstraintField};
 pub use ark_poly::DensePolynomial as Polynomial;
 use core::borrow::Borrow;
 use core::ops::{AddAssign, MulAssign, SubAssign};
@@ -181,6 +181,14 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     /// Retrieve the degree bound in `self`.
     pub fn degree_bound(&self) -> Option<usize> {
         self.degree_bound
+    }
+}
+
+impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
+    for LabeledCommitment<C>
+{
+    fn to_field_elements(&self) -> Option<Vec<F>> {
+        self.commitment.to_field_elements()
     }
 }
 

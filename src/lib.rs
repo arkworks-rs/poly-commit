@@ -99,12 +99,20 @@ pub type QuerySet<'a, F> = BTreeSet<(String, (String, F))>;
 pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
 
 /// A proof of satisfaction of linear combinations.
-#[derive(Clone)]
 pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
     /// Evaluations required to verify the proof.
     pub evals: Option<Vec<F>>,
+}
+
+impl<F: Field, PC: PolynomialCommitment<F>> Clone for BatchLCProof<F, PC> {
+    fn clone(&self) -> Self {
+        BatchLCProof {
+            proof: self.proof.clone(),
+            evals: self.evals.clone(),
+        }
+    }
 }
 
 /// Describes the interface for a polynomial commitment scheme that allows
@@ -119,9 +127,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey;
+    type VerifierKey: PCVerifierKey + Default;
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Default + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The prepared commitment to a polynomial.
