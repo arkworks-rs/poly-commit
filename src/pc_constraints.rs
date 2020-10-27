@@ -1,7 +1,7 @@
 use ark_ff::PrimeField;
-use core::marker::Sized;
-use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_r1cs_std::prelude::*;
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use core::marker::Sized;
 
 use crate::data_structures::LabeledCommitment;
 use crate::{BTreeMap, BTreeSet, LCTerm, LinearCombination, String, Vec};

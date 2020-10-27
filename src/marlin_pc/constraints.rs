@@ -10,9 +10,7 @@ use crate::{
 };
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
-use core::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::MulAssign};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
-use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use ark_r1cs_std::{
     alloc::{AllocVar, AllocationMode},
     bits::{boolean::Boolean, uint8::UInt8, ToBitsGadget},
@@ -23,6 +21,8 @@ use ark_r1cs_std::{
     select::CondSelectGadget,
     R1CSVar, ToBytesGadget, ToConstraintFieldGadget,
 };
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use core::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::MulAssign};
 
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
 pub struct VerifierKeyVar<
@@ -216,7 +216,8 @@ where
 
         let g = PG::G1Var::new_variable(ark_relations::ns!(cs, "g"), || Ok(g.clone()), mode)?;
         let h = PG::G2Var::new_variable(ark_relations::ns!(cs, "h"), || Ok(h.clone()), mode)?;
-        let beta_h = PG::G2Var::new_variable(ark_relations::ns!(cs, "beta_h"), || Ok(beta_h), mode)?;
+        let beta_h =
+            PG::G2Var::new_variable(ark_relations::ns!(cs, "beta_h"), || Ok(beta_h), mode)?;
 
         Ok(Self {
             g,
