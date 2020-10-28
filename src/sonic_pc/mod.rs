@@ -28,7 +28,7 @@ pub struct SonicKZG10<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> SonicKZG10<E> {
-    fn accumulate_elems<'a>(
+    fn accumulate_elems_individual_opening_challenges<'a>(
         combined_comms: &mut BTreeMap<Option<usize>, E::G1Projective>,
         combined_witness: &mut E::G1Projective,
         combined_adjusted_witness: &mut E::G1Projective,
@@ -37,11 +37,14 @@ impl<E: PairingEngine> SonicKZG10<E> {
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &kzg10::Proof<E>,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         randomizer: Option<E::Fr>,
     ) {
         let acc_time = start_timer!(|| "Accumulating elements");
-        let mut curr_challenge = opening_challenge;
+
+        let mut opening_challenge_counter = 0;
+        let mut curr_challenge = opening_challenges(opening_challenge_counter);
+        opening_challenge_counter += 1;
 
         // Keeps track of running combination of values
         let mut combined_values = E::Fr::zero();
@@ -64,7 +67,8 @@ impl<E: PairingEngine> SonicKZG10<E> {
             *combined_comms
                 .entry(degree_bound)
                 .or_insert(E::G1Projective::zero()) += &comm_with_challenge;
-            curr_challenge *= &opening_challenge;
+            curr_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
@@ -329,12 +333,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Ok((labeled_comms, randomness))
     }
 
-    fn open<'a>(
+    fn open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -344,7 +348,11 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     {
         let mut combined_polynomial = Polynomial::zero();
         let mut combined_rand = kzg10::Randomness::empty();
-        let mut curr_challenge = opening_challenge;
+
+        let mut opening_challenge_counter = 0;
+
+        let mut curr_challenge = opening_challenges(opening_challenge_counter);
+        opening_challenge_counter += 1;
 
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -361,7 +369,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
             combined_polynomial += (curr_challenge, polynomial.polynomial());
             combined_rand += (curr_challenge, rand);
-            curr_challenge *= &opening_challenge;
+            curr_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
         }
 
         let proof_time = start_timer!(|| "Creating proof for polynomials");
@@ -371,13 +380,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         Ok(proof)
     }
 
-    fn check<'a>(
+    fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -388,7 +397,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         let mut combined_witness: E::G1Projective = E::G1Projective::zero();
         let mut combined_adjusted_witness: E::G1Projective = E::G1Projective::zero();
 
-        Self::accumulate_elems(
+        Self::accumulate_elems_individual_opening_challenges(
             &mut combined_comms,
             &mut combined_witness,
             &mut combined_adjusted_witness,
@@ -397,7 +406,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             point,
             values,
             proof,
-            opening_challenge,
+            opening_challenges,
             None,
         );
 
@@ -411,13 +420,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         res
     }
 
-    fn batch_check<'a, R: RngCore>(
+    fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         values: &Evaluations<E::Fr>,
         proof: &Self::BatchProof,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -459,7 +468,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 values_to_combine.push(*v_i);
             }
 
-            Self::accumulate_elems(
+            Self::accumulate_elems_individual_opening_challenges(
                 &mut combined_comms,
                 &mut combined_witness,
                 &mut combined_adjusted_witness,
@@ -468,7 +477,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 *point,
                 values_to_combine.into_iter(),
                 p,
-                opening_challenge,
+                opening_challenges,
                 Some(randomizer),
             );
 
@@ -483,13 +492,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         )
     }
 
-    fn open_combinations<'a>(
+    fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
@@ -563,12 +572,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
             .collect::<Vec<_>>();
 
-        let proof = Self::batch_open(
+        let proof = Self::batch_open_individual_opening_challenges(
             ck,
             lc_polynomials.iter(),
             lc_commitments.iter(),
             &query_set,
-            opening_challenge,
+            opening_challenges,
             lc_randomness.iter(),
             rng,
         )?;
@@ -577,14 +586,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn check_combinations<'a, R: RngCore>(
+    fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         evaluations: &Evaluations<E::Fr>,
         proof: &BatchLCProof<E::Fr, Self>,
-        opening_challenge: E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -648,13 +657,13 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
             .collect::<Vec<_>>();
 
-        Self::batch_check(
+        Self::batch_check_individual_opening_challenges(
             vk,
             &lc_commitments,
             &query_set,
             &evaluations,
             proof,
-            opening_challenge,
+            opening_challenges,
             rng,
         )
     }

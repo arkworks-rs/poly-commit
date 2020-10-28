@@ -5,7 +5,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{Field, One, Zero};
+use ark_ff::{One, Zero};
 use ark_std::vec;
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
@@ -113,7 +113,7 @@ impl<E: PairingEngine> MarlinKZG10<E> {
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         values: impl IntoIterator<Item = E::Fr>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
     ) -> Result<(E::G1Projective, E::Fr), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
         let mut combined_comm = E::G1Projective::zero();
@@ -340,170 +340,12 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<Self::Proof, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::open_individual_opening_challenges(
-            ck,
-            labeled_polynomials,
-            commitments,
-            point,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// Verifies that `value` is the evaluation at `x` of the polynomial
-    /// committed inside `comm`.
-    fn check<'a>(
-        vk: &Self::VerifierKey,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
-        values: impl IntoIterator<Item = E::Fr>,
-        proof: &Self::Proof,
-        opening_challenge: E::Fr,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::check_individual_opening_challenges(
-            vk,
-            commitments,
-            point,
-            values,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    fn batch_check<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &Self::BatchProof,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::batch_check_individual_opening_challenges(
-            vk,
-            commitments,
-            query_set,
-            evaluations,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    fn open_combinations<'a>(
-        ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::open_combinations_individual_opening_challenges(
-            ck,
-            lc_s,
-            polynomials,
-            commitments,
-            query_set,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
-    /// committed in `labeled_commitments`.
-    fn check_combinations<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self>,
-        opening_challenge: E::Fr,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::check_combinations_individual_opening_challenges(
-            vk,
-            lc_s,
-            commitments,
-            query_set,
-            evaluations,
-            proof,
-            &opening_challenges,
-            rng,
-        )
-    }
-
-    // On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
-    /// of the polynomials at the points in the query set.
-    fn batch_open<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        opening_challenge: E::Fr,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<Self::BatchProof, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let opening_challenges = |j| opening_challenge.pow([j as u64]);
-        Self::batch_open_individual_opening_challenges(
-            ck,
-            labeled_polynomials,
-            commitments,
-            query_set,
-            &opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     fn open_individual_opening_challenges<'a>(
         ck: &CommitterKey<E>,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: E::Fr,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Randomness<E>>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<kzg10::Proof<E>, Error>
@@ -599,7 +441,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         point: E::Fr,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &kzg10::Proof<E>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Error>
     where
@@ -625,7 +467,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         query_set: &QuerySet<E::Fr>,
         evaluations: &Evaluations<E::Fr>,
         proof: &Vec<kzg10::Proof<E>>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
@@ -709,7 +551,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Randomness<E>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, Self>, Error>
@@ -807,7 +649,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         query_set: &QuerySet<E::Fr>,
         evaluations: &Evaluations<E::Fr>,
         proof: &BatchLCProof<E::Fr, Self>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
@@ -890,7 +732,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for MarlinKZG10<E> {
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
-        opening_challenges: &dyn Fn(usize) -> E::Fr,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Randomness<E>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>

@@ -88,7 +88,7 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
     ) -> Option<SuccinctCheckPolynomial<G::ScalarField>> {
         let check_time = start_timer!(|| "Succinct checking");
 
@@ -100,7 +100,10 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
         let mut combined_commitment_proj = G::Projective::zero();
         let mut combined_v = G::ScalarField::zero();
 
-        let mut cur_challenge = opening_challenge;
+        let mut opening_challenge_counter = 0;
+        let mut cur_challenge = opening_challenges(opening_challenge_counter);
+        opening_challenge_counter += 1;
+
         let labeled_commitments = commitments.into_iter();
         let values = values.into_iter();
 
@@ -108,7 +111,8 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
             let commitment = labeled_commitment.commitment();
             combined_v += &(cur_challenge * &value);
             combined_commitment_proj += &labeled_commitment.commitment().comm.mul(cur_challenge);
-            cur_challenge *= &opening_challenge;
+            cur_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
 
             let degree_bound = labeled_commitment.degree_bound();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
@@ -119,7 +123,8 @@ impl<G: AffineCurve, D: Digest> InnerProductArgPC<G, D> {
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
             }
 
-            cur_challenge *= &opening_challenge;
+            cur_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
         }
 
         let mut combined_commitment = combined_commitment_proj.into_affine();
@@ -441,12 +446,12 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok((comms, rands))
     }
 
-    fn open<'a>(
+    fn open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -465,7 +470,11 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         let comms_iter = commitments.into_iter();
 
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
-        let mut cur_challenge = opening_challenge;
+
+        let mut opening_challenge_counter = 0;
+        let mut cur_challenge = opening_challenges(opening_challenge_counter);
+        opening_challenge_counter += 1;
+
         for (labeled_polynomial, (labeled_commitment, randomness)) in
             polys_iter.zip(comms_iter.zip(rands_iter))
         {
@@ -486,7 +495,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 combined_rand += &(cur_challenge * &randomness.rand);
             }
 
-            cur_challenge *= &opening_challenge;
+            cur_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
 
             let has_degree_bound = degree_bound.is_some();
 
@@ -519,7 +529,8 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 }
             }
 
-            cur_challenge *= &opening_challenge;
+            cur_challenge = opening_challenges(opening_challenge_counter);
+            opening_challenge_counter += 1;
         }
 
         end_timer!(combine_time);
@@ -679,13 +690,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         })
     }
 
-    fn check<'a>(
+    fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -709,7 +720,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         }
 
         let check_poly =
-            Self::succinct_check(vk, commitments, point, values, proof, opening_challenge);
+            Self::succinct_check(vk, commitments, point, values, proof, opening_challenges);
 
         if check_poly.is_none() {
             return Ok(false);
@@ -730,13 +741,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok(true)
     }
 
-    fn batch_check<'a, R: RngCore>(
+    fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
         values: &Evaluations<G::ScalarField>,
         proof: &Self::BatchProof,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -785,7 +796,7 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
                 *point,
                 vals.into_iter(),
                 p,
-                opening_challenge,
+                opening_challenges,
             );
 
             if check_poly.is_none() {
@@ -817,13 +828,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
         Ok(true)
     }
 
-    fn open_combinations<'a>(
+    fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<G::ScalarField, Self>, Self::Error>
@@ -912,12 +923,12 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let lc_commitments = Self::construct_labeled_commitments(&lc_info, &lc_commitments);
 
-        let proof = Self::batch_open(
+        let proof = Self::batch_open_individual_opening_challenges(
             ck,
             lc_polynomials.iter(),
             lc_commitments.iter(),
             &query_set,
-            opening_challenge,
+            opening_challenges,
             lc_randomness.iter(),
             rng,
         )?;
@@ -926,14 +937,14 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn check_combinations<'a, R: RngCore>(
+    fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<G::ScalarField>,
         evaluations: &Evaluations<G::ScalarField>,
         proof: &BatchLCProof<G::ScalarField, Self>,
-        opening_challenge: G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -1000,13 +1011,13 @@ impl<G: AffineCurve, D: Digest> PolynomialCommitment<G::ScalarField> for InnerPr
 
         let lc_commitments = Self::construct_labeled_commitments(&lc_info, &lc_commitments);
 
-        Self::batch_check(
+        Self::batch_check_individual_opening_challenges(
             vk,
             &lc_commitments,
             &query_set,
             &evaluations,
             proof,
-            opening_challenge,
+            opening_challenges,
             rng,
         )
     }
