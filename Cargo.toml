@@ -30,8 +30,6 @@ ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = fal
 ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", default-features = false  }
 
-ark-nonnative-field = { git = "ssh://git@github.com/arkworks-rs/nonnative.git" }
-
 bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
 
 rand_core = { version = "0.5", default-features = false }
