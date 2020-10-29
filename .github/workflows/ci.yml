@@ -87,7 +87,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: thumbv6m-none-eabi
+          target: aarch64-unknown-none
           override: true
 
       - name: Build
@@ -95,11 +95,11 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --no-default-features --target thumbv6m-none-eabi
+          args: --no-default-features --target aarch64-unknown-none
 
       - name: Check
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: check
-          args: --examples --no-default-features --target thumbv6m-none-eabi
+          args: --examples --no-default-features --target aarch64-unknown-none
