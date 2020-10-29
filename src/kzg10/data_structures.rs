@@ -1,6 +1,7 @@
 use crate::*;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes, Zero};
+use ark_std::borrow::Cow;
 use core::ops::{Add, AddAssign};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -86,6 +87,39 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     }
 }
 
+/// `PreparedVerifierKey` is the fully prepared version for checking evaluation proofs for a given commitment.
+/// We omit gamma here for simplicity.
+#[derive(Derivative)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+pub struct PreparedVerifierKey<E: PairingEngine> {
+    /// The generator of G1, prepared for power series.
+    pub prepared_g: Vec<E::G1Affine>,
+    /// The generator of G2, prepared for use in pairings.
+    pub prepared_h: E::G2Prepared,
+    /// \beta times the above generator of G2, prepared for use in pairings.
+    pub prepared_beta_h: E::G2Prepared,
+}
+
+impl<E: PairingEngine> PreparedVerifierKey<E> {
+    /// prepare `PreparedVerifierKey` from `VerifierKey`
+    pub fn prepare(vk: &VerifierKey<E>) -> Self {
+        let supported_bits = E::Fr::size_in_bits();
+
+        let mut prepared_g = Vec::<E::G1Affine>::new();
+        let mut g = E::G1Projective::from(vk.g.clone());
+        for _ in 0..supported_bits {
+            prepared_g.push(g.clone().into());
+            g.double_in_place();
+        }
+
+        Self {
+            prepared_g,
+            prepared_h: vk.prepared_h.clone(),
+            prepared_beta_h: vk.prepared_beta_h.clone(),
+        }
+    }
+}
+
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
 #[derive(Derivative)]
 #[derivative(
@@ -130,6 +164,38 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
         let mut other = other.0.mul(f.into_repr());
         other.add_assign_mixed(&self.0);
         self.0 = other.into();
+    }
+}
+
+/// `PreparedCommitment` commits to a polynomial and prepares for mul_bits.
+#[derive(Derivative)]
+#[derivative(
+    Default(bound = ""),
+    Hash(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
+)]
+pub struct PreparedCommitment<E: PairingEngine>(
+    /// The commitment is a group element.
+    pub Vec<E::G1Affine>,
+);
+
+impl<E: PairingEngine> PreparedCommitment<E> {
+    /// prepare `PreparedCommitment` from `Commitment`
+    pub fn prepare(comm: &Commitment<E>) -> Self {
+        let mut prepared_comm = Vec::<E::G1Affine>::new();
+        let mut cur = E::G1Projective::from(comm.0.clone());
+
+        let supported_bits = E::Fr::size_in_bits();
+
+        for _ in 0..supported_bits {
+            prepared_comm.push(cur.clone().into());
+            cur.double_in_place();
+        }
+
+        Self { 0: prepared_comm }
     }
 }
 

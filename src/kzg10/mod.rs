@@ -421,7 +421,7 @@ impl<E: PairingEngine> KZG10<E> {
         supported_degree: usize,
         max_degree: usize,
         enforced_degree_bounds: Option<&[usize]>,
-        p: &'a LabeledPolynomial<'a, E::Fr>,
+        p: &'a LabeledPolynomial<E::Fr>,
     ) -> Result<(), Error> {
         if let Some(bound) = p.degree_bound() {
             let enforced_degree_bounds =
@@ -494,8 +494,8 @@ mod tests {
                 .collect();
 
             let powers = Powers {
-                powers_of_g: Cow::Owned(powers_of_g),
-                powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
+                powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
+                powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
             };
             let vk = VerifierKey {
                 g: pp.powers_of_g[0],
