@@ -31,7 +31,7 @@ ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = fal
 bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
 
 rand_core = { version = "0.5", default-features = false }
-digest = "0.8"
+digest = "0.9"
 rayon = { version = "1", optional = true }
 derivative = { version = "2", features = [ "use_core" ] }
 
