@@ -5,7 +5,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, Zero, Field};
+use ark_ff::{Field, One, Zero};
 use ark_std::vec;
 use core::{convert::TryInto, marker::PhantomData};
 use rand_core::RngCore;
