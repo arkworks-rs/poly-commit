@@ -166,10 +166,7 @@ pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub  BTreeMap<
-        (String, NonNativeFieldVar<TargetField, BaseField>),
-        NonNativeFieldVar<TargetField, BaseField>,
-    >,
+    pub BTreeMap<(String, String), NonNativeFieldVar<TargetField, BaseField>>,
 );
 
 impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField, BaseField> {
@@ -177,9 +174,9 @@ impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField,
     pub fn get_lc_eval(
         &self,
         lc_string: &String,
-        point: &NonNativeFieldVar<TargetField, BaseField>,
+        point_label: &String,
     ) -> Result<NonNativeFieldVar<TargetField, BaseField>, SynthesisError> {
-        let key = (lc_string.clone(), point.clone());
+        let key = (lc_string.clone(), point_label.clone());
         Ok(self.0.get(&key).map(|v| (*v).clone()).unwrap())
     }
 }
