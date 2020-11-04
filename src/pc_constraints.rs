@@ -1,7 +1,7 @@
 use ark_ff::PrimeField;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
-use core::marker::Sized;
+use core::{borrow::Borrow, marker::Sized};
 
 use crate::data_structures::LabeledCommitment;
 use crate::{BatchLCProof, PolynomialCommitment};
@@ -9,7 +9,6 @@ use crate::{LCTerm, LinearCombination, String, Vec};
 use ark_nonnative_field::NonNativeFieldVar;
 use ark_r1cs_std::fields::fp::FpVar;
 use hashbrown::{HashMap, HashSet};
-use std::borrow::Borrow;
 
 /// A generic gadget for the prepared* structures
 pub trait PrepareVar<UNPREPARED, ConstraintF: PrimeField>: Sized {
