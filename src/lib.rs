@@ -26,6 +26,7 @@ use ark_std::{
     string::{String, ToString},
     vec::Vec,
 };
+use hashbrown::HashMap;
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
@@ -96,7 +97,7 @@ pub type QuerySet<'a, F> = BTreeSet<(String, (String, F))>;
 /// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation.
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
-pub type Evaluations<'a, F> = BTreeMap<(String, F), F>;
+pub type Evaluations<'a, F> = HashMap<(String, F), F>;
 
 /// A proof of satisfaction of linear combinations.
 pub struct BatchLCProof<F: Field, PC: PolynomialCommitment<F>> {

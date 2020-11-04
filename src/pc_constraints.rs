@@ -4,10 +4,11 @@ use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use core::marker::Sized;
 
 use crate::data_structures::LabeledCommitment;
-use crate::{BTreeMap, BTreeSet, LCTerm, LinearCombination, String, Vec};
+use crate::{BTreeSet, LCTerm, LinearCombination, String, Vec};
 use crate::{BatchLCProof, PolynomialCommitment};
 use ark_nonnative_field::NonNativeFieldVar;
 use ark_r1cs_std::fields::fp::FpVar;
+use hashbrown::HashMap;
 use std::borrow::Borrow;
 
 /// A generic gadget for the prepared* structures
@@ -166,7 +167,10 @@ pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub BTreeMap<(String, String), NonNativeFieldVar<TargetField, BaseField>>,
+    pub  HashMap<
+        (String, NonNativeFieldVar<TargetField, BaseField>),
+        NonNativeFieldVar<TargetField, BaseField>,
+    >,
 );
 
 impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField, BaseField> {
@@ -174,9 +178,9 @@ impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField,
     pub fn get_lc_eval(
         &self,
         lc_string: &String,
-        point_label: &String,
+        point: &NonNativeFieldVar<TargetField, BaseField>,
     ) -> Result<NonNativeFieldVar<TargetField, BaseField>, SynthesisError> {
-        let key = (lc_string.clone(), point_label.clone());
+        let key = (lc_string.clone(), point.clone());
         Ok(self.0.get(&key).map(|v| (*v).clone()).unwrap())
     }
 }

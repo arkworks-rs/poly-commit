@@ -1348,7 +1348,7 @@ where
         let mut combined_queries = Vec::new();
         let mut combined_comms = Vec::new();
         let mut combined_evals = Vec::new();
-        for (point_label, (point, labels)) in query_to_labels_map.into_iter() {
+        for (_, (point, labels)) in query_to_labels_map.into_iter() {
             let mut comms_to_combine = Vec::<
                 Vec<(
                     Option<
@@ -1366,10 +1366,7 @@ where
             for label in labels.into_iter() {
                 let commitment_lc = commitment_lcs.get(label).unwrap().clone();
 
-                let v_i = evaluations
-                    .0
-                    .get(&(label.clone(), point_label.clone()))
-                    .unwrap();
+                let v_i = evaluations.0.get(&(label.clone(), point.clone())).unwrap();
 
                 comms_to_combine.push(commitment_lc.1.clone());
                 values_to_combine.push(v_i.clone());
@@ -1662,7 +1659,7 @@ where
         let mut combined_queries = Vec::new();
         let mut combined_comms = Vec::new();
         let mut combined_evals = Vec::new();
-        for (point_label, (point, labels)) in query_to_labels_map.into_iter() {
+        for (_, (point, labels)) in query_to_labels_map.into_iter() {
             let mut comms_to_combine: Vec<Self::LabeledCommitmentVar> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
@@ -1673,10 +1670,7 @@ where
                     commitment.commitment.shifted_comm.is_some()
                 );
 
-                let v_i = evaluations
-                    .0
-                    .get(&(label.clone(), point_label.clone()))
-                    .unwrap();
+                let v_i = evaluations.0.get(&(label.clone(), point.clone())).unwrap();
 
                 comms_to_combine.push(commitment.clone());
                 values_to_combine.push(v_i.clone());
