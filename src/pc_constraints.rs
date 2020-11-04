@@ -4,11 +4,11 @@ use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use core::marker::Sized;
 
 use crate::data_structures::LabeledCommitment;
-use crate::{BTreeSet, LCTerm, LinearCombination, String, Vec};
 use crate::{BatchLCProof, PolynomialCommitment};
+use crate::{LCTerm, LinearCombination, String, Vec};
 use ark_nonnative_field::NonNativeFieldVar;
 use ark_r1cs_std::fields::fp::FpVar;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use std::borrow::Borrow;
 
 /// A generic gadget for the prepared* structures
@@ -161,7 +161,7 @@ pub trait PCCheckVar<PCF: PrimeField, PC: PolynomialCommitment<PCF>, ConstraintF
 
 /// An allocated version of `QuerySet`.
 pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub BTreeSet<(String, (String, NonNativeFieldVar<TargetField, BaseField>))>,
+    pub HashSet<(String, (String, NonNativeFieldVar<TargetField, BaseField>))>,
 );
 
 /// An allocated version of `Evaluations`.

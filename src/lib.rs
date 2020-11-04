@@ -26,7 +26,7 @@ use ark_std::{
     string::{String, ToString},
     vec::Vec,
 };
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
@@ -91,7 +91,7 @@ pub mod ipa_pc;
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
 /// `point_label` is the label for the point (e.g., "beta"), and  and `point` is the field element
 /// that `p[label]` is to be queried at.
-pub type QuerySet<'a, F> = BTreeSet<(String, (String, F))>;
+pub type QuerySet<'a, F> = HashSet<(String, (String, F))>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials or equations
 /// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation.
