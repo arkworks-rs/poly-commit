@@ -24,6 +24,7 @@ use ark_std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 use hashbrown::{HashMap, HashSet};

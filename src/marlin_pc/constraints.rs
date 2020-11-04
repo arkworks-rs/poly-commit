@@ -6,7 +6,7 @@ use crate::{
         MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
     },
     pc_constraints::{EvaluationsVar, PCCheckVar, QuerySetVar},
-    BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareVar, String, ToString, Vec,
+    vec, BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareVar, String, ToString, Vec,
 };
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
