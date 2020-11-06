@@ -42,6 +42,12 @@ ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-feature
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = [ "curve" ] }
 blake2 = { version = "0.8", default-features = false }
 
+[patch.'https://github.com/arkworks-rs/algebra']
+ark-serialize = { git = "https://github.com/ryanleh/algebra", branch = "multivariate-support", default-features = false }
+ark-ff = { git = "https://github.com/ryanleh/algebra", branch = "multivariate-support", default-features = false }
+ark-ec = { git = "https://github.com/ryanleh/algebra", branch = "multivariate-support", default-features = false }
+ark-poly = { git = "https://github.com/ryanleh/algebra", branch = "multivariate-support", default-features = false }
+
 [profile.release]
 opt-level = 3
 lto = "thin"
