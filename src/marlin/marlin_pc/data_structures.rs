@@ -1,9 +1,10 @@
 use crate::{
     PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCVerifierKey, UVPolynomial, Vec,
+    PCVerifierKey, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};
+use ark_poly::UVPolynomial;
 use ark_std::ops::{Add, AddAssign};
 use rand_core::RngCore;
 

@@ -1,6 +1,7 @@
 use crate::*;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes, Zero};
+use ark_poly::UVPolynomial;
 use ark_std::{
     borrow::Cow,
     marker::PhantomData,

@@ -5,7 +5,7 @@
    <a href="https://github.com/arkworks-rs/poly-commit/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-`poly-commit` is a Rust library that implements (univariate) *polynomial commitment schemes*. This library was initially developed as part of the [Marlin paper][marlin], and is released under the MIT License and the Apache v2 License (see [License](#license)).
+`poly-commit` is a Rust library that implements *polynomial commitment schemes*. This library was initially developed as part of the [Marlin paper][marlin], and is released under the MIT License and the Apache v2 License (see [License](#license)).
 
 **WARNING:** This is an academic prototype, and in particular has not received careful code review. This implementation is NOT ready for production use.
 
@@ -54,6 +54,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [sonic]: https://ia.cr/2019/099
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
+[pst]: https://www.iacr.org/archive/tcc2013/77850221/77850221.pdf
 
 ## Reference papers
 
@@ -77,6 +78,9 @@ EUROCRYPT 2020
 Benedikt Bünz, Alessandro Chiesa, [Pratyush Mishra](https://www.github.com/pratyush), Nicholas Spooner     
 ePrint, 2020
 
+[Signatures of Correct Computation][pst]
+Charalampos Papamanthou, Elaine Shi, Roberto Tamassia
+TCC 2020
 
 ## Acknowledgements
 

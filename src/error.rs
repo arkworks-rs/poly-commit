@@ -79,6 +79,20 @@ pub enum Error {
 
     /// The inputs to `commit`, `open` or `verify` had incorrect lengths.
     IncorrectInputLength(String),
+
+    /// An invalid number of variables was provided to `setup`
+    InvalidNumberOfVariables,
+
+    /// The degree of the `index`-th polynomial passed to `commit`, `open`
+    /// or `check` was incorrect, that is, `supported_degree <= poly_degree`
+    PolynomialDegreeTooLarge {
+        /// Degree of the polynomial.
+        poly_degree: usize,
+        /// Maximum supported degree.
+        supported_degree: usize,
+        /// Index of the offending polynomial.
+        label: String,
+    },
 }
 
 impl core::fmt::Display for Error {
@@ -150,6 +164,19 @@ impl core::fmt::Display for Error {
                  (having degree {:?}) is greater than the maximum \
                  supported degree ({:?})",
                 degree_bound, label, poly_degree, supported_degree
+            ),
+            Error::InvalidNumberOfVariables => write!(
+                f,
+                "An invalid number of variables was provided to `setup`"
+            ),
+            Error::PolynomialDegreeTooLarge {
+                poly_degree,
+                supported_degree,
+                label,
+            } => write!(
+                f,
+                "the polynomial {} has degree {:?}, but parameters only
+                support up to degree ({:?})", label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
         }
