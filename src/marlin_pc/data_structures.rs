@@ -294,12 +294,12 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine, P: UVPolynomial<E::Fr>> {
-    pub(crate) rand: kzg10::Randomness<E, P>,
-    pub(crate) shifted_rand: Option<kzg10::Randomness<E, P>>,
+pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+    pub(crate) rand: kzg10::Randomness<F, P>,
+    pub(crate) shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<&'a Self> for Randomness<E, P> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
     type Output = Self;
 
     fn add(mut self, other: &'a Self) -> Self {
@@ -308,7 +308,7 @@ impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<&'a Self> for Randomness<
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<&'a Self> for Randomness<E, P> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Self> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.rand += &other.rand;
@@ -323,23 +323,21 @@ impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<&'a Self> for Rando
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<(E::Fr, &'a Randomness<E, P>)>
-    for Randomness<E, P>
-{
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E, P>)) -> Self {
+    fn add(mut self, other: (F, &'a Randomness<F, P>)) -> Self {
         self += other;
         self
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<(E::Fr, &'a Randomness<E, P>)>
-    for Randomness<E, P>
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
 {
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E, P>)) {
+    fn add_assign(&mut self, (f, other): (F, &'a Randomness<F, P>)) {
         self.rand += (f, &other.rand);
         let empty = kzg10::Randomness::empty();
         if let Some(r1) = &mut self.shifted_rand {
@@ -350,7 +348,7 @@ impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<(E::Fr, &'a Randomn
     }
 }
 
-impl<E: PairingEngine, P: UVPolynomial<E::Fr>> PCRandomness for Randomness<E, P> {
+impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             rand: kzg10::Randomness::empty(),

@@ -1034,13 +1034,12 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::InnerProductArgPC;
-    use ark_ec::AffineCurve;
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
-    use ark_ff::UniformRand;
+    use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
     use blake2::Blake2s;
 
-    type UniPoly = DensePoly<ark_ed_on_bls12_381::Fr>;
+    type UniPoly = DensePoly<Fr>;
     type PC<E, D, P> = InnerProductArgPC<E, D, P>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly>;
 
@@ -1052,22 +1051,15 @@ mod tests {
         DensePoly::rand(degree, rng)
     }
 
-    fn rand_point<F: Field>(
-        _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> F {
+    fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> F {
         F::rand(rng)
     }
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, _, PC_JJB2S>(
-            None,
-            rand_poly::<Fr>,
-            rand_point::<Fr>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
@@ -1083,21 +1075,15 @@ mod tests {
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, _, PC_JJB2S>(
-            rand_poly::<Fr>,
-            rand_point::<Fr>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        linear_poly_degree_bound_test::<_, _, PC_JJB2S>(rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, _, PC_JJB2S>(
-            rand_poly::<Fr>,
-            rand_point::<Fr>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        single_poly_degree_bound_test::<_, _, PC_JJB2S>(rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
     #[test]
@@ -1123,59 +1109,40 @@ mod tests {
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, _, PC_JJB2S>(
-            None,
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        full_end_to_end_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, _, PC_JJB2S>(
-            None,
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        single_equation_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, _, PC_JJB2S>(
-            None,
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        two_equation_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, _, PC_JJB2S>(
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        two_equation_degree_bound_test::<_, _, PC_JJB2S>(rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, _, PC_JJB2S>(
-            None,
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        full_end_to_end_equation_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 
@@ -1183,11 +1150,8 @@ mod tests {
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, _, PC_JJB2S>(
-            rand_poly::<EdwardsAffine>,
-            rand_point::<EdwardsAffine>,
-        )
-        .expect("test failed for ed_on_bls12_381-blake2s");
+        bad_degree_bound_test::<_, _, PC_JJB2S>(rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
     }
 }

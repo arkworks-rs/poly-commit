@@ -148,7 +148,7 @@ where
         polynomial: &P,
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Commitment<E>, Randomness<E, P>), Error> {
+    ) -> Result<(Commitment<E>, Randomness<E::Fr, P>), Error> {
         Self::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
@@ -167,7 +167,7 @@ where
         );
         end_timer!(msm_time);
 
-        let mut randomness = Randomness::<E, P>::empty();
+        let mut randomness = Randomness::<E::Fr, P>::empty();
         if let Some(hiding_degree) = hiding_bound {
             let mut rng = rng.ok_or(Error::MissingRng)?;
             let sample_random_poly_time = start_timer!(|| format!(
@@ -204,7 +204,7 @@ where
     pub fn compute_witness_polynomial(
         p: &P,
         point: P::Point,
-        randomness: &Randomness<E, P>,
+        randomness: &Randomness<E::Fr, P>,
     ) -> Result<(P, Option<P>), Error> {
         let divisor = P::from_coefficients_vec(vec![-point, E::Fr::one()]);
 
@@ -229,7 +229,7 @@ where
     pub(crate) fn open_with_witness_polynomial<'a>(
         powers: &Powers<E>,
         point: P::Point,
-        randomness: &Randomness<E, P>,
+        randomness: &Randomness<E::Fr, P>,
         witness_polynomial: &P,
         hiding_witness_polynomial: Option<&P>,
     ) -> Result<Proof<E>, Error> {
@@ -274,7 +274,7 @@ where
         powers: &Powers<E>,
         p: &P,
         point: P::Point,
-        rand: &Randomness<E, P>,
+        rand: &Randomness<E::Fr, P>,
     ) -> Result<Proof<E>, Error> {
         Self::check_degree_is_within_bounds(p.degree(), powers.size())?;
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
@@ -487,21 +487,6 @@ mod tests {
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
 
-    fn rand_poly<E: PairingEngine, P: UVPolynomial<E::Fr>>(
-        degree: usize,
-        _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> P {
-        P::rand(degree, rng)
-    }
-
-    fn rand_point<E: PairingEngine, P: UVPolynomial<E::Fr, Point = E::Fr>>(
-        _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> P::Point {
-        E::Fr::rand(rng)
-    }
-
     impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
         /// `d` should be less that `pp.max_degree()`.
@@ -574,10 +559,10 @@ mod tests {
             }
             let pp = KZG10::<E, P>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, degree)?;
-            let p = rand_poly::<E, P>(degree, None, rng);
+            let p = P::rand(degree, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = rand_point::<E, P>(None, rng);
+            let point = E::Fr::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -602,10 +587,10 @@ mod tests {
             let degree = 50;
             let pp = KZG10::<E, P>::setup(degree, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, 2)?;
-            let p = rand_poly::<E, P>(1, None, rng);
+            let p = P::rand(1, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = rand_point::<E, P>(None, rng);
+            let point = E::Fr::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -638,10 +623,10 @@ mod tests {
             let mut points = Vec::new();
             let mut proofs = Vec::new();
             for _ in 0..10 {
-                let p = rand_poly::<E, P>(degree, None, rng);
+                let p = P::rand(degree, rng);
                 let hiding_bound = Some(1);
                 let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-                let point = rand_point::<E, P>(None, rng);
+                let point = E::Fr::rand(rng);
                 let value = p.evaluate(&point);
                 let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
 

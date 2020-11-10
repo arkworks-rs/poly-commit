@@ -169,7 +169,7 @@ where
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E, P>;
+    type Randomness = Randomness<E::Fr, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -355,12 +355,12 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: &'a P::Point,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
-        rands: impl IntoIterator<Item = &'a Randomness<E, P>>,
+        rands: impl IntoIterator<Item = &'a Randomness<E::Fr, P>>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<kzg10::Proof<E>, Error>
     where
         P: 'a,
-        Randomness<E, P>: 'a,
+        Randomness<E::Fr, P>: 'a,
         Commitment<E>: 'a,
     {
         let mut p = P::zero();
@@ -398,11 +398,12 @@ where
             if let Some(degree_bound) = degree_bound {
                 enforce_degree_bound = true;
                 let shifted_rand = rand.shifted_rand.as_ref().unwrap();
-                let (witness, shifted_rand_witness) = kzg10::KZG10::compute_witness_polynomial(
-                    polynomial.polynomial(),
-                    *point,
-                    &shifted_rand,
-                )?;
+                let (witness, shifted_rand_witness) =
+                    kzg10::KZG10::<E, P>::compute_witness_polynomial(
+                        polynomial.polynomial(),
+                        *point,
+                        &shifted_rand,
+                    )?;
                 let challenge_j_1 = opening_challenges(opening_challenge_counter);
                 opening_challenge_counter += 1;
 
@@ -563,12 +564,12 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
-        rands: impl IntoIterator<Item = &'a Randomness<E, P>>,
+        rands: impl IntoIterator<Item = &'a Randomness<E::Fr, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, P, Self>, Error>
     where
         P: 'a,
-        Randomness<E, P>: 'a,
+        Randomness<E::Fr, P>: 'a,
         Commitment<E>: 'a,
     {
         let label_map = polynomials
@@ -589,7 +590,7 @@ where
             let mut degree_bound = None;
             let mut hiding_bound = None;
 
-            let mut randomness = Randomness::<E, P>::empty();
+            let mut randomness = Randomness::<E::Fr, P>::empty();
             assert!(randomness.shifted_rand.is_none());
 
             let mut coeffs_and_comms = Vec::new();
@@ -745,12 +746,12 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
-        rands: impl IntoIterator<Item = &'a Randomness<E, P>>,
+        rands: impl IntoIterator<Item = &'a Randomness<E::Fr, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
     where
         P: 'a,
-        Randomness<E, P>: 'a,
+        Randomness<E::Fr, P>: 'a,
         Commitment<E>: 'a,
     {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
@@ -779,7 +780,7 @@ where
         let mut proofs = Vec::new();
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
-            let mut query_rands: Vec<&'a Randomness<E, P>> = Vec::new();
+            let mut query_rands: Vec<&'a Randomness<E::Fr, P>> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Commitment<E>>> = Vec::new();
 
             for label in labels {
