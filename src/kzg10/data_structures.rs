@@ -212,7 +212,7 @@ impl<E: PairingEngine> PreparedCommitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine, P: UVPolynomial<E::Fr>> {
+pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
     /// For KZG10, the commitment randomness is a random polynomial.
     pub blinding_polynomial: P,
     _engine: PhantomData<E>,
