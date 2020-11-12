@@ -1,10 +1,10 @@
 use crate::{
     PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCVerifierKey, Vec,
+    PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};
-use core::ops::{Add, AddAssign};
+use ark_std::ops::{Add, AddAssign};
 use rand_core::RngCore;
 
 use crate::kzg10;
@@ -287,19 +287,18 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = ""),
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine> {
-    pub(crate) rand: kzg10::Randomness<E>,
-    pub(crate) shifted_rand: Option<kzg10::Randomness<E>>,
+pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+    pub(crate) rand: kzg10::Randomness<F, P>,
+    pub(crate) shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
-impl<'a, E: PairingEngine> Add<&'a Self> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
     type Output = Self;
 
     fn add(mut self, other: &'a Self) -> Self {
@@ -308,7 +307,7 @@ impl<'a, E: PairingEngine> Add<&'a Self> for Randomness<E> {
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Self> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.rand += &other.rand;
@@ -323,19 +322,21 @@ impl<'a, E: PairingEngine> AddAssign<&'a Self> for Randomness<E> {
     }
 }
 
-impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
+    fn add(mut self, other: (F, &'a Randomness<F, P>)) -> Self {
         self += other;
         self
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
+{
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
+    fn add_assign(&mut self, (f, other): (F, &'a Randomness<F, P>)) {
         self.rand += (f, &other.rand);
         let empty = kzg10::Randomness::empty();
         if let Some(r1) = &mut self.shifted_rand {
@@ -346,7 +347,7 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<
     }
 }
 
-impl<E: PairingEngine> PCRandomness for Randomness<E> {
+impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             rand: kzg10::Randomness::empty(),
@@ -354,14 +355,19 @@ impl<E: PairingEngine> PCRandomness for Randomness<E> {
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, has_degree_bound: bool, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(
+        hiding_bound: usize,
+        has_degree_bound: bool,
+        _: Option<usize>,
+        rng: &mut R,
+    ) -> Self {
         let shifted_rand = if has_degree_bound {
-            Some(kzg10::Randomness::rand(hiding_bound, false, rng))
+            Some(kzg10::Randomness::rand(hiding_bound, false, None, rng))
         } else {
             None
         };
         Self {
-            rand: kzg10::Randomness::rand(hiding_bound, false, rng),
+            rand: kzg10::Randomness::rand(hiding_bound, false, None, rng),
             shifted_rand,
         }
     }

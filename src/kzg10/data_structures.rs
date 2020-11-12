@@ -1,12 +1,15 @@
 use crate::*;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes, Zero};
-use ark_std::borrow::Cow;
-use core::ops::{Add, AddAssign};
+use ark_std::{
+    borrow::Cow,
+    marker::PhantomData,
+    ops::{Add, AddAssign},
+};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
@@ -202,19 +205,19 @@ impl<E: PairingEngine> PreparedCommitment<E> {
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = ""),
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine> {
+pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
     /// For KZG10, the commitment randomness is a random polynomial.
-    pub blinding_polynomial: Polynomial<E::Fr>,
+    pub blinding_polynomial: P,
+    _field: PhantomData<F>,
 }
 
-impl<E: PairingEngine> Randomness<E> {
+impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
@@ -229,22 +232,23 @@ impl<E: PairingEngine> Randomness<E> {
     }
 }
 
-impl<E: PairingEngine> PCRandomness for Randomness<E> {
+impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
-            blinding_polynomial: Polynomial::zero(),
+            blinding_polynomial: P::zero(),
+            _field: PhantomData,
         }
     }
 
-    fn rand<R: RngCore>(hiding_bound: usize, _: bool, rng: &mut R) -> Self {
+    fn rand<R: RngCore>(hiding_bound: usize, _: bool, _: Option<usize>, rng: &mut R) -> Self {
         let mut randomness = Randomness::empty();
         let hiding_poly_degree = Self::calculate_hiding_polynomial_degree(hiding_bound);
-        randomness.blinding_polynomial = Polynomial::rand(hiding_poly_degree, rng);
+        randomness.blinding_polynomial = P::rand(hiding_poly_degree, rng);
         randomness
     }
 }
 
-impl<'a, E: PairingEngine> Add<&'a Randomness<E>> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -254,26 +258,28 @@ impl<'a, E: PairingEngine> Add<&'a Randomness<E>> for Randomness<E> {
     }
 }
 
-impl<'a, E: PairingEngine> Add<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E>)) -> Self {
+    fn add(mut self, other: (F, &'a Randomness<F, P>)) -> Self {
         self += other;
         self
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<&'a Randomness<E>> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Randomness<F, P>> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Randomness<E>)> for Randomness<E> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
+{
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E>)) {
+    fn add_assign(&mut self, (f, other): (F, &'a Randomness<F, P>)) {
         self.blinding_polynomial += (f, &other.blinding_polynomial);
     }
 }
