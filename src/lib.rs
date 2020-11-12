@@ -87,13 +87,13 @@ pub mod ipa_pc;
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
 /// `point_label` is the label for the point (e.g., "beta"), and  and `point` is the location
 /// that `p[label]` is to be queried at.
-pub type QuerySet<'a, T> = BTreeSet<(String, (String, T))>;
+pub type QuerySet<T> = BTreeSet<(String, (String, T))>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials or equations
 /// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation.
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
-pub type Evaluations<'a, F, T> = BTreeMap<(String, T), F>;
+pub type Evaluations<T, F> = BTreeMap<(String, T), F>;
 
 /// A proof of satisfaction of linear combinations.
 #[derive(Clone)]
@@ -261,7 +261,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<F, P::Point>,
+        evaluations: &Evaluations<P::Point, F>,
         proof: &Self::BatchProof,
         opening_challenge: F,
         rng: &mut R,
@@ -319,7 +319,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         eqn_query_set: &QuerySet<P::Point>,
-        eqn_evaluations: &Evaluations<F, P::Point>,
+        eqn_evaluations: &Evaluations<P::Point, F>,
         proof: &BatchLCProof<F, P, Self>,
         opening_challenge: F,
         rng: &mut R,
@@ -373,7 +373,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<F, P::Point>,
+        evaluations: &Evaluations<P::Point, F>,
         proof: &Self::BatchProof,
         opening_challenges: &dyn Fn(u64) -> F,
         rng: &mut R,
@@ -472,7 +472,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         eqn_query_set: &QuerySet<P::Point>,
-        eqn_evaluations: &Evaluations<F, P::Point>,
+        eqn_evaluations: &Evaluations<P::Point, F>,
         proof: &BatchLCProof<F, P, Self>,
         opening_challenges: &dyn Fn(u64) -> F,
         rng: &mut R,
@@ -616,8 +616,8 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
 /// Evaluate the given polynomials at `query_set`.
 pub fn evaluate_query_set<'a, F, P, T>(
     polys: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
-    query_set: &QuerySet<'a, T>,
-) -> Evaluations<'a, F, T>
+    query_set: &QuerySet<T>,
+) -> Evaluations<T, F>
 where
     F: Field,
     P: 'a + Polynomial<F, Point = T>,
@@ -637,8 +637,8 @@ where
 
 fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
     linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
-    query_set: &QuerySet<'a, T>,
-) -> QuerySet<'a, T> {
+    query_set: &QuerySet<T>,
+) -> QuerySet<T> {
     let mut poly_query_set = QuerySet::<T>::new();
     let lc_s = linear_combinations.into_iter().map(|lc| (lc.label(), lc));
     let linear_combinations = BTreeMap::from_iter(lc_s);
@@ -661,8 +661,7 @@ pub mod tests {
     use ark_poly::Polynomial;
     use rand::{distributions::Distribution, Rng};
 
-    #[derive(Default)]
-    struct TestInfo {
+    struct TestInfo<F: Field, P: Polynomial<F>> {
         num_iters: usize,
         max_degree: Option<usize>,
         supported_degree: Option<usize>,
@@ -671,6 +670,8 @@ pub mod tests {
         enforce_degree_bounds: bool,
         max_num_queries: usize,
         num_equations: Option<usize>,
+        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
     }
 
     pub fn bad_degree_bound_test<F, P, PC>(
@@ -685,7 +686,6 @@ pub mod tests {
         let rng = &mut test_rng();
         let max_degree = 100;
         let pp = PC::setup(max_degree, None, rng)?;
-
         for _ in 0..10 {
             let supported_degree = rand::distributions::Uniform::from(1..=max_degree).sample(rng);
             assert!(
@@ -763,11 +763,7 @@ pub mod tests {
         Ok(())
     }
 
-    fn test_template<F, P, PC>(
-        info: TestInfo,
-        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
-    ) -> Result<(), PC::Error>
+    fn test_template<F, P, PC>(info: TestInfo<F, P>) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -781,7 +777,9 @@ pub mod tests {
             num_polynomials,
             enforce_degree_bounds,
             max_num_queries,
-            ..
+            num_equations: _,
+            rand_poly,
+            rand_point,
         } = info;
 
         let rng = &mut test_rng();
@@ -903,11 +901,7 @@ pub mod tests {
         Ok(())
     }
 
-    fn equation_test_template<F, P, PC>(
-        info: TestInfo,
-        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
-    ) -> Result<(), PC::Error>
+    fn equation_test_template<F, P, PC>(info: TestInfo<F, P>) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -922,6 +916,8 @@ pub mod tests {
             enforce_degree_bounds,
             max_num_queries,
             num_equations,
+            rand_poly,
+            rand_point,
         } = info;
 
         let rng = &mut test_rng();
@@ -1101,9 +1097,11 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: false,
             max_num_queries: 1,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn linear_poly_degree_bound_test<F, P, PC>(
@@ -1123,9 +1121,11 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 1,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn single_poly_degree_bound_test<F, P, PC>(
@@ -1145,9 +1145,11 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 1,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC>(
@@ -1167,9 +1169,11 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 2,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC>(
@@ -1189,9 +1193,11 @@ pub mod tests {
             num_polynomials: 1,
             enforce_degree_bounds: true,
             max_num_queries: 2,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn two_polys_degree_bound_single_query_test<F, P, PC>(
@@ -1211,9 +1217,11 @@ pub mod tests {
             num_polynomials: 2,
             enforce_degree_bounds: true,
             max_num_queries: 1,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn full_end_to_end_test<F, P, PC>(
@@ -1234,9 +1242,11 @@ pub mod tests {
             num_polynomials: 10,
             enforce_degree_bounds: true,
             max_num_queries: 5,
-            ..Default::default()
+            num_equations: None,
+            rand_poly,
+            rand_point,
         };
-        test_template::<F, P, PC>(info, rand_poly, rand_point)
+        test_template::<F, P, PC>(info)
     }
 
     pub fn full_end_to_end_equation_test<F, P, PC>(
@@ -1258,8 +1268,10 @@ pub mod tests {
             enforce_degree_bounds: true,
             max_num_queries: 5,
             num_equations: Some(10),
+            rand_poly,
+            rand_point,
         };
-        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
+        equation_test_template::<F, P, PC>(info)
     }
 
     pub fn single_equation_test<F, P, PC>(
@@ -1281,8 +1293,10 @@ pub mod tests {
             enforce_degree_bounds: false,
             max_num_queries: 1,
             num_equations: Some(1),
+            rand_poly,
+            rand_point,
         };
-        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
+        equation_test_template::<F, P, PC>(info)
     }
 
     pub fn two_equation_test<F, P, PC>(
@@ -1304,8 +1318,10 @@ pub mod tests {
             enforce_degree_bounds: false,
             max_num_queries: 1,
             num_equations: Some(2),
+            rand_poly,
+            rand_point,
         };
-        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
+        equation_test_template::<F, P, PC>(info)
     }
 
     pub fn two_equation_degree_bound_test<F, P, PC>(
@@ -1326,7 +1342,9 @@ pub mod tests {
             enforce_degree_bounds: true,
             max_num_queries: 1,
             num_equations: Some(2),
+            rand_poly,
+            rand_point,
         };
-        equation_test_template::<F, P, PC>(info, rand_poly, rand_point)
+        equation_test_template::<F, P, PC>(info)
     }
 }
