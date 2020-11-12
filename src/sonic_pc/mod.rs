@@ -1,13 +1,12 @@
 use crate::{kzg10, PCCommitterKey};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, Polynomial, PolynomialCommitment};
+use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, UniformRand, Zero};
-use ark_std::vec;
-use core::{convert::TryInto, marker::PhantomData};
+use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, vec};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -23,11 +22,12 @@ pub use data_structures::*;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct SonicKZG10<E: PairingEngine> {
+pub struct SonicKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
     _engine: PhantomData<E>,
+    _poly: PhantomData<P>,
 }
 
-impl<E: PairingEngine> SonicKZG10<E> {
+impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
     #[allow(clippy::too_many_arguments)]
     fn accumulate_elems_individual_opening_challenges<'a>(
         combined_comms: &mut BTreeMap<Option<usize>, E::G1Projective>,
@@ -35,7 +35,7 @@ impl<E: PairingEngine> SonicKZG10<E> {
         combined_adjusted_witness: &mut E::G1Projective,
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
-        point: E::Fr,
+        point: P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &kzg10::Proof<E>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
@@ -130,23 +130,29 @@ impl<E: PairingEngine> SonicKZG10<E> {
     }
 }
 
-impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
+impl<E, P> PolynomialCommitment<E::Fr, P> for SonicKZG10<E, P>
+where
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    for<'a, 'b> &'a P: Div<&'b P, Output = P>,
+{
     type UniversalParams = UniversalParams<E>;
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E>;
+    type Randomness = Randomness<E::Fr, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
 
     fn setup<R: RngCore>(
         max_degree: usize,
+        _: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        kzg10::KZG10::setup(max_degree, true, rng).map_err(Into::into)
+        kzg10::KZG10::<E, P>::setup(max_degree, true, rng).map_err(Into::into)
     }
 
     fn trim(
@@ -274,7 +280,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -282,7 +288,10 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             Vec<Self::Randomness>,
         ),
         Self::Error,
-    > {
+    >
+    where
+        P: 'a,
+    {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
@@ -291,14 +300,14 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         for labeled_polynomial in polynomials {
             let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
 
-            kzg10::KZG10::<E>::check_degrees_and_bounds(
+            kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
                 &labeled_polynomial,
             )?;
 
-            let polynomial = labeled_polynomial.polynomial();
+            let polynomial: &P = labeled_polynomial.polynomial();
             let degree_bound = labeled_polynomial.degree_bound();
             let hiding_bound = labeled_polynomial.hiding_bound();
             let label = labeled_polynomial.label();
@@ -317,7 +326,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
                 ck.powers()
             };
 
-            let (comm, rand) = kzg10::KZG10::commit(&powers, &polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) = kzg10::KZG10::commit(&powers, polynomial, hiding_bound, Some(rng))?;
 
             labeled_comms.push(LabeledCommitment::new(
                 label.to_string(),
@@ -334,9 +343,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
     fn open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a P::Point,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
@@ -344,8 +353,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
+        P: 'a,
     {
-        let mut combined_polynomial = Polynomial::zero();
+        let mut combined_polynomial = P::zero();
         let mut combined_rand = kzg10::Randomness::empty();
 
         let mut opening_challenge_counter = 0;
@@ -356,7 +366,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
 
-            kzg10::KZG10::<E>::check_degrees_and_bounds(
+            kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
@@ -370,7 +380,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         }
 
         let proof_time = start_timer!(|| "Creating proof for polynomials");
-        let proof = kzg10::KZG10::open(&ck.powers(), &combined_polynomial, point, &combined_rand)?;
+        let proof = kzg10::KZG10::open(&ck.powers(), &combined_polynomial, *point, &combined_rand)?;
         end_timer!(proof_time);
 
         Ok(proof)
@@ -379,7 +389,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
@@ -399,7 +409,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
             &mut combined_adjusted_witness,
             vk,
             commitments,
-            point,
+            *point,
             values,
             proof,
             opening_challenges,
@@ -419,8 +429,8 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        values: &Evaluations<E::Fr>,
+        query_set: &QuerySet<P::Point>,
+        values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
@@ -491,16 +501,17 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
+        query_set: &QuerySet<P::Point>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, P, Self>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
+        P: 'a,
     {
         let label_map = polynomials
             .into_iter()
@@ -516,7 +527,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
         for lc in lc_s {
             let lc_label = lc.label().clone();
-            let mut poly = Polynomial::zero();
+            let mut poly = P::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
@@ -586,9 +597,9 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self>,
+        query_set: &QuerySet<P::Point>,
+        evaluations: &Evaluations<E::Fr, P::Point>,
+        proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -668,105 +679,214 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-
     use super::SonicKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
+    use ark_ec::PairingEngine;
+    use ark_ff::UniformRand;
+    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
 
-    type PC<E> = SonicKZG10<E>;
-    type PC_Bls12_377 = PC<Bls12_377>;
-    type PC_Bls12_381 = PC<Bls12_381>;
+    type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
+
+    type PC<E, P> = SonicKZG10<E, P>;
+    type PC_Bls12_377 = PC<Bls12_377, UniPoly_377>;
+    type PC_Bls12_381 = PC<Bls12_381, UniPoly_381>;
+
+    fn rand_poly<E: PairingEngine>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<E::Fr> {
+        DensePoly::<E::Fr>::rand(degree, rng)
+    }
+
+    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> E::Fr {
+        E::Fr::rand(rng)
+    }
 
     #[test]
     fn single_poly_test() {
         use crate::tests::*;
-        single_poly_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
-        single_poly_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn quadratic_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        quadratic_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
-        linear_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
-        linear_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        linear_poly_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        linear_poly_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
-        single_poly_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
-        single_poly_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_poly_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn single_poly_degree_bound_multiple_queries_test() {
         use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        single_poly_degree_bound_multiple_queries_test::<_, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_degree_bound_multiple_queries_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, PC_Bls12_377>()
-            .expect("test failed for bls12-377");
-        two_polys_degree_bound_single_query_test::<_, PC_Bls12_381>()
-            .expect("test failed for bls12-381");
+        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        two_polys_degree_bound_single_query_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
-        full_end_to_end_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        full_end_to_end_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
-        single_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        single_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        single_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
-        two_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        two_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
-        two_equation_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        two_equation_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        two_equation_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
-        full_end_to_end_equation_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(
+            None,
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(
+            None,
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 
@@ -774,9 +894,17 @@ mod tests {
     #[should_panic]
     fn bad_degree_bound_test() {
         use crate::tests::*;
-        bad_degree_bound_test::<_, PC_Bls12_377>().expect("test failed for bls12-377");
+        bad_degree_bound_test::<_, _, PC_Bls12_377>(
+            rand_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        bad_degree_bound_test::<_, PC_Bls12_381>().expect("test failed for bls12-381");
+        bad_degree_bound_test::<_, _, PC_Bls12_381>(
+            rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
         println!("Finished bls12-381");
     }
 }

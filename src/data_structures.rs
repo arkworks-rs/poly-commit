@@ -1,8 +1,10 @@
-use crate::{Rc, String, Vec};
+use crate::{Polynomial, Rc, String, Vec};
 use ark_ff::{Field, ToConstraintField};
-pub use ark_poly::DensePolynomial as Polynomial;
-use core::borrow::Borrow;
-use core::ops::{AddAssign, MulAssign, SubAssign};
+use ark_std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    ops::{AddAssign, MulAssign, SubAssign},
+};
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -73,8 +75,14 @@ pub trait PCRandomness: Clone {
     /// Samples randomness for commitments;
     /// `num_queries` specifies the number of queries that the commitment will be opened at.
     /// `has_degree_bound` indicates that the corresponding commitment has an enforced
+    /// `num_vars` specifies the number of variables for multivariate commitment.
     /// strict degree bound.
-    fn rand<R: RngCore>(num_queries: usize, has_degree_bound: bool, rng: &mut R) -> Self;
+    fn rand<R: RngCore>(
+        num_queries: usize,
+        has_degree_bound: bool,
+        num_vars: Option<usize>,
+        rng: &mut R,
+    ) -> Self;
 }
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
@@ -88,26 +96,27 @@ pub trait PCProof: Clone + ark_ff::ToBytes {
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
 #[derive(Debug, Clone)]
-pub struct LabeledPolynomial<F: Field> {
+pub struct LabeledPolynomial<F: Field, P: Polynomial<F>> {
     label: PolynomialLabel,
-    polynomial: Rc<Polynomial<F>>,
+    polynomial: Rc<P>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
+    _field: PhantomData<F>,
 }
 
-impl<'a, F: Field> core::ops::Deref for LabeledPolynomial<F> {
-    type Target = Polynomial<F>;
+impl<'a, F: Field, P: Polynomial<F>> core::ops::Deref for LabeledPolynomial<F, P> {
+    type Target = P;
 
     fn deref(&self) -> &Self::Target {
         &self.polynomial
     }
 }
 
-impl<'a, F: Field> LabeledPolynomial<F> {
+impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<F, P> {
     /// Construct a new labeled polynomial.
     pub fn new(
         label: PolynomialLabel,
-        polynomial: Polynomial<F>,
+        polynomial: P,
         degree_bound: Option<usize>,
         hiding_bound: Option<usize>,
     ) -> Self {
@@ -116,6 +125,7 @@ impl<'a, F: Field> LabeledPolynomial<F> {
             polynomial: Rc::new(polynomial),
             degree_bound,
             hiding_bound,
+            _field: PhantomData,
         }
     }
 
@@ -124,14 +134,19 @@ impl<'a, F: Field> LabeledPolynomial<F> {
         &self.label
     }
 
-    /// Retrieve the polynomial from `self`.
-    pub fn polynomial(&self) -> &Polynomial<F> {
+    /// Retrieve the polynomial from `self`
+    pub fn polynomial(&self) -> &P {
         &self.polynomial
     }
 
     /// Evaluate the polynomial in `self`.
-    pub fn evaluate(&self, point: F) -> F {
+    pub fn evaluate(&self, point: &P::Point) -> F {
         self.polynomial.evaluate(point)
+    }
+
+    /// Retrieve the degree of the polynomial in `self`.
+    pub fn degree(&self) -> usize {
+        self.polynomial.degree()
     }
 
     /// Retrieve the degree bound in `self`.

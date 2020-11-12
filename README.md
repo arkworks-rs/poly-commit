@@ -1,10 +1,8 @@
-<h1 align="center">Univariate Polynomial Commitments</h1>
+<h1 align="center">Polynomial Commitments</h1>
 
 <p align="center">
-    <a href="https://travis-ci.org/scipr-lab/poly-commit"><img src="https://travis-ci.org/scipr-lab/poly-commit.svg?branch=master"></a>
-    <a href="https://github.com/scipr-lab/poly-commit/blob/master/AUTHORS"><img src="https://img.shields.io/badge/authors-SCIPR%20Lab-orange.svg"></a>
-    <a href="https://github.com/scipr-lab/poly-commit/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
-   <a href="https://github.com/scipr-lab/poly-commit/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+   <a href="https://github.com/arkworks-rs/poly-commit/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
+   <a href="https://github.com/arkworks-rs/poly-commit/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
 `poly-commit` is a Rust library that implements (univariate) *polynomial commitment schemes*. This library was initially developed as part of the [Marlin paper][marlin], and is released under the MIT License and the Apache v2 License (see [License](#license)).
@@ -13,7 +11,7 @@
 
 ## Overview
 
-A (univariate) polynomial commitment scheme is a cryptographic primitive that enables a party to commit to a univariate polynomial and then, later on, to reveal desired evaluations of the polynomial along with cryptographic proofs attesting to their correctness.
+A polynomial commitment scheme is a cryptographic primitive that enables a party to commit to a polynomial over a given finite field, and then, later on, to reveal desired evaluations of the polynomial along with cryptographic proofs attesting to their correctness.
 
 This library provides various constructions of polynomial commitment schemes. These constructions support committing to multiple polynomials at a time with differing degree bounds, batching multiple evaluation proofs for the same evaluation point into a single one, and batch verification of proofs.
 
