@@ -41,6 +41,7 @@ pub use pc_constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
+use ark_std::hash::Hash;
 pub use error::*;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
@@ -94,13 +95,13 @@ pub mod ipa_pc;
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
 /// `point_label` is the label for the point (e.g., "beta"), and  and `point` is the location
 /// that `p[label]` is to be queried at.
-pub type QuerySet<'a, T> = HashSet<(String, (String, T))>;
+pub type QuerySet<T> = HashSet<(String, (String, T))>;
 
 /// `Evaluations` is the result of querying a set of labeled polynomials or equations
 /// `p` at a `QuerySet` `Q`. It maps each element of `Q` to the resulting evaluation.
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
-pub type Evaluations<'a, T, F> = HashMap<(String, T), F>;
+pub type Evaluations<T, F> = HashMap<(String, T), F>;
 
 /// A proof of satisfaction of linear combinations.
 pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
@@ -110,7 +111,7 @@ pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, 
     pub evals: Option<Vec<F>>,
 }
 
-impl<F: Field, PC: PolynomialCommitment<F>> Clone for BatchLCProof<F, PC> {
+impl<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> Clone for BatchLCProof<F, P, PC> {
     fn clone(&self) -> Self {
         BatchLCProof {
             proof: self.proof.clone(),
@@ -258,7 +259,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
 
         let mut proofs = Vec::new();
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
-            let mut query_polys: Vec<&'a LabeledPolynomial<_>> = Vec::new();
+            let mut query_polys: Vec<&'a LabeledPolynomial<_, P>> = Vec::new();
             let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
@@ -278,7 +279,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
                 ck,
                 query_polys,
                 query_comms,
-                *point,
+                point,
                 opening_challenge,
                 query_rands,
                 Some(rng),
@@ -575,7 +576,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
                     let eval = match label {
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
-                            .get(&(l.into(), point))
+                            .get(&(l.into(), point.clone()))
                             .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 
@@ -689,7 +690,7 @@ pub fn evaluate_query_set<'a, F, P, T>(
 where
     F: Field,
     P: 'a + Polynomial<F, Point = T>,
-    T: Clone + Debug + Ord + Sync,
+    T: Clone + Debug + Ord + Sync + Hash,
 {
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::new();
@@ -703,7 +704,7 @@ where
     evaluations
 }
 
-fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
+fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord + Hash>(
     linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
     query_set: &QuerySet<T>,
 ) -> QuerySet<T> {

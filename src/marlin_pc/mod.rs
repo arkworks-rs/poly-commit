@@ -307,7 +307,7 @@ where
             let polynomial: &P = p.polynomial();
 
             let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
-            kzg10::KZG10::<E>::check_degrees_and_bounds(
+            kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
@@ -352,15 +352,15 @@ where
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a P::Point,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
-        Randomness<E>: 'a,
+        Randomness<E::Fr, P>: 'a,
         Commitment<E>: 'a,
     {
         let opening_challenges = |j| opening_challenge.pow([j]);
@@ -368,7 +368,7 @@ where
             ck,
             labeled_polynomials,
             commitments,
-            point,
+            &point,
             &opening_challenges,
             rands,
             rng,
@@ -380,7 +380,7 @@ where
     fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: E::Fr,
+        point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenge: E::Fr,
@@ -393,7 +393,7 @@ where
         Self::check_individual_opening_challenges(
             vk,
             commitments,
-            point,
+            &point,
             values,
             proof,
             &opening_challenges,
@@ -405,7 +405,7 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
+        evaluations: &Evaluations<P::Point, E::Fr>,
         proof: &Self::BatchProof,
         opening_challenge: E::Fr,
         rng: &mut R,
@@ -428,14 +428,15 @@ where
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, P, Self>, Self::Error>
     where
+        P: 'a,
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
@@ -459,8 +460,8 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
-        evaluations: &Evaluations<E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self>,
+        evaluations: &Evaluations<P::Point, E::Fr>,
+        proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenge: E::Fr,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -484,7 +485,7 @@ where
     /// of the polynomials at the points in the query set.
     fn batch_open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<E::Fr>,
         opening_challenge: E::Fr,
@@ -492,6 +493,7 @@ where
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
+        P: 'a,
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
@@ -535,7 +537,7 @@ where
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
             let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
-            kzg10::KZG10::<E>::check_degrees_and_bounds(
+            kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,
                 enforced_degree_bounds,
@@ -955,7 +957,7 @@ where
                 ck,
                 query_polys,
                 query_comms,
-                *point,
+                point,
                 opening_challenges,
                 query_rands,
                 Some(rng),

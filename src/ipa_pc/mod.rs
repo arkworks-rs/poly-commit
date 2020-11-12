@@ -557,7 +557,7 @@ where
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-          
+
             let mut hiding_polynomial = P::rand(degree, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 

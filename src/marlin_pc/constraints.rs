@@ -11,6 +11,7 @@ use crate::{
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
+use ark_poly::UVPolynomial;
 use ark_r1cs_std::{
     alloc::{AllocVar, AllocationMode},
     bits::{boolean::Boolean, uint8::UInt8, ToBitsGadget},
@@ -22,6 +23,7 @@ use ark_r1cs_std::{
     R1CSVar, ToBytesGadget, ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_std::ops::Div;
 use core::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::MulAssign};
 
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
@@ -1114,6 +1116,7 @@ where
 #[allow(clippy::type_complexity)]
 pub struct BatchLCProofVar<
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1131,11 +1134,14 @@ pub struct BatchLCProofVar<
             NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
         >,
     >,
+    #[doc(hidden)]
+    pub polynomial: PhantomData<P>,
 }
 
-impl<CycleE, PG> Clone for BatchLCProofVar<CycleE, PG>
+impl<CycleE, P, PG> Clone for BatchLCProofVar<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1148,17 +1154,20 @@ where
         BatchLCProofVar {
             proofs: self.proofs.clone(),
             evals: self.evals.clone(),
+            polynomial: PhantomData,
         }
     }
 }
 
-impl<CycleE, PG>
+impl<CycleE, P, PG>
     AllocVar<
-        BatchLCProof<<CycleE::E2 as PairingEngine>::Fr, MarlinKZG10<CycleE::E2>>,
+        BatchLCProof<<CycleE::E2 as PairingEngine>::Fr, P, MarlinKZG10<CycleE::E2, P>>,
         <CycleE::E1 as PairingEngine>::Fr,
-    > for BatchLCProofVar<CycleE, PG>
+    > for BatchLCProofVar<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
+    for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1174,7 +1183,7 @@ where
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<BatchLCProof<<CycleE::E2 as PairingEngine>::Fr, MarlinKZG10<CycleE::E2>>>,
+        T: Borrow<BatchLCProof<<CycleE::E2 as PairingEngine>::Fr, P, MarlinKZG10<CycleE::E2, P>>>,
     {
         value_gen().map(|proof| {
             let ns = cs.into();
@@ -1215,15 +1224,20 @@ where
                 ),
             };
 
-            Self { proofs, evals }
+            Self {
+                proofs,
+                evals,
+                polynomial: PhantomData,
+            }
         })
     }
 }
 
 /// Var for the Marlin-KZG10 polynomial commitment verifier.
-pub struct MarlinKZG10Gadget<CycleE, PG>
+pub struct MarlinKZG10Gadget<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1234,11 +1248,13 @@ where
 {
     _cycle_engine: PhantomData<CycleE>,
     _pairing_gadget: PhantomData<PG>,
+    _polynomial: PhantomData<P>,
 }
 
-impl<CycleE, PG> Clone for MarlinKZG10Gadget<CycleE, PG>
+impl<CycleE, P, PG> Clone for MarlinKZG10Gadget<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1251,13 +1267,16 @@ where
         MarlinKZG10Gadget {
             _cycle_engine: PhantomData,
             _pairing_gadget: PhantomData,
+            _polynomial: PhantomData,
         }
     }
 }
 
-impl<CycleE, PG> MarlinKZG10Gadget<CycleE, PG>
+impl<CycleE, P, PG> MarlinKZG10Gadget<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
+    for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1275,7 +1294,8 @@ where
         cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         prepared_verification_key: &<Self as PCCheckVar<
             <CycleE::E2 as PairingEngine>::Fr,
-            MarlinKZG10<CycleE::E2>,
+            P,
+            MarlinKZG10<CycleE::E2, P>,
             <CycleE::E1 as PairingEngine>::Fr,
         >>::PreparedVerifierKeyVar,
         lc_info: &[(
@@ -1302,7 +1322,8 @@ where
         >,
         proofs: &[<Self as PCCheckVar<
             <CycleE::E2 as PairingEngine>::Fr,
-            MarlinKZG10<CycleE::E2>,
+            P,
+            MarlinKZG10<CycleE::E2, P>,
             <CycleE::E1 as PairingEngine>::Fr,
         >>::ProofVar],
         opening_challenges: &[NonNativeFieldVar<
@@ -1601,14 +1622,17 @@ where
     }
 }
 
-impl<CycleE, PG>
+impl<CycleE, P, PG>
     PCCheckVar<
         <CycleE::E2 as PairingEngine>::Fr,
-        MarlinKZG10<CycleE::E2>,
+        P,
+        MarlinKZG10<CycleE::E2, P>,
         <CycleE::E1 as PairingEngine>::Fr,
-    > for MarlinKZG10Gadget<CycleE, PG>
+    > for MarlinKZG10Gadget<CycleE, P, PG>
 where
     CycleE: CycleEngine,
+    P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
+    for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1624,7 +1648,7 @@ where
     type LabeledCommitmentVar = LabeledCommitmentVar<CycleE, PG>;
     type PreparedLabeledCommitmentVar = PreparedLabeledCommitmentVar<CycleE, PG>;
     type ProofVar = ProofVar<CycleE, PG>;
-    type BatchLCProofVar = BatchLCProofVar<CycleE, PG>;
+    type BatchLCProofVar = BatchLCProofVar<CycleE, P, PG>;
 
     #[allow(clippy::type_complexity)]
     #[tracing::instrument(

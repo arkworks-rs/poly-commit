@@ -7,6 +7,7 @@ use crate::data_structures::LabeledCommitment;
 use crate::{BatchLCProof, PolynomialCommitment};
 use crate::{LCTerm, LinearCombination, String, Vec};
 use ark_nonnative_field::NonNativeFieldVar;
+use ark_poly::Polynomial;
 use ark_r1cs_std::fields::fp::FpVar;
 use hashbrown::{HashMap, HashSet};
 
@@ -89,8 +90,12 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
 
 /// Describes the interface for a gadget for a `PolynomialCommitment`
 /// verifier.
-pub trait PCCheckVar<PCF: PrimeField, PC: PolynomialCommitment<PCF>, ConstraintF: PrimeField>:
-    Clone
+pub trait PCCheckVar<
+    PCF: PrimeField,
+    P: Polynomial<PCF>,
+    PC: PolynomialCommitment<PCF, P>,
+    ConstraintF: PrimeField,
+>: Clone
 {
     /// An allocated version of `PC::VerifierKey`.
     type VerifierKeyVar: AllocVar<PC::VerifierKey, ConstraintF> + Clone + ToBytesGadget<ConstraintF>;
@@ -112,7 +117,7 @@ pub trait PCCheckVar<PCF: PrimeField, PC: PolynomialCommitment<PCF>, ConstraintF
     type ProofVar: AllocVar<PC::Proof, ConstraintF> + Clone;
 
     /// An allocated version of `PC::BatchLCProof`.
-    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, PC>, ConstraintF> + Clone;
+    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, P, PC>, ConstraintF> + Clone;
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that check that `proof_i` is a valid evaluation
     /// proof at `point_i` for the polynomial in `commitment_i`.

@@ -143,6 +143,7 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
+    #[allow(clippy::type_complexity)]
     pub fn commit(
         powers: &Powers<E>,
         polynomial: &P,
