@@ -1,6 +1,6 @@
 use ark_ff::PrimeField;
 use ark_r1cs_std::prelude::*;
-use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use core::{borrow::Borrow, marker::Sized};
 
 use crate::data_structures::LabeledCommitment;
@@ -13,15 +13,16 @@ use hashbrown::{HashMap, HashSet};
 /// A generic gadget for the prepared* structures
 pub trait PrepareVar<UNPREPARED, ConstraintF: PrimeField>: Sized {
     /// prepare from an unprepared element
-    fn prepare(unprepared: &UNPREPARED) -> Result<Self, SynthesisError>;
+    fn prepare(unprepared: &UNPREPARED) -> R1CSResult<Self>;
 
     /// prepare for a smaller field
-    fn prepare_small(_unprepared: &UNPREPARED) -> Result<Self, SynthesisError> {
+    fn prepare_small(_unprepared: &UNPREPARED) -> R1CSResult<Self> {
         unimplemented!();
     }
 }
 
 /// An allocated version of `LinearCombination`.
+#[allow(clippy::type_complexity)]
 pub struct LinearCombinationVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// The label.
     pub label: String,
@@ -52,7 +53,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
         cs: impl Into<Namespace<BaseField>>,
         val: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<LinearCombination<TargetField>>,
     {
@@ -61,6 +62,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
         let ns = cs.into();
         let cs = ns.cs();
 
+        #[allow(clippy::type_complexity)]
         let new_terms: Vec<(
             Option<NonNativeFieldVar<TargetField, BaseField>>,
             LCTerm,
@@ -79,7 +81,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
             .collect();
 
         Ok(Self {
-            label: label.clone(),
+            label,
             terms: new_terms,
         })
     }
@@ -114,34 +116,36 @@ pub trait PCCheckVar<PCF: PrimeField, PC: PolynomialCommitment<PCF>, ConstraintF
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that check that `proof_i` is a valid evaluation
     /// proof at `point_i` for the polynomial in `commitment_i`.
+    #[allow(clippy::too_many_arguments)]
     fn batch_check_evaluations(
         cs: ConstraintSystemRef<ConstraintF>,
         verification_key: &Self::VerifierKeyVar,
-        commitments: &Vec<Self::LabeledCommitmentVar>,
+        commitments: &[Self::LabeledCommitmentVar],
         query_set: &QuerySetVar<PCF, ConstraintF>,
         evaluations: &EvaluationsVar<PCF, ConstraintF>,
-        proofs: &Vec<Self::ProofVar>,
-        opening_challenges: &Vec<NonNativeFieldVar<PCF, ConstraintF>>,
-        opening_challenges_bits: &Vec<Vec<Boolean<ConstraintF>>>,
-        batching_rands: &Vec<NonNativeFieldVar<PCF, ConstraintF>>,
-        batching_rands_bits: &Vec<Vec<Boolean<ConstraintF>>>,
-    ) -> Result<Boolean<ConstraintF>, SynthesisError>;
+        proofs: &[Self::ProofVar],
+        opening_challenges: &[NonNativeFieldVar<PCF, ConstraintF>],
+        opening_challenges_bits: &[Vec<Boolean<ConstraintF>>],
+        batching_rands: &[NonNativeFieldVar<PCF, ConstraintF>],
+        batching_rands_bits: &[Vec<Boolean<ConstraintF>>],
+    ) -> R1CSResult<Boolean<ConstraintF>>;
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that conditionally check that `proof` is a valid evaluation
     /// proof at the points in `query_set` for the combinations `linear_combinations`.
+    #[allow(clippy::too_many_arguments)]
     fn prepared_check_combinations(
         cs: ConstraintSystemRef<ConstraintF>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,
-        linear_combinations: &Vec<LinearCombinationVar<PCF, ConstraintF>>,
-        prepared_commitments: &Vec<Self::PreparedLabeledCommitmentVar>,
+        linear_combinations: &[LinearCombinationVar<PCF, ConstraintF>],
+        prepared_commitments: &[Self::PreparedLabeledCommitmentVar],
         query_set: &QuerySetVar<PCF, ConstraintF>,
         evaluations: &EvaluationsVar<PCF, ConstraintF>,
         proof: &Self::BatchLCProofVar,
-        opening_challenges: &Vec<NonNativeFieldVar<PCF, ConstraintF>>,
-        opening_challenges_bits: &Vec<Vec<Boolean<ConstraintF>>>,
-        batching_rands: &Vec<NonNativeFieldVar<PCF, ConstraintF>>,
-        batching_rands_bits: &Vec<Vec<Boolean<ConstraintF>>>,
-    ) -> Result<Boolean<ConstraintF>, SynthesisError>;
+        opening_challenges: &[NonNativeFieldVar<PCF, ConstraintF>],
+        opening_challenges_bits: &[Vec<Boolean<ConstraintF>>],
+        batching_rands: &[NonNativeFieldVar<PCF, ConstraintF>],
+        batching_rands_bits: &[Vec<Boolean<ConstraintF>>],
+    ) -> R1CSResult<Boolean<ConstraintF>>;
 
     /// Create the labeled commitment gadget from the commitment gadget
     fn create_labeled_commitment_gadget(
@@ -159,6 +163,7 @@ pub trait PCCheckVar<PCF: PrimeField, PC: PolynomialCommitment<PCF>, ConstraintF
 }
 
 /// An allocated version of `QuerySet`.
+#[allow(clippy::type_complexity)]
 pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
     pub HashSet<(String, (String, NonNativeFieldVar<TargetField, BaseField>))>,
 );
@@ -176,10 +181,10 @@ impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField,
     /// find the evaluation result
     pub fn get_lc_eval(
         &self,
-        lc_string: &String,
+        lc_string: &str,
         point: &NonNativeFieldVar<TargetField, BaseField>,
     ) -> Result<NonNativeFieldVar<TargetField, BaseField>, SynthesisError> {
-        let key = (lc_string.clone(), point.clone());
+        let key = (String::from(lc_string), point.clone());
         Ok(self.0.get(&key).map(|v| (*v).clone()).unwrap())
     }
 }

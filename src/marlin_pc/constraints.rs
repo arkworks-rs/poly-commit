@@ -21,10 +21,11 @@ use ark_r1cs_std::{
     select::CondSelectGadget,
     R1CSVar, ToBytesGadget, ToConstraintFieldGadget,
 };
-use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use core::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::MulAssign};
 
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
+#[allow(clippy::type_complexity)]
 pub struct VerifierKeyVar<
     CycleE: CycleEngine,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -100,7 +101,7 @@ where
             let mut sum = FpVar::<<CycleE::E1 as PairingEngine>::Fr>::zero();
             let one = FpVar::<<CycleE::E1 as PairingEngine>::Fr>::one();
             for pir_gadget in pir_vector_gadgets.iter() {
-                sum = sum + &FpVar::<<CycleE::E1 as PairingEngine>::Fr>::from(pir_gadget.clone());
+                sum += &FpVar::<<CycleE::E1 as PairingEngine>::Fr>::from(pir_gadget.clone());
             }
             sum.enforce_equal(&one).unwrap();
 
@@ -169,7 +170,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         val: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<VerifierKey<CycleE::E2>>,
     {
@@ -184,38 +185,32 @@ where
             ..
         } = vk_orig;
 
-        let degree_bounds_and_shift_powers = degree_bounds_and_shift_powers.and_then(|vec| {
-            Some(
-                vec.iter()
-                    .map(|(s, g)| {
-                        (
-                            *s,
-                            FpVar::<<CycleE::E1 as PairingEngine>::Fr>::new_variable(
-                                ark_relations::ns!(cs, "degree bound"),
-                                || {
-                                    Ok(<<CycleE::E1 as PairingEngine>::Fr as From<u128>>::from(
-                                        *s as u128,
-                                    ))
-                                },
-                                mode,
-                            )
-                            .unwrap(),
-                            PG::G1Var::new_variable(
-                                ark_relations::ns!(cs, "pow"),
-                                || Ok(g.clone()),
-                                mode,
-                            )
-                            .unwrap(),
+        let degree_bounds_and_shift_powers = degree_bounds_and_shift_powers.map(|vec| {
+            vec.iter()
+                .map(|(s, g)| {
+                    (
+                        *s,
+                        FpVar::<<CycleE::E1 as PairingEngine>::Fr>::new_variable(
+                            ark_relations::ns!(cs, "degree bound"),
+                            || {
+                                Ok(<<CycleE::E1 as PairingEngine>::Fr as From<u128>>::from(
+                                    *s as u128,
+                                ))
+                            },
+                            mode,
                         )
-                    })
-                    .collect(),
-            )
+                        .unwrap(),
+                        PG::G1Var::new_variable(ark_relations::ns!(cs, "pow"), || Ok(*g), mode)
+                            .unwrap(),
+                    )
+                })
+                .collect()
         });
 
         let KZG10VerifierKey { g, h, beta_h, .. } = vk;
 
-        let g = PG::G1Var::new_variable(ark_relations::ns!(cs, "g"), || Ok(g.clone()), mode)?;
-        let h = PG::G2Var::new_variable(ark_relations::ns!(cs, "h"), || Ok(h.clone()), mode)?;
+        let g = PG::G1Var::new_variable(ark_relations::ns!(cs, "g"), || Ok(g), mode)?;
+        let h = PG::G2Var::new_variable(ark_relations::ns!(cs, "h"), || Ok(h), mode)?;
         let beta_h =
             PG::G2Var::new_variable(ark_relations::ns!(cs, "beta_h"), || Ok(beta_h), mode)?;
 
@@ -241,7 +236,7 @@ where
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
     #[inline]
-    fn to_bytes(&self) -> Result<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>, SynthesisError> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(&self.g.to_bytes()?);
@@ -276,9 +271,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn to_constraint_field(
-        &self,
-    ) -> Result<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>, SynthesisError> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut res = Vec::new();
 
         let mut g_gadget = self.g.to_constraint_field()?;
@@ -305,6 +298,7 @@ where
 }
 
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
+#[allow(clippy::type_complexity)]
 pub struct PreparedVerifierKeyVar<
     CycleE: CycleEngine,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -376,20 +370,20 @@ where
         } else {
             let shift_power = self.origin_vk.as_ref().unwrap().get_shift_power(cs, bound);
 
-            if shift_power.is_none() {
-                None
-            } else {
+            if let Some(shift_power) = shift_power {
                 let mut prepared_shift_gadgets = Vec::<PG::G1Var>::new();
 
                 let supported_bits = <CycleE::E2 as PairingEngine>::Fr::size_in_bits();
 
-                let mut cur: PG::G1Var = shift_power.unwrap().clone();
+                let mut cur: PG::G1Var = shift_power;
                 for _ in 0..supported_bits {
                     prepared_shift_gadgets.push(cur.clone());
                     cur.double_in_place().unwrap();
                 }
 
                 Some(prepared_shift_gadgets)
+            } else {
+                None
             }
         }
     }
@@ -407,7 +401,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn prepare(unprepared: &VerifierKeyVar<CycleE, PG>) -> Result<Self, SynthesisError> {
+    fn prepare(unprepared: &VerifierKeyVar<CycleE, PG>) -> R1CSResult<Self> {
         let supported_bits = <CycleE::E2 as PairingEngine>::Fr::size_in_bits();
         let mut prepared_g = Vec::<PG::G1Var>::new();
 
@@ -434,7 +428,7 @@ where
                     .unwrap()
                     .iter()
                 {
-                    res.push((d.clone(), (*d_gadget).clone(), vec![shift_power.clone()]));
+                    res.push((*d, (*d_gadget).clone(), vec![shift_power.clone()]));
                 }
 
                 Some(res)
@@ -472,7 +466,7 @@ where
             prepared_degree_bounds_and_shift_powers: self
                 .prepared_degree_bounds_and_shift_powers
                 .clone(),
-            constant_allocation: self.constant_allocation.clone(),
+            constant_allocation: self.constant_allocation,
             origin_vk: self.origin_vk.clone(),
         }
     }
@@ -494,7 +488,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<PreparedVerifierKey<CycleE::E2>>,
     {
@@ -510,7 +504,7 @@ where
                 <CycleE::E2 as PairingEngine>::G1Affine,
                 <CycleE::E1 as PairingEngine>::Fr,
             >>::new_variable(
-                ark_relations::ns!(cs, "g"), || Ok(g.clone()), mode
+                ark_relations::ns!(cs, "g"), || Ok(*g), mode
             )?);
         }
 
@@ -545,7 +539,7 @@ where
                             <CycleE::E2 as PairingEngine>::G1Affine,
                             <CycleE::E1 as PairingEngine>::Fr,
                         >>::new_variable(
-                            cs.clone(), || Ok(shift_power_elem.clone()), mode
+                            cs.clone(), || Ok(shift_power_elem), mode
                         )?);
                     }
 
@@ -559,7 +553,7 @@ where
                         mode,
                     )?;
 
-                    res.push((d.clone(), d_gadget, gadgets));
+                    res.push((*d, d_gadget, gadgets));
                 }
                 Some(res)
             } else {
@@ -631,7 +625,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<Commitment<CycleE::E2>>,
     {
@@ -639,17 +633,13 @@ where
             let ns = cs.into();
             let cs = ns.cs();
 
-            let commitment = (*commitment.borrow()).clone();
+            let commitment = *commitment.borrow();
             let comm = commitment.comm;
             let comm_gadget = PG::G1Var::new_variable(cs.clone(), || Ok(comm.0), mode)?;
 
             let shifted_comm = commitment.shifted_comm;
             let shifted_comm_gadget = if let Some(shifted_comm) = shifted_comm {
-                Some(PG::G1Var::new_variable(
-                    cs.clone(),
-                    || Ok(shifted_comm.0),
-                    mode,
-                )?)
+                Some(PG::G1Var::new_variable(cs, || Ok(shifted_comm.0), mode)?)
             } else {
                 None
             };
@@ -675,9 +665,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn to_constraint_field(
-        &self,
-    ) -> Result<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>, SynthesisError> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut res = Vec::new();
 
         let mut comm_gadget = self.comm.to_constraint_field()?;
@@ -705,7 +693,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn to_bytes(&self) -> Result<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>, SynthesisError> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>> {
         let zero_shifted_comm = PG::G1Var::zero();
 
         let mut bytes = Vec::new();
@@ -765,7 +753,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn prepare(unprepared: &CommitmentVar<CycleE, PG>) -> Result<Self, SynthesisError> {
+    fn prepare(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
         let supported_bits = <CycleE::E2 as PairingEngine>::Fr::size_in_bits();
 
@@ -781,7 +769,7 @@ where
         })
     }
 
-    fn prepare_small(unprepared: &CommitmentVar<CycleE, PG>) -> Result<Self, SynthesisError> {
+    fn prepare_small(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
         let supported_bits = 128;
 
@@ -814,7 +802,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<PreparedCommitment<CycleE::E2>>,
     {
@@ -834,7 +822,7 @@ where
                 ark_relations::ns!(cs, "comm_elem"),
                 || {
                     Ok(<CycleE::E2 as PairingEngine>::G1Projective::from(
-                        comm_elem.clone(),
+                        *comm_elem,
                     ))
                 },
                 mode,
@@ -849,7 +837,7 @@ where
                 ark_relations::ns!(cs, "shifted_comm"),
                 || {
                     Ok(<CycleE::E2 as PairingEngine>::G1Projective::from(
-                        obj.shifted_comm.unwrap().0.clone(),
+                        obj.shifted_comm.unwrap().0,
                     ))
                 },
                 mode,
@@ -923,7 +911,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<LabeledCommitment<Commitment<CycleE::E2>>>,
     {
@@ -942,12 +930,12 @@ where
                 mode,
             )?;
 
-            let degree_bound = if degree_bound.is_some() {
+            let degree_bound = if let Some(degree_bound) = degree_bound {
                 FpVar::<<CycleE::E1 as PairingEngine>::Fr>::new_variable(
                     ark_relations::ns!(cs, "degree_bound"),
                     || {
                         Ok(<<CycleE::E1 as PairingEngine>::Fr as From<u128>>::from(
-                            degree_bound.unwrap() as u128,
+                            degree_bound as u128,
                         ))
                     },
                     mode,
@@ -1018,7 +1006,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    fn prepare(unprepared: &LabeledCommitmentVar<CycleE, PG>) -> Result<Self, SynthesisError> {
+    fn prepare(unprepared: &LabeledCommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let prepared_commitment = PreparedCommitmentVar::prepare(&unprepared.commitment)?;
 
         Ok(Self {
@@ -1030,6 +1018,7 @@ where
 }
 
 /// Var for a Marlin-KZG10 proof.
+#[allow(clippy::type_complexity)]
 pub struct ProofVar<
     CycleE: CycleEngine,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -1085,7 +1074,7 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<Proof<CycleE::E2>>,
     {
@@ -1093,14 +1082,14 @@ where
             let ns = cs.into();
             let cs = ns.cs();
 
-            let Proof { w, random_v } = proof.borrow().clone();
+            let Proof { w, random_v } = *proof.borrow();
             let w = PG::G1Var::new_variable(ark_relations::ns!(cs, "w"), || Ok(w), mode)?;
 
             let random_v = match random_v {
                 None => None,
                 Some(random_v_inner) => Some(NonNativeFieldVar::new_variable(
                     ark_relations::ns!(cs, "random_v"),
-                    || Ok(random_v_inner.clone()),
+                    || Ok(random_v_inner),
                     mode,
                 )?),
             };
@@ -1111,6 +1100,7 @@ where
 }
 
 /// An allocated version of `BatchLCProof`.
+#[allow(clippy::type_complexity)]
 pub struct BatchLCProofVar<
     CycleE: CycleEngine,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -1171,17 +1161,17 @@ where
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
-    ) -> Result<Self, SynthesisError>
+    ) -> R1CSResult<Self>
     where
         T: Borrow<BatchLCProof<<CycleE::E2 as PairingEngine>::Fr, MarlinKZG10<CycleE::E2>>>,
     {
-        value_gen().and_then(|proof| {
+        value_gen().map(|proof| {
             let ns = cs.into();
             let cs = ns.cs();
 
             let BatchLCProof { proof, evals } = proof.borrow().clone();
 
-            let proofs: Vec<Proof<_>> = proof.clone().into();
+            let proofs: Vec<Proof<_>> = proof;
             let proofs: Vec<ProofVar<CycleE, PG>> = proofs
                 .iter()
                 .map(|p| {
@@ -1189,6 +1179,7 @@ where
                 })
                 .collect();
 
+            #[allow(clippy::type_complexity)]
             let evals: Option<
                 Vec<
                     NonNativeFieldVar<
@@ -1213,7 +1204,7 @@ where
                 ),
             };
 
-            Ok(Self { proofs, evals })
+            Self { proofs, evals }
         })
     }
 }
@@ -1264,6 +1255,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn prepared_batch_check_evaluations(
         cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         prepared_verification_key: &<Self as PCCheckVar<
@@ -1271,7 +1263,7 @@ where
             MarlinKZG10<CycleE::E2>,
             <CycleE::E1 as PairingEngine>::Fr,
         >>::PreparedVerifierKeyVar,
-        lc_info: &Vec<(
+        lc_info: &[(
             String,
             Vec<(
                 Option<
@@ -1284,7 +1276,7 @@ where
                 PreparedCommitmentVar<CycleE, PG>,
                 bool,
             )>,
-        )>,
+        )],
         query_set: &QuerySetVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
@@ -1293,24 +1285,24 @@ where
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
         >,
-        proofs: &Vec<
-            <Self as PCCheckVar<
-                <CycleE::E2 as PairingEngine>::Fr,
-                MarlinKZG10<CycleE::E2>,
-                <CycleE::E1 as PairingEngine>::Fr,
-            >>::ProofVar,
-        >,
-        opening_challenges: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        opening_challenges_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-        batching_rands: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        batching_rands_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-    ) -> Result<Boolean<<CycleE::E1 as PairingEngine>::Fr>, SynthesisError> {
-        let mut batching_rands = batching_rands.clone();
-        let mut batching_rands_bits = batching_rands_bits.clone();
+        proofs: &[<Self as PCCheckVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            MarlinKZG10<CycleE::E2>,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >>::ProofVar],
+        opening_challenges: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        opening_challenges_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+        batching_rands: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        batching_rands_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+    ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
+        let mut batching_rands = batching_rands.to_vec();
+        let mut batching_rands_bits = batching_rands_bits.to_vec();
 
         let commitment_lcs: BTreeMap<
             String,
@@ -1483,7 +1475,7 @@ where
                 // Similarly, we add up the evaluations, multiplied with random challenges.
                 let value_times_challenge_unreduced = value.mul_without_reduce(&challenge)?;
 
-                combined_eval = combined_eval + &value_times_challenge_unreduced;
+                combined_eval += &value_times_challenge_unreduced;
             }
 
             let combined_eval_reduced = combined_eval.reduce()?;
@@ -1531,7 +1523,7 @@ where
 
                     let randomizer_times_v = randomizer.mul_without_reduce(&v)?;
 
-                    g_multiplier = g_multiplier + &randomizer_times_v;
+                    g_multiplier += &randomizer_times_v;
 
                     let c_times_randomizer =
                         c_plus_w_times_z.scalar_mul_le(randomizer_bits.iter())?;
@@ -1619,10 +1611,11 @@ where
     type ProofVar = ProofVar<CycleE, PG>;
     type BatchLCProofVar = BatchLCProofVar<CycleE, PG>;
 
+    #[allow(clippy::type_complexity)]
     fn batch_check_evaluations(
         _cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         verification_key: &Self::VerifierKeyVar,
-        commitments: &Vec<Self::LabeledCommitmentVar>,
+        commitments: &[Self::LabeledCommitmentVar],
         query_set: &QuerySetVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
@@ -1631,18 +1624,20 @@ where
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
         >,
-        proofs: &Vec<Self::ProofVar>,
-        opening_challenges: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        opening_challenges_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-        batching_rands: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        batching_rands_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-    ) -> Result<Boolean<<CycleE::E1 as PairingEngine>::Fr>, SynthesisError> {
-        let mut batching_rands = batching_rands.clone();
-        let mut batching_rands_bits = batching_rands_bits.clone();
+        proofs: &[Self::ProofVar],
+        opening_challenges: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        opening_challenges_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+        batching_rands: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        batching_rands_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+    ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
+        let mut batching_rands = batching_rands.to_vec();
+        let mut batching_rands_bits = batching_rands_bits.to_vec();
 
         let commitments: BTreeMap<_, _> =
             commitments.iter().map(|c| (c.label.clone(), c)).collect();
@@ -1663,7 +1658,7 @@ where
             let mut comms_to_combine: Vec<Self::LabeledCommitmentVar> = Vec::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
-                let commitment = commitments.get(label).unwrap().clone();
+                let commitment = &(*commitments.get(label).unwrap()).clone();
                 let degree_bound = commitment.degree_bound.clone();
                 assert_eq!(
                     degree_bound.is_some(),
@@ -1704,7 +1699,7 @@ where
 
                 // Similarly, we add up the evaluations, multiplied with random challenges.
                 let value_times_challenge_unreduced = value.mul_without_reduce(&challenge)?;
-                combined_eval = combined_eval + &value_times_challenge_unreduced;
+                combined_eval += &value_times_challenge_unreduced;
 
                 // If the degree bound is specified, we include the adjusted degree-shifted commitment
                 // (that is, c_i' - v_i beta^{D - d_i} G), where d_i is the specific degree bound and
@@ -1805,16 +1800,15 @@ where
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn prepared_check_combinations(
         cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,
-        linear_combinations: &Vec<
-            LinearCombinationVar<
-                <CycleE::E2 as PairingEngine>::Fr,
-                <CycleE::E1 as PairingEngine>::Fr,
-            >,
-        >,
-        prepared_commitments: &Vec<Self::PreparedLabeledCommitmentVar>,
+        linear_combinations: &[LinearCombinationVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        prepared_commitments: &[Self::PreparedLabeledCommitmentVar],
         query_set: &QuerySetVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
@@ -1824,15 +1818,17 @@ where
             <CycleE::E1 as PairingEngine>::Fr,
         >,
         proof: &Self::BatchLCProofVar,
-        opening_challenges: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        opening_challenges_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-        batching_rands: &Vec<
-            NonNativeFieldVar<<CycleE::E2 as PairingEngine>::Fr, <CycleE::E1 as PairingEngine>::Fr>,
-        >,
-        batching_rands_bits: &Vec<Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>>,
-    ) -> Result<Boolean<<CycleE::E1 as PairingEngine>::Fr>, SynthesisError> {
+        opening_challenges: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        opening_challenges_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+        batching_rands: &[NonNativeFieldVar<
+            <CycleE::E2 as PairingEngine>::Fr,
+            <CycleE::E1 as PairingEngine>::Fr,
+        >],
+        batching_rands_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+    ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
         let BatchLCProofVar { proofs, .. } = proof;
 
         let label_comm_map = prepared_commitments
@@ -1880,7 +1876,7 @@ where
                         coeff.clone(),
                         cur_comm.degree_bound.clone(),
                         cur_comm.prepared_commitment.clone(),
-                        negate.clone(),
+                        *negate,
                     ));
                 }
             }

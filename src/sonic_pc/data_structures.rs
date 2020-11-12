@@ -20,7 +20,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
-        let mut cur = E::G1Projective::from(comm.0.clone());
+        let mut cur = E::G1Projective::from(comm.0);
         for _ in 0..128 {
             prepared_comm.push(cur.clone().into());
             cur.double_in_place();
@@ -97,7 +97,7 @@ impl<E: PairingEngine> CommitterKey<E> {
                 };
 
                 let ck = kzg10::Powers {
-                    powers_of_g: shifted_powers_of_g[powers_range.clone()].into(),
+                    powers_of_g: shifted_powers_of_g[powers_range].into(),
                     powers_of_gamma_g: shifted_powers_of_gamma_g[&bound].clone().into(),
                 };
 

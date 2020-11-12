@@ -28,6 +28,7 @@ pub struct SonicKZG10<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> SonicKZG10<E> {
+    #[allow(clippy::too_many_arguments)]
     fn accumulate_elems_individual_opening_challenges<'a>(
         combined_comms: &mut BTreeMap<Option<usize>, E::G1Projective>,
         combined_witness: &mut E::G1Projective,
@@ -66,7 +67,7 @@ impl<E: PairingEngine> SonicKZG10<E> {
             // Accumulate values in the BTreeMap
             *combined_comms
                 .entry(degree_bound)
-                .or_insert(E::G1Projective::zero()) += &comm_with_challenge;
+                .or_insert_with(E::G1Projective::zero) += &comm_with_challenge;
             curr_challenge = opening_challenges(opening_challenge_counter);
             opening_challenge_counter += 1;
         }
@@ -163,7 +164,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
 
         let enforced_degree_bounds = enforced_degree_bounds.map(|bounds| {
             let mut v = bounds.to_vec();
-            v.sort();
+            v.sort_unstable();
             v.dedup();
             v
         });
@@ -270,6 +271,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
     }
 
     /// Outputs a commitment to `polynomial`.
+    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr>>,
@@ -287,10 +289,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         let mut randomness: Vec<Self::Randomness> = Vec::new();
 
         for labeled_polynomial in polynomials {
-            let enforced_degree_bounds: Option<&[usize]> = ck
-                .enforced_degree_bounds
-                .as_ref()
-                .map(|bounds| bounds.as_slice());
+            let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
 
             kzg10::KZG10::<E>::check_degrees_and_bounds(
                 ck.supported_degree(),
@@ -355,10 +354,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         opening_challenge_counter += 1;
 
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
-            let enforced_degree_bounds: Option<&[usize]> = ck
-                .enforced_degree_bounds
-                .as_ref()
-                .map(|bounds| bounds.as_slice());
+            let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
 
             kzg10::KZG10::<E>::check_degrees_and_bounds(
                 ck.supported_degree(),
@@ -563,7 +559,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         let comms: Vec<Self::Commitment> =
             E::G1Projective::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
-                .map(|c| kzg10::Commitment::<E>(c))
+                .map(kzg10::Commitment::<E>)
                 .collect();
 
         let lc_commitments = lc_info
@@ -648,7 +644,7 @@ impl<E: PairingEngine> PolynomialCommitment<E::Fr> for SonicKZG10<E> {
         let comms: Vec<Self::Commitment> =
             E::G1Projective::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
-                .map(|c| kzg10::Commitment(c))
+                .map(kzg10::Commitment)
                 .collect();
 
         let lc_commitments = lc_info

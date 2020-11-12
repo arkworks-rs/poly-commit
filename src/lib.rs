@@ -9,6 +9,7 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
+#![allow(clippy::op_ref)]
 
 #[macro_use]
 extern crate derivative;
@@ -129,9 +130,9 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// open the commitment to produce an evaluation proof.
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
-    type VerifierKey: PCVerifierKey + Default;
+    type VerifierKey: PCVerifierKey;
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Default + Clone;
+    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The prepared commitment to a polynomial.
@@ -170,6 +171,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     ///
     /// If for some `i`, `polynomials[i].degree_bound().is_some()`, then that
     /// polynomial will have the corresponding degree bound enforced.
+    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F>>,
@@ -339,6 +341,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     /// On input a list of polynomials, linear combinations of those polynomials,
     /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
+    #[allow(clippy::too_many_arguments)]
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -368,6 +371,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
 
     /// Checks that `evaluations` are the true evaluations at `query_set` of the
     /// linear combinations of polynomials committed in `commitments`.
+    #[allow(clippy::too_many_arguments)]
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -485,6 +489,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// open_combinations but with individual challenges
+    #[allow(clippy::too_many_arguments)]
     fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -520,6 +525,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
     }
 
     /// check_combinations with individual challenges
+    #[allow(clippy::too_many_arguments)]
     fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -560,7 +566,7 @@ pub trait PolynomialCommitment<F: Field>: Sized {
                     let eval = match label {
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
-                            .get(&(l.clone().into(), point))
+                            .get(&(l.into(), point))
                             .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 

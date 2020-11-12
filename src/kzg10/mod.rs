@@ -196,6 +196,7 @@ impl<E: PairingEngine> KZG10<E> {
     /// The witness polynomial w(x) the quotient of the division (p(x) - p(z)) / (x - z)
     /// Observe that this quotient does not change with z because
     /// p(z) is the remainder term. We can therefore omit p(z) when computing the quotient.
+    #[allow(clippy::type_complexity)]
     pub fn compute_witness_polynomial(
         p: &Polynomial<E::Fr>,
         point: E::Fr,
@@ -221,7 +222,7 @@ impl<E: PairingEngine> KZG10<E> {
         Ok((witness_polynomial, random_witness_polynomial))
     }
 
-    pub(crate) fn open_with_witness_polynomial<'a>(
+    pub(crate) fn open_with_witness_polynomial(
         powers: &Powers<E>,
         point: E::Fr,
         randomness: &Randomness<E>,
@@ -265,7 +266,7 @@ impl<E: PairingEngine> KZG10<E> {
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    pub(crate) fn open<'a>(
+    pub(crate) fn open(
         powers: &Powers<E>,
         p: &Polynomial<E::Fr>,
         point: E::Fr,
@@ -430,12 +431,12 @@ impl<E: PairingEngine> KZG10<E> {
             if enforced_degree_bounds.binary_search(&bound).is_err() {
                 Err(Error::UnsupportedDegreeBound(bound))
             } else if bound < p.degree() || bound > max_degree {
-                return Err(Error::IncorrectDegreeBound {
+                Err(Error::IncorrectDegreeBound {
                     poly_degree: p.degree(),
                     degree_bound: p.degree_bound().unwrap(),
                     supported_degree,
                     label: p.label().to_string(),
-                });
+                })
             } else {
                 Ok(())
             }
