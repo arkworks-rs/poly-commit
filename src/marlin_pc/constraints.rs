@@ -60,6 +60,7 @@ where
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
     /// Find the appropriate shift for the degree bound.
+    #[tracing::instrument(target = "r1cs", skip(self, cs))]
     pub fn get_shift_power(
         &self,
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
@@ -166,6 +167,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(cs, val))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         val: impl FnOnce() -> Result<T, SynthesisError>,
@@ -235,7 +237,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    #[inline]
+    #[tracing::instrument(target = "r1cs", skip(self))]
     fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut bytes = Vec::new();
 
@@ -271,6 +273,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(self))]
     fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut res = Vec::new();
 
@@ -401,8 +404,9 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &VerifierKeyVar<CycleE, PG>) -> R1CSResult<Self> {
-        let supported_bits = <CycleE::E2 as PairingEngine>::Fr::size_in_bits();
+        let supported_bits = <<CycleE::E2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
         let mut prepared_g = Vec::<PG::G1Var>::new();
 
         let mut g: PG::G1Var = unprepared.g.clone();
@@ -484,6 +488,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
@@ -620,7 +625,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    #[inline]
+    #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
@@ -665,6 +670,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(self))]
     fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<CycleE::E1 as PairingEngine>::Fr>>> {
         let mut res = Vec::new();
 
@@ -693,6 +699,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(self))]
     fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<CycleE::E1 as PairingEngine>::Fr>>> {
         let zero_shifted_comm = PG::G1Var::zero();
 
@@ -753,9 +760,10 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
-        let supported_bits = <CycleE::E2 as PairingEngine>::Fr::size_in_bits();
+        let supported_bits = <<CycleE::E2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
 
         let mut cur: PG::G1Var = unprepared.comm.clone();
         for _ in 0..supported_bits {
@@ -769,6 +777,7 @@ where
         })
     }
 
+    #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare_small(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
         let supported_bits = 128;
@@ -798,6 +807,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
@@ -821,9 +831,9 @@ where
             >>::new_variable(
                 ark_relations::ns!(cs, "comm_elem"),
                 || {
-                    Ok(<CycleE::E2 as PairingEngine>::G1Projective::from(
-                        *comm_elem,
-                    ))
+                    Ok(<<CycleE::E2 as PairingEngine>::G1Projective as From<
+                        <CycleE::E2 as PairingEngine>::G1Affine,
+                    >>::from(*comm_elem))
                 },
                 mode,
             )?);
@@ -836,9 +846,9 @@ where
             >>::new_variable(
                 ark_relations::ns!(cs, "shifted_comm"),
                 || {
-                    Ok(<CycleE::E2 as PairingEngine>::G1Projective::from(
-                        obj.shifted_comm.unwrap().0,
-                    ))
+                    Ok(<<CycleE::E2 as PairingEngine>::G1Projective as From<
+                        <CycleE::E2 as PairingEngine>::G1Affine,
+                    >>::from(obj.shifted_comm.unwrap().0))
                 },
                 mode,
             )?)
@@ -906,7 +916,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    #[inline]
+    #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
@@ -1006,6 +1016,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
+    #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &LabeledCommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let prepared_commitment = PreparedCommitmentVar::prepare(&unprepared.commitment)?;
 
@@ -1069,7 +1080,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    #[inline]
+    #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
@@ -1156,7 +1167,7 @@ where
     <CycleE::E2 as PairingEngine>::G2Affine:
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
-    #[inline]
+    #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
         cs: impl Into<Namespace<<CycleE::E1 as PairingEngine>::Fr>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
@@ -1256,6 +1267,10 @@ where
         ToConstraintField<<<CycleE::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
 {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
+    #[tracing::instrument(
+        target = "r1cs",
+        skip(prepared_verification_key, lc_info, query_set, evaluations, proofs)
+    )]
     fn prepared_batch_check_evaluations(
         cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         prepared_verification_key: &<Self as PCCheckVar<
@@ -1612,6 +1627,10 @@ where
     type BatchLCProofVar = BatchLCProofVar<CycleE, PG>;
 
     #[allow(clippy::type_complexity)]
+    #[tracing::instrument(
+        target = "r1cs",
+        skip(verification_key, commitments, query_set, evaluations, proofs)
+    )]
     fn batch_check_evaluations(
         _cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         verification_key: &Self::VerifierKeyVar,
@@ -1801,6 +1820,17 @@ where
     }
 
     #[allow(clippy::type_complexity)]
+    #[tracing::instrument(
+        target = "r1cs",
+        skip(
+            prepared_verification_key,
+            linear_combinations,
+            prepared_commitments,
+            query_set,
+            proof,
+            evaluations
+        )
+    )]
     fn prepared_check_combinations(
         cs: ConstraintSystemRef<<CycleE::E1 as PairingEngine>::Fr>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,

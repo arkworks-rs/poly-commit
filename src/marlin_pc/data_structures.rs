@@ -157,7 +157,7 @@ where
 
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
             for (d, shift_power) in degree_bounds_and_shift_powers.iter() {
-                let d_elem: <E::Fq as Field>::BasePrimeField = (d.clone() as u64).into();
+                let d_elem: <E::Fq as Field>::BasePrimeField = (*d as u64).into();
 
                 res.push(d_elem);
                 res.extend_from_slice(&shift_power.to_field_elements().unwrap());
