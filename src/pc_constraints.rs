@@ -176,7 +176,7 @@ pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub  HashMap<
+    pub HashMap<
         (String, NonNativeFieldVar<TargetField, BaseField>),
         NonNativeFieldVar<TargetField, BaseField>,
     >,
