@@ -22,6 +22,7 @@ use rand_core::RngCore;
 use ark_std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
+    hash::Hash,
     iter::FromIterator,
     rc::Rc,
     string::{String, ToString},
@@ -621,7 +622,7 @@ pub fn evaluate_query_set<'a, F, P, T>(
 where
     F: Field,
     P: 'a + Polynomial<F, Point = T>,
-    T: Clone + Debug + Ord + Sync,
+    T: Clone + Debug + Hash + Ord + Sync,
 {
     let polys = BTreeMap::from_iter(polys.into_iter().map(|p| (p.label(), p)));
     let mut evaluations = Evaluations::new();
