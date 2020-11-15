@@ -139,7 +139,7 @@ impl<E: PairingEngine, P: MVPolynomial<E::Fr>> MarlinPST13<E, P> {
 impl<E, P> PolynomialCommitment<E::Fr, P> for MarlinPST13<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: MVPolynomial<E::Fr> + Sync,
     P::Point: Index<usize, Output = E::Fr>,
 {
     type UniversalParams = UniversalParams<E, P>;
@@ -581,7 +581,7 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        values: &Evaluations<E::Fr, P::Point>,
+        values: &Evaluations<P::Point, E::Fr>,
         proof: &Self::BatchProof,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
@@ -686,7 +686,7 @@ where
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<E::Fr, P::Point>,
+        evaluations: &Evaluations<P::Point, E::Fr>,
         proof: &BatchLCProof<E::Fr, P, Self>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,

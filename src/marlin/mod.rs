@@ -5,7 +5,7 @@ use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, Zero};
-use ark_std::{convert::TryInto, ops::AddAssign};
+use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by
@@ -140,7 +140,7 @@ impl<E: PairingEngine> Marlin<E> {
     fn combine_and_normalize<'a, D: Clone + Ord + Sync>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         query_set: &QuerySet<D>,
-        evaluations: &Evaluations<E::Fr, D>,
+        evaluations: &Evaluations<D, E::Fr>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(Vec<kzg10::Commitment<E>>, Vec<D>, Vec<E::Fr>), Error>
@@ -222,7 +222,7 @@ impl<E: PairingEngine> Marlin<E> {
     ) -> Result<BatchLCProof<E::Fr, P, PC>, Error>
     where
         P: 'a + Polynomial<E::Fr, Point = D>,
-        D: Debug + Clone + Ord + Sync,
+        D: Debug + Clone + Hash + Ord + Sync,
         PC: PolynomialCommitment<
             E::Fr,
             P,
@@ -310,7 +310,7 @@ impl<E: PairingEngine> Marlin<E> {
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<E::Fr, P::Point>,
+        evaluations: &Evaluations<P::Point, E::Fr>,
         proof: &BatchLCProof<E::Fr, P, PC>,
         opening_challenges: &dyn Fn(u64) -> E::Fr,
         rng: &mut R,
@@ -318,7 +318,7 @@ impl<E: PairingEngine> Marlin<E> {
     where
         R: RngCore,
         P: Polynomial<E::Fr, Point = D>,
-        D: Debug + Clone + Ord + Sync,
+        D: Debug + Clone + Hash + Ord + Sync,
         PC: PolynomialCommitment<
             E::Fr,
             P,

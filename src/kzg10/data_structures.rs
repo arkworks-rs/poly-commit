@@ -10,7 +10,7 @@ use ark_std::{
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
@@ -206,20 +206,19 @@ impl<E: PairingEngine> PreparedCommitment<E> {
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = ""),
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<E: PairingEngine, P: UVPolynomial<E::Fr>> {
+pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
     /// For KZG10, the commitment randomness is a random polynomial.
     pub blinding_polynomial: P,
-    _engine: PhantomData<E>,
+    _field: PhantomData<F>,
 }
 
-impl<E: PairingEngine, P: UVPolynomial<E::Fr>> Randomness<E, P> {
+impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
@@ -234,11 +233,11 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> Randomness<E, P> {
     }
 }
 
-impl<E: PairingEngine, P: UVPolynomial<E::Fr>> PCRandomness for Randomness<E, P> {
+impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),
-            _engine: PhantomData,
+            _field: PhantomData,
         }
     }
 
@@ -250,7 +249,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> PCRandomness for Randomness<E, P>
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for Randomness<E, P> {
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -260,32 +259,28 @@ impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> Add<(E::Fr, &'a Randomness<E, P>)>
-    for Randomness<E, P>
-{
+impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E, P>)) -> Self {
+    fn add(mut self, other: (F, &'a Randomness<F, P>)) -> Self {
         self += other;
         self
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<&'a Randomness<E, P>>
-    for Randomness<E, P>
-{
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Randomness<F, P>> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 
-impl<'a, E: PairingEngine, P: UVPolynomial<E::Fr>> AddAssign<(E::Fr, &'a Randomness<E, P>)>
-    for Randomness<E, P>
+impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
 {
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E, P>)) {
+    fn add_assign(&mut self, (f, other): (F, &'a Randomness<F, P>)) {
         self.blinding_polynomial += (f, &other.blinding_polynomial);
     }
 }

@@ -61,7 +61,6 @@ where
 /// polynomial.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = "")
@@ -157,7 +156,6 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
 /// `Randomness` hides the polynomial inside a commitment`.
 #[derive(Derivative)]
 #[derivative(
-    Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
     Debug(bound = ""),

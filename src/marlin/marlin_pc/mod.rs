@@ -2,7 +2,7 @@ use crate::{kzg10, marlin::Marlin, PCCommitterKey};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
-use crate::{ToString, Vec};
+use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
 use ark_poly::UVPolynomial;
@@ -62,7 +62,7 @@ where
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E, P>;
+    type Randomness = Randomness<E::Fr, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -285,11 +285,12 @@ where
             if let Some(degree_bound) = degree_bound {
                 enforce_degree_bound = true;
                 let shifted_rand = rand.shifted_rand.as_ref().unwrap();
-                let (witness, shifted_rand_witness) = kzg10::KZG10::compute_witness_polynomial(
-                    polynomial.polynomial(),
-                    *point,
-                    &shifted_rand,
-                )?;
+                let (witness, shifted_rand_witness) =
+                    kzg10::KZG10::<E, P>::compute_witness_polynomial(
+                        polynomial.polynomial(),
+                        *point,
+                        &shifted_rand,
+                    )?;
                 let challenge_j_1 = opening_challenges(opening_challenge_counter);
                 opening_challenge_counter += 1;
 
@@ -444,6 +445,82 @@ where
             opening_challenges,
             rng,
         )
+    }
+
+    /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
+    /// of the polynomials at the points in the query set.
+    fn batch_open_individual_opening_challenges<'a>(
+        ck: &CommitterKey<E>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
+        query_set: &QuerySet<P::Point>,
+        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<Vec<kzg10::Proof<E>>, Error>
+    where
+        P: 'a,
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .zip(commitments.into_iter())
+            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
+            .collect();
+
+        let open_time = start_timer!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            poly_rand_comm.len(),
+            query_set.len(),
+        ));
+
+        let mut query_to_labels_map = BTreeMap::new();
+
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
+        }
+
+        let mut proofs = Vec::new();
+        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
+            let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
+            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
+
+            for label in labels {
+                let (polynomial, rand, comm) =
+                    poly_rand_comm.get(&label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
+
+                query_polys.push(polynomial);
+                query_rands.push(rand);
+                query_comms.push(comm);
+            }
+
+            let proof_time = start_timer!(|| "Creating proof");
+            let proof = Self::open_individual_opening_challenges(
+                ck,
+                query_polys,
+                query_comms,
+                point,
+                opening_challenges,
+                query_rands,
+                Some(rng),
+            )?;
+
+            end_timer!(proof_time);
+
+            proofs.push(proof);
+        }
+        end_timer!(open_time);
+
+        Ok(proofs.into())
     }
 }
 
