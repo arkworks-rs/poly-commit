@@ -60,11 +60,7 @@ where
 /// `CommitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
 #[derive(Derivative)]
-#[derivative(
-    Hash(bound = ""),
-    Clone(bound = ""),
-    Debug(bound = "")
-)]
+#[derivative(Hash(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct CommitterKey<E, P>
 where
     E: PairingEngine,
