@@ -1,12 +1,12 @@
 use crate::{
+    constraints::{EvaluationsVar, PCCheckVar, QuerySetVar},
     data_structures::LabeledCommitment,
     kzg10::{Proof, VerifierKey as KZG10VerifierKey},
     marlin_pc::{
         data_structures::{Commitment, VerifierKey},
         MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
     },
-    pc_constraints::{EvaluationsVar, PCCheckVar, QuerySetVar},
-    vec, BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareVar, String, ToString, Vec,
+    BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareVar, String, ToString, Vec,
 };
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
@@ -23,8 +23,9 @@ use ark_r1cs_std::{
     R1CSVar, ToBytesGadget, ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use ark_std::ops::Div;
-use core::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::MulAssign};
+use ark_std::{
+    borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, ops::MulAssign, vec,
+};
 
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
 #[allow(clippy::type_complexity)]

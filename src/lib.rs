@@ -43,7 +43,6 @@ pub use constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
-use ark_std::hash::Hash;
 pub use error::*;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
