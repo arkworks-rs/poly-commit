@@ -26,7 +26,6 @@ use ark_std::{
     iter::FromIterator,
     rc::Rc,
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 use hashbrown::{HashMap, HashSet};
