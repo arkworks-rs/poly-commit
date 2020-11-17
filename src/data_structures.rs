@@ -41,9 +41,9 @@ pub trait PCVerifierKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of prepared verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCPreparedVerifierKey<UNPREPARED: PCVerifierKey> {
+pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
     /// prepare
-    fn prepare(vk: &UNPREPARED) -> Self;
+    fn prepare(vk: &Unprepared) -> Self;
 }
 
 /// Defines the minimal interface of commitments for any polynomial

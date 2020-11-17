@@ -256,7 +256,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let mut commitments = Vec::new();
 
         let mut i = 0;
-        for info in lc_info.iter() {
+        for info in &lc_info {
             let commitment;
             let label = info.0.clone();
             let degree_bound = info.1;

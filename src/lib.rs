@@ -35,9 +35,11 @@ use hashbrown::{HashMap, HashSet};
 pub mod data_structures;
 pub use data_structures::*;
 
-/// Constraints for recursion.
-mod pc_constraints;
-pub use pc_constraints::*;
+/// R1CS constraints for polynomial constraints.
+#[cfg(feature = "r1cs")]
+mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
