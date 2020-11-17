@@ -63,7 +63,7 @@ debug = true
 default = ["std", "parallel"]
 std = [ "ark-ff/std", "ark-ec/std", "ark-nonnative-field/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std" ]
 
-r1cs = [ "ark-relations/std", "ark-r1cs-std", "ark-nonnative-field" ]
+r1cs = [ "ark-relations", "ark-r1cs-std", "ark-nonnative-field" ]
 print-trace = [ "bench-utils/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
 density-optimized = [ "r1cs", "ark-nonnative-field/density-optimized" ]
