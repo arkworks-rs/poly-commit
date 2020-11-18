@@ -294,8 +294,8 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     Eq(bound = "")
 )]
 pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
-    pub(crate) rand: kzg10::Randomness<F, P>,
-    pub(crate) shifted_rand: Option<kzg10::Randomness<F, P>>,
+    pub rand: kzg10::Randomness<F, P>,
+    pub shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
 impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
