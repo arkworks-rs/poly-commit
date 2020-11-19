@@ -294,7 +294,11 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     Eq(bound = "")
 )]
 pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+    /// Commitment randomness for a KZG10 commitment.
     pub rand: kzg10::Randomness<F, P>,
+    /// Commitment randomness for a KZG10 commitment to the shifted polynomial.
+    /// This is `None` if the committed polynomial does not enforce a strict
+    /// degree bound.
     pub shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
