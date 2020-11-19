@@ -4,6 +4,7 @@ use crate::{
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};
+use ark_serialize::*;
 use ark_std::ops::{Add, AddAssign};
 use rand_core::RngCore;
 
@@ -13,7 +14,7 @@ pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 
 /// `CommitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -132,7 +133,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.vk.write(&mut writer)?;
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
             writer.write_all(&degree_bounds_and_shift_powers.len().to_le_bytes())?;
@@ -205,7 +206,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -227,7 +228,7 @@ pub struct Commitment<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -285,7 +286,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
 }
 
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Hash(bound = ""),
     Clone(bound = ""),
