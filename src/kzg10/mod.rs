@@ -149,7 +149,7 @@ where
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<(Commitment<E>, Randomness<E::Fr, P>), Error> {
-        Self::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
+        Self::check_degree_is_too_large(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
             "Committing to polynomial of degree {} with hiding_bound: {:?}",
@@ -276,7 +276,7 @@ where
         point: P::Point,
         rand: &Randomness<E::Fr, P>,
     ) -> Result<Proof<E>, Error> {
-        Self::check_degree_is_within_bounds(p.degree(), powers.size())?;
+        Self::check_degree_is_too_large(p.degree(), powers.size())?;
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
 
         let witness_time = start_timer!(|| "Computing witness polynomials");
@@ -377,18 +377,6 @@ where
         Ok(result)
     }
 
-    // Functions for checking errors
-    pub(crate) fn check_degree_is_within_bounds(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
-        if num_coefficients < 1 {
-            Err(Error::DegreeIsZero)
-        } else {
-            Self::check_degree_is_too_large(num_coefficients, num_powers)
-        }
-    }
-
     pub(crate) fn check_degree_is_too_large(
         num_coefficients: usize,
         num_powers: usize,
@@ -454,7 +442,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
     p: &P,
 ) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
-    while p.coeffs()[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs().len() {
+    while num_leading_zeros < p.coeffs().len() && p.coeffs()[num_leading_zeros].is_zero() {
         num_leading_zeros += 1;
     }
     let coeffs = convert_to_bigints(&p.coeffs()[num_leading_zeros..]);
