@@ -840,6 +840,14 @@ mod tests {
         DensePoly::<E::Fr>::rand(degree, rng)
     }
 
+    fn constant_poly<E: PairingEngine>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<E::Fr> {
+        DensePoly::<E::Fr>::from_coefficients_slice(&[E::Fr::rand(rng)])
+    }
+
     fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> E::Fr {
         E::Fr::rand(rng)
     }
@@ -856,6 +864,23 @@ mod tests {
         single_poly_test::<_, _, PC_Bls12_381>(
             None,
             rand_poly::<Bls12_381>,
+            rand_point::<Bls12_381>,
+        )
+        .expect("test failed for bls12-381");
+    }
+
+    #[test]
+    fn constant_poly_test() {
+        use crate::tests::*;
+        single_poly_test::<_, _, PC_Bls12_377>(
+            None,
+            constant_poly::<Bls12_377>,
+            rand_point::<Bls12_377>,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_test::<_, _, PC_Bls12_381>(
+            None,
+            constant_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
         )
         .expect("test failed for bls12-381");

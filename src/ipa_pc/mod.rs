@@ -188,9 +188,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         supported_degree: usize,
         p: &LabeledPolynomial<G::ScalarField, P>,
     ) -> Result<(), Error> {
-        if p.degree() < 1 {
-            return Err(Error::DegreeIsZero);
-        } else if p.degree() > supported_degree {
+        if p.degree() > supported_degree {
             return Err(Error::TooManyCoefficients {
                 num_coefficients: p.degree() + 1,
                 num_powers: supported_degree + 1,
@@ -1051,6 +1049,14 @@ mod tests {
         DensePoly::rand(degree, rng)
     }
 
+    fn constant_poly<F: PrimeField>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<F> {
+        DensePoly::from_coefficients_slice(&[F::rand(rng)])
+    }
+
     fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> F {
         F::rand(rng)
     }
@@ -1059,6 +1065,13 @@ mod tests {
     fn single_poly_test() {
         use crate::tests::*;
         single_poly_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
+    }
+
+    #[test]
+    fn constant_poly_test() {
+        use crate::tests::*;
+        single_poly_test::<_, _, PC_JJB2S>(None, constant_poly::<Fr>, rand_point::<Fr>)
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
