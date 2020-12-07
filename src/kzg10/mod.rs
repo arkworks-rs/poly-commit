@@ -124,8 +124,8 @@ where
 
         end_timer!(prepared_neg_powers_of_h_time);
 
-        let beta_h = h.mul(beta).into_affine();
         let h = h.into_affine();
+        let beta_h = h.mul(beta).into_affine();
         let prepared_h = h.into();
         let prepared_beta_h = beta_h.into();
 
@@ -305,7 +305,7 @@ where
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(value);
+        let mut inner = comm.0.into_projective() - &vk.g.mul(value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
@@ -330,8 +330,6 @@ where
     ) -> Result<bool, Error> {
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
-        let g = vk.g.into_projective();
-        let gamma_g = vk.gamma_g.into_projective();
 
         let mut total_c = <E::G1Projective>::zero();
         let mut total_w = <E::G1Projective>::zero();
@@ -351,14 +349,14 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer);
+            total_c += &c.mul(randomizer.into());
             total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(g_multiplier);
-        total_c -= &gamma_g.mul(gamma_g_multiplier);
+        total_c -= &vk.g.mul(g_multiplier);
+        total_c -= &vk.gamma_g.mul(gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
