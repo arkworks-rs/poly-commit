@@ -5,8 +5,7 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitmen
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
-use ark_std::{format, vec};
-use core::{convert::TryInto, marker::PhantomData};
+use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -150,7 +149,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v);
+        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
@@ -584,7 +583,7 @@ where
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
-                &(hiding_commitment_proj.mul(hiding_challenge) - &ck.s.mul(combined_rand));
+                &(hiding_commitment.unwrap().mul(hiding_challenge) - &ck.s.mul(combined_rand));
 
             end_timer!(hiding_time);
         }
@@ -809,7 +808,7 @@ where
 
             let check_poly = P::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
             combined_check_poly += (randomizer, &check_poly);
-            combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
+            combined_final_key += &p.final_comm_key.mul(randomizer);
 
             randomizer = u128::rand(rng).into();
             end_timer!(lc_time);
