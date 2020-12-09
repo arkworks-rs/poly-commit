@@ -153,7 +153,7 @@ pub trait PCCheckVar<
     ) -> Self::LabeledCommitmentVar;
 
     /// Create the prepared labeled commitment gadget from the commitment gadget
-    fn create_prepared_labeled_commitment_gadget(
+    fn create_prepared_labeled_commitment_var(
         label: String,
         commitment: Self::PreparedCommitmentVar,
         degree_bound: Option<FpVar<ConstraintF>>,
