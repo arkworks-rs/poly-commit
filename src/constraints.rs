@@ -146,14 +146,14 @@ pub trait PCCheckVar<
     ) -> R1CSResult<Boolean<ConstraintF>>;
 
     /// Create the labeled commitment gadget from the commitment gadget
-    fn create_labeled_commitment_var(
+    fn create_labeled_commitment(
         label: String,
         commitment: Self::CommitmentVar,
         degree_bound: Option<FpVar<ConstraintF>>,
     ) -> Self::LabeledCommitmentVar;
 
     /// Create the prepared labeled commitment gadget from the commitment gadget
-    fn create_prepared_labeled_commitment_var(
+    fn create_prepared_labeled_commitment(
         label: String,
         commitment: Self::PreparedCommitmentVar,
         degree_bound: Option<FpVar<ConstraintF>>,
