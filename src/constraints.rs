@@ -11,7 +11,7 @@ use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized
 use hashbrown::{HashMap, HashSet};
 
 /// Define the minimal interface of prepared allocated structures.
-pub trait PreparedVar<Unprepared, ConstraintF: PrimeField>: Sized {
+pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
     /// Prepare from an unprepared element.
     fn prepare(unprepared: &Unprepared) -> R1CSResult<Self>;
 }
