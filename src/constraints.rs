@@ -21,9 +21,9 @@ pub trait PreparedVar<Unprepared, ConstraintF: PrimeField>: Sized {
 #[derive(Clone)]
 pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// Coefficient 1.
-    ONE,
+    One,
     /// Coefficient -1.
-    MINUS_ONE,
+    MinusOne,
     /// Other coefficient, represented as a nonnative field element.
     Var(NonNativeFieldVar<TargetField, BaseField>),
 }
