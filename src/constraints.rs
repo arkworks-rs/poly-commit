@@ -18,6 +18,7 @@ pub trait PreparedVar<Unprepared, ConstraintF: PrimeField>: Sized {
 
 /// A coefficient of `LinearCombination`.
 #[allow(non_camel_case_types)]
+#[derive(Clone)]
 pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// Coefficient 1.
     ONE,
@@ -27,21 +28,13 @@ pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeFiel
     Var(NonNativeFieldVar<TargetField, BaseField>),
 }
 
-impl<TargetField: PrimeField, BaseField: PrimeField> From<NonNativeFieldVar<TargetField, BaseField>>
-    for LinearCombinationCoeffVar<TargetField, BaseField>
-{
-    fn from(v: NonNativeFieldVar<TargetField, BaseField>) -> Self {
-        Self::Var(v)
-    }
-}
-
 /// An allocated version of `LinearCombination`.
 #[derive(Clone)]
 pub struct LinearCombinationVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// The label.
     pub label: String,
     /// The linear combination of `(coeff, poly_label)` pairs.
-    pub terms: Vec<(Option<NonNativeFieldVar<TargetField, BaseField>>, LCTerm)>,
+    pub terms: Vec<(LinearCombinationCoeffVar<TargetField, BaseField>, LCTerm)>,
 }
 
 impl<TargetField: PrimeField, BaseField: PrimeField>
@@ -61,7 +54,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
         let ns = cs.into();
         let cs = ns.cs();
 
-        let new_terms: Vec<(Option<NonNativeFieldVar<TargetField, BaseField>>, LCTerm)> = terms
+        let new_terms: Vec<(LinearCombinationCoeffVar<TargetField, BaseField>, LCTerm)> = terms
             .iter()
             .map(|term| {
                 let (f, lc_term) = term;
@@ -70,7 +63,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
                     NonNativeFieldVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
                         .unwrap();
 
-                (Some(fg), lc_term.clone())
+                (LinearCombinationCoeffVar::Var(fg), lc_term.clone())
             })
             .collect();
 
