@@ -60,7 +60,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(randomizer);
+                comm_with_challenge = comm_with_challenge.mul(randomizer.into());
             }
 
             // Accumulate values in the BTreeMap
@@ -79,8 +79,8 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
         }
 
         if let Some(randomizer) = randomizer {
-            witness = witness.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(randomizer);
+            witness = witness.mul(randomizer.into());
+            adjusted_witness = adjusted_witness.mul(randomizer.into());
         }
 
         *combined_witness += &witness;
@@ -560,7 +560,11 @@ where
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
-                comm += &curr_comm.commitment().0.into_projective().mul(*coeff);
+                comm += &curr_comm
+                    .commitment()
+                    .0
+                    .into_projective()
+                    .mul((*coeff).into());
             }
 
             let lc_poly =
