@@ -161,7 +161,7 @@ where
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         let trim_time = start_timer!(|| "Trimming public parameters");
-        let prepared_neg_powers_of_h = &pp.prepared_neg_powers_of_h;
+        let neg_powers_of_h = &pp.neg_powers_of_h;
         let max_degree = pp.max_degree();
         if supported_degree > max_degree {
             return Err(Error::TrimmingDegreeTooLarge);
@@ -221,7 +221,7 @@ where
                     .map(|bound| {
                         (
                             *bound,
-                            prepared_neg_powers_of_h[&(max_degree - *bound)].clone(),
+                            neg_powers_of_h[&(max_degree - *bound)].clone().into(),
                         )
                     })
                     .collect();

@@ -1,5 +1,6 @@
 use crate::{Polynomial, Rc, String, Vec};
 use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     borrow::Borrow,
     marker::PhantomData,
@@ -12,7 +13,9 @@ pub type PolynomialLabel = String;
 
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
-pub trait PCUniversalParams: Clone + core::fmt::Debug {
+pub trait PCUniversalParams:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
@@ -48,7 +51,9 @@ pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + ark_ff::ToBytes {
+pub trait PCCommitment:
+    Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -87,7 +92,7 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + ark_ff::ToBytes {
+pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
 }

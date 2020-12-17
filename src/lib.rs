@@ -41,6 +41,7 @@ pub use constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
@@ -135,7 +136,11 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     /// The evaluation proof for a single point.
     type Proof: PCProof + Clone;
     /// The evaluation proof for a query set.
-    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
+    type BatchProof: Clone
+        + From<Vec<Self::Proof>>
+        + Into<Vec<Self::Proof>>
+        + CanonicalSerialize
+        + CanonicalDeserialize;
     /// The error type for the scheme.
     type Error: ark_std::error::Error + From<Error>;
 
@@ -664,8 +669,9 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use ark_ff::{test_rng, Field};
+    use ark_ff::Field;
     use ark_poly::Polynomial;
+    use ark_std::test_rng;
     use rand::{distributions::Distribution, Rng};
 
     struct TestInfo<F: Field, P: Polynomial<F>> {
