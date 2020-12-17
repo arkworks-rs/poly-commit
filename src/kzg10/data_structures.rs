@@ -53,6 +53,14 @@ impl<E: PairingEngine> CanonicalSerialize for UniversalParams<E> {
             + self.beta_h.serialized_size()
             + self.neg_powers_of_h.serialized_size()
     }
+
+    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.powers_of_g.serialize_unchecked(&mut writer)?;
+        self.powers_of_gamma_g.serialize_unchecked(&mut writer)?;
+        self.h.serialize_unchecked(&mut writer)?;
+        self.beta_h.serialize_unchecked(&mut writer)?;
+        self.neg_powers_of_h.serialize_unchecked(&mut writer)
+    }
 }
 
 impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
@@ -62,6 +70,27 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
         let h = E::G2Affine::deserialize(&mut reader)?;
         let beta_h = E::G2Affine::deserialize(&mut reader)?;
         let neg_powers_of_h = BTreeMap::<usize, E::G2Affine>::deserialize(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            powers_of_g,
+            powers_of_gamma_g,
+            h,
+            beta_h,
+            neg_powers_of_h,
+            prepared_h,
+            prepared_beta_h,
+        })
+    }
+
+    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
+        let powers_of_gamma_g = BTreeMap::<usize, E::G1Affine>::deserialize_unchecked(&mut reader)?;
+        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+        let neg_powers_of_h = BTreeMap::<usize, E::G2Affine>::deserialize_unchecked(&mut reader)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
