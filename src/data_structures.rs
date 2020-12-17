@@ -1,8 +1,9 @@
-use crate::{Polynomial, Rc, String, Vec};
+use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
 use ark_ff::Field;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Borrow,
+    io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
@@ -95,6 +96,15 @@ pub trait PCRandomness: Clone {
 pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
+}
+
+/// A proof of satisfaction of linear combinations.
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
+    /// Evaluation proof.
+    pub proof: PC::BatchProof,
+    /// Evaluations required to verify the proof.
+    pub evals: Option<Vec<F>>,
 }
 
 /// A polynomial along with information about its degree bound (if any), and the
@@ -206,7 +216,7 @@ impl<C: PCCommitment> LabeledCommitment<C> {
 
 impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.commitment.write(writer)
     }
 }
