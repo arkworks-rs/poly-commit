@@ -90,9 +90,8 @@ where
                 .enumerate()
                 .collect();
 
-        let prepared_neg_powers_of_h_time =
-            start_timer!(|| "Generating negative powers of h in G2");
-        let prepared_neg_powers_of_h = if produce_g2_powers {
+        let neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
+        let neg_powers_of_h = if produce_g2_powers {
             let mut neg_powers_of_beta = vec![E::Fr::one()];
             let mut cur = E::Fr::one() / &beta;
             for _ in 0..max_degree {
@@ -110,19 +109,15 @@ where
 
             let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
             let mut affines_map = BTreeMap::new();
-            affines
-                .into_iter()
-                .enumerate()
-                .map(|(i, a)| (i, a.into()))
-                .for_each(|(i, a)| {
-                    affines_map.insert(i, a);
-                });
+            affines.into_iter().enumerate().for_each(|(i, a)| {
+                affines_map.insert(i, a);
+            });
             affines_map
         } else {
             BTreeMap::new()
         };
 
-        end_timer!(prepared_neg_powers_of_h_time);
+        end_timer!(neg_powers_of_h_time);
 
         let h = h.into_affine();
         let beta_h = h.mul(beta).into_affine();
@@ -134,7 +129,7 @@ where
             powers_of_gamma_g,
             h,
             beta_h,
-            prepared_neg_powers_of_h,
+            neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
         };
