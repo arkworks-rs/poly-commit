@@ -23,7 +23,9 @@ pub trait PCUniversalParams:
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
-pub trait PCCommitterKey: Clone + core::fmt::Debug {
+pub trait PCCommitterKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -34,7 +36,9 @@ pub trait PCCommitterKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCVerifierKey: Clone + core::fmt::Debug {
+pub trait PCVerifierKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -74,7 +78,7 @@ pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
 
 /// Defines the minimal interface of commitment randomness for any polynomial
 /// commitment scheme.
-pub trait PCRandomness: Clone {
+pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 

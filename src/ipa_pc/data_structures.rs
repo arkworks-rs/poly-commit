@@ -31,7 +31,7 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
 
 /// `CommitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -149,7 +149,7 @@ impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<
 }
 
 /// `Randomness` hides the polynomial inside a commitment and is outputted by `InnerProductArg::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
