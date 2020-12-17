@@ -461,8 +461,8 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_ec::PairingEngine;
-    use ark_ff::test_rng;
     use ark_poly::univariate::DensePolynomial as DensePoly;
+    use ark_std::test_rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;

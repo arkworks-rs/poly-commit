@@ -669,8 +669,9 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use ark_ff::{test_rng, Field};
+    use ark_ff::Field;
     use ark_poly::Polynomial;
+    use ark_std::test_rng;
     use rand::{distributions::Distribution, Rng};
 
     struct TestInfo<F: Field, P: Polynomial<F>> {
