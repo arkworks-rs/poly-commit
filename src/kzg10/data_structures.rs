@@ -189,6 +189,102 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
+impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
+    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize(&mut writer)?;
+        self.gamma_g.serialize(&mut writer)?;
+        self.h.serialize(&mut writer)?;
+        self.beta_h.serialize(&mut writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.g.serialized_size()
+            + self.gamma_g.serialized_size()
+            + self.h.serialized_size()
+            + self.beta_h.serialized_size()
+    }
+
+    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize_uncompressed(&mut writer)?;
+        self.gamma_g.serialize_uncompressed(&mut writer)?;
+        self.h.serialize_uncompressed(&mut writer)?;
+        self.beta_h.serialize_uncompressed(&mut writer)
+    }
+
+    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize_unchecked(&mut writer)?;
+        self.gamma_g.serialize_unchecked(&mut writer)?;
+        self.h.serialize_unchecked(&mut writer)?;
+        self.beta_h.serialize_unchecked(&mut writer)
+    }
+
+    fn uncompressed_size(&self) -> usize {
+        self.g.uncompressed_size()
+            + self.gamma_g.uncompressed_size()
+            + self.h.uncompressed_size()
+            + self.beta_h.uncompressed_size()
+    }
+}
+
+impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
+    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
+        let h = E::G2Affine::deserialize(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+        })
+    }
+
+    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
+        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+        })
+    }
+
+    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
+        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+        })
+    }
+}
+
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     #[inline]
     fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
@@ -314,7 +410,7 @@ impl<E: PairingEngine> PreparedCommitment<E> {
 }
 
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Hash(bound = ""),
     Clone(bound = ""),
