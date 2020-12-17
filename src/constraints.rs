@@ -17,7 +17,6 @@ pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
 }
 
 /// A coefficient of `LinearCombination`.
-#[allow(non_camel_case_types)]
 #[derive(Clone)]
 pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// Coefficient 1.
