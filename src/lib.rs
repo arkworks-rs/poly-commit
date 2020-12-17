@@ -103,15 +103,6 @@ pub type QuerySet<T> = BTreeSet<(String, (String, T))>;
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<T, F> = BTreeMap<(String, T), F>;
 
-/// A proof of satisfaction of linear combinations.
-#[derive(Clone)]
-pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
-    /// Evaluation proof.
-    pub proof: PC::BatchProof,
-    /// Evaluations required to verify the proof.
-    pub evals: Option<Vec<F>>,
-}
-
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
