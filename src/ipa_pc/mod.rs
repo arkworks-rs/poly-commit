@@ -162,7 +162,7 @@ where
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v);
+        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
@@ -604,7 +604,7 @@ where
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
-                &(hiding_commitment_proj.mul(hiding_challenge) - &ck.s.mul(combined_rand));
+                &(hiding_commitment_proj.mul(hiding_challenge.into()) - &ck.s.mul(combined_rand.into()));
 
             end_timer!(hiding_time);
         }
@@ -838,7 +838,7 @@ where
 
             let check_poly = P::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
             combined_check_poly += (randomizer, &check_poly);
-            combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
+            combined_final_key += &p.final_comm_key.into_projective().mul(randomizer.into());
 
             randomizer = u128::rand(rng).into();
             end_timer!(lc_time);

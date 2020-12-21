@@ -145,7 +145,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
         P: 'a,
     {
         let supported_degree = ck.supported_degree();
-        let mut combined_polynomial = Polynomial::zero();
+        let mut combined_polynomial = P::zero();
 
         let mut i = 0;
         for labeled_polynomial in labeled_polynomials {
