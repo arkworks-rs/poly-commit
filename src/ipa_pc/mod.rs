@@ -5,8 +5,10 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitmen
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_sponge::{absorb, Absorbable, CryptographicSponge};
 use ark_std::{format, vec};
 use core::{convert::TryInto, marker::PhantomData};
+use digest::Digest;
 use rand_core::RngCore;
 
 mod data_structures;
@@ -14,8 +16,6 @@ pub use data_structures::*;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-
-use digest::Digest;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
@@ -30,13 +30,28 @@ use digest::Digest;
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct InnerProductArgPC<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> {
+pub struct InnerProductArgPC<G, D, P, S>
+where
+    G: AffineCurve,
+    G::ScalarField: Absorbable<G::ScalarField>,
+    D: Digest,
+    P: UVPolynomial<G::ScalarField>,
+    S: CryptographicSponge<G::ScalarField>,
+{
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
     _poly: PhantomData<P>,
+    _sponge: PhantomData<S>,
 }
 
-impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArgPC<G, D, P> {
+impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
+where
+    G: AffineCurve,
+    G::ScalarField: Absorbable<G::ScalarField>,
+    D: Digest,
+    P: UVPolynomial<G::ScalarField>,
+    S: CryptographicSponge<G::ScalarField>,
+{
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
 
@@ -62,20 +77,6 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         comm
     }
 
-    fn compute_random_oracle_challenge(bytes: &[u8]) -> G::ScalarField {
-        let mut i = 0u64;
-        let mut challenge = None;
-        while challenge.is_none() {
-            let hash_input = ark_ff::to_bytes![bytes, i].unwrap();
-            let hash = D::digest(&hash_input);
-            challenge = <G::ScalarField as Field>::from_random_bytes(&hash);
-
-            i += 1;
-        }
-
-        challenge.unwrap()
-    }
-
     #[inline]
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
         ark_std::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
@@ -83,7 +84,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
     /// The succinct portion of `PC::check`. This algorithm runs in time
     /// O(log d), where d is the degree of the committed polynomials.
-    fn succinct_check<'a>(
+    pub fn succinct_check<'a>(
         vk: &VerifierKey<G>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<G>>>,
         point: G::ScalarField,
@@ -135,18 +136,29 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
             let hiding_comm = proof.hiding_comm.unwrap();
             let rand = proof.rand.unwrap();
 
-            let hiding_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![combined_commitment, point, combined_v, hiding_comm].unwrap(),
+            let mut sponge = S::new();
+            absorb!(
+                &mut sponge,
+                &ark_ff::to_bytes![combined_commitment, hiding_comm].unwrap(),
+                &point,
+                &combined_v
             );
+            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
         }
 
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
-        let mut round_challenge = Self::compute_random_oracle_challenge(
-            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
+        let mut sponge = S::new();
+        absorb!(
+            &mut sponge,
+            &ark_ff::to_bytes![combined_commitment].unwrap(),
+            &point,
+            &combined_v
         );
+        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
 
         let h_prime = vk.h.mul(round_challenge);
 
@@ -156,9 +168,14 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let r_iter = proof.r_vec.iter();
 
         for (l, r) in l_iter.zip(r_iter) {
-            round_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![round_challenge, l, r].unwrap(),
+            let mut sponge = S::new();
+            absorb!(
+                &mut sponge,
+                &round_challenge,
+                &ark_ff::to_bytes![l, r].unwrap()
             );
+            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+
             round_challenges.push(round_challenge);
             round_commitment_proj +=
                 &(l.mul(round_challenge.inverse().unwrap()) + &r.mul(round_challenge));
@@ -304,11 +321,13 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
     }
 }
 
-impl<G, D, P> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P>
+impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
+    G::ScalarField: Absorbable<G::ScalarField>,
     D: Digest,
     P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
+    S: CryptographicSponge<G::ScalarField>,
 {
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
@@ -574,15 +593,14 @@ where
             hiding_commitment = Some(batch.pop().unwrap());
             combined_commitment = batch.pop().unwrap();
 
-            let hiding_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![
-                    combined_commitment,
-                    point,
-                    combined_v,
-                    hiding_commitment.unwrap()
-                ]
-                .unwrap(),
-            );
+            let mut sponge = S::new();
+            absorb![
+                &mut sponge,
+                &ark_ff::to_bytes![combined_commitment, hiding_commitment.unwrap()].unwrap(),
+                point,
+                &combined_v
+            ];
+            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
@@ -603,9 +621,14 @@ where
         combined_commitment = combined_commitment_proj.into_affine();
 
         // ith challenge
-        let mut round_challenge = Self::compute_random_oracle_challenge(
-            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
-        );
+        let mut sponge = S::new();
+        absorb![
+            &mut sponge,
+            &ark_ff::to_bytes![combined_commitment].unwrap(),
+            point,
+            &combined_v
+        ];
+        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
@@ -657,9 +680,13 @@ where
             l_vec.push(lr[0]);
             r_vec.push(lr[1]);
 
-            round_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![round_challenge, lr[0], lr[1]].unwrap(),
-            );
+            let mut sponge = S::new();
+            absorb![
+                &mut sponge,
+                &round_challenge,
+                &ark_ff::to_bytes![lr[0], lr[1]].unwrap()
+            ];
+            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
             ark_std::cfg_iter_mut!(coeffs_l)
@@ -1040,11 +1067,13 @@ mod tests {
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_sponge::digest_sponge::DigestSponge;
     use blake2::Blake2s;
+    use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
-    type PC<E, D, P> = InnerProductArgPC<E, D, P>;
-    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly>;
+    type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, DigestSponge<Fr, Sha512>>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,
