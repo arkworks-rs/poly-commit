@@ -90,6 +90,14 @@ pub mod sonic_pc;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
 
+/// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
+/// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm
+/// in prime-order groups. Construction is detailed in [[XZZPD19]][xzzpd19] and [[ZGKPP18]][zgkpp18]
+///
+/// [xzzpd19]: https://eprint.iacr.org/2019/317
+/// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
+pub mod multilinear_pc;
+
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
