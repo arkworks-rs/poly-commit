@@ -269,7 +269,6 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
-    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
@@ -290,7 +289,10 @@ where
         let mut randomness: Vec<Self::Randomness> = Vec::new();
 
         for labeled_polynomial in polynomials {
-            let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
 
             kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
@@ -356,7 +358,10 @@ where
         opening_challenge_counter += 1;
 
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
-            let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
 
             kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
@@ -562,7 +567,7 @@ where
         let comms: Vec<Self::Commitment> =
             E::G1Projective::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
-                .map(kzg10::Commitment::<E>)
+                .map(|c| kzg10::Commitment::<E>(c))
                 .collect();
 
         let lc_commitments = lc_info
@@ -647,7 +652,7 @@ where
         let comms: Vec<Self::Commitment> =
             E::G1Projective::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
-                .map(kzg10::Commitment)
+                .map(|c| kzg10::Commitment(c))
                 .collect();
 
         let lc_commitments = lc_info
