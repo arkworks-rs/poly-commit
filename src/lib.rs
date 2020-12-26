@@ -9,7 +9,6 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
 #![forbid(unsafe_code)]
-#![allow(clippy::op_ref)]
 
 #[macro_use]
 extern crate derivative;

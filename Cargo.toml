@@ -59,7 +59,7 @@ incremental = true
 debug = true
 
 [features]
-default = ["std", "parallel"]
+default = [ "std", "parallel" ]
 std = [ "ark-ff/std", "ark-ec/std", "ark-nonnative-field/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std" ]
 r1cs = [ "ark-relations", "ark-r1cs-std", "ark-nonnative-field", "hashbrown" ]
 print-trace = [ "bench-utils/print-trace" ]

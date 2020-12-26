@@ -261,7 +261,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
             if degree_bound.is_some() {
                 commitment = Commitment {
                     comm: comms[i].clone(),
-                    shifted_comm: Some(comms[i + 1]).clone(),
+                    shifted_comm: Some(comms[i + 1].clone()),
                 };
 
                 i += 2;
@@ -553,7 +553,6 @@ where
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-
             let mut hiding_polynomial = P::rand(d, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 
@@ -608,7 +607,6 @@ where
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
         // Pads the coefficients with zeroes to get the number of coeff to be d+1
-
         let mut coeffs = combined_polynomial.coeffs().to_vec();
         if coeffs.len() < d + 1 {
             for _ in coeffs.len()..(d + 1) {
