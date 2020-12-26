@@ -1,49 +1,39 @@
+use crate::{
+    data_structures::LabeledCommitment, BatchLCProof, LCTerm, LinearCombination,
+    PolynomialCommitment, String, Vec,
+};
 use ark_ff::PrimeField;
-use ark_r1cs_std::prelude::*;
-use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use core::{borrow::Borrow, marker::Sized};
-
-use crate::data_structures::LabeledCommitment;
-use crate::{BatchLCProof, PolynomialCommitment};
-use crate::{LCTerm, LinearCombination, String, Vec};
 use ark_nonnative_field::NonNativeFieldVar;
 use ark_poly::Polynomial;
-use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
 use hashbrown::{HashMap, HashSet};
 
-/// A generic gadget for the prepared* structures
-pub trait PrepareVar<UNPREPARED, ConstraintF: PrimeField>: Sized {
-    /// prepare from an unprepared element
-    fn prepare(unprepared: &UNPREPARED) -> R1CSResult<Self>;
+/// Define the minimal interface of prepared allocated structures.
+pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
+    /// Prepare from an unprepared element.
+    fn prepare(unprepared: &Unprepared) -> R1CSResult<Self>;
+}
 
-    /// prepare for a smaller field
-    fn prepare_small(_unprepared: &UNPREPARED) -> R1CSResult<Self> {
-        unimplemented!();
-    }
+/// A coefficient of `LinearCombination`.
+#[derive(Clone)]
+pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeField> {
+    /// Coefficient 1.
+    One,
+    /// Coefficient -1.
+    MinusOne,
+    /// Other coefficient, represented as a nonnative field element.
+    Var(NonNativeFieldVar<TargetField, BaseField>),
 }
 
 /// An allocated version of `LinearCombination`.
-#[allow(clippy::type_complexity)]
+#[derive(Clone)]
 pub struct LinearCombinationVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// The label.
     pub label: String,
     /// The linear combination of `(coeff, poly_label)` pairs.
-    pub terms: Vec<(
-        Option<NonNativeFieldVar<TargetField, BaseField>>,
-        LCTerm,
-        bool,
-    )>,
-}
-
-impl<TargetField: PrimeField, BaseField: PrimeField> Clone
-    for LinearCombinationVar<TargetField, BaseField>
-{
-    fn clone(&self) -> Self {
-        LinearCombinationVar {
-            label: self.label.clone(),
-            terms: self.terms.clone(),
-        }
-    }
+    pub terms: Vec<(LinearCombinationCoeffVar<TargetField, BaseField>, LCTerm)>,
 }
 
 impl<TargetField: PrimeField, BaseField: PrimeField>
@@ -63,12 +53,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
         let ns = cs.into();
         let cs = ns.cs();
 
-        #[allow(clippy::type_complexity)]
-        let new_terms: Vec<(
-            Option<NonNativeFieldVar<TargetField, BaseField>>,
-            LCTerm,
-            bool,
-        )> = terms
+        let new_terms: Vec<(LinearCombinationCoeffVar<TargetField, BaseField>, LCTerm)> = terms
             .iter()
             .map(|term| {
                 let (f, lc_term) = term;
@@ -77,7 +62,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
                     NonNativeFieldVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
                         .unwrap();
 
-                (Some(fg), lc_term.clone(), false)
+                (LinearCombinationCoeffVar::Var(fg), lc_term.clone())
             })
             .collect();
 
@@ -86,6 +71,21 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
             terms: new_terms,
         })
     }
+}
+
+#[derive(Clone)]
+/// A collection of random data used in the polynomial commitment checking.
+pub struct PCCheckRandomDataVar<TargetField: PrimeField, BaseField: PrimeField> {
+    /// Opening challenges.
+    /// The prover and the verifier MUST use the same opening challenges.
+    pub opening_challenges: Vec<NonNativeFieldVar<TargetField, BaseField>>,
+    /// Bit representations of the opening challenges.
+    pub opening_challenges_bits: Vec<Vec<Boolean<BaseField>>>,
+    /// Batching random numbers.
+    /// The verifier can choose these numbers freely, as long as they are random.
+    pub batching_rands: Vec<NonNativeFieldVar<TargetField, BaseField>>,
+    /// Bit representations of the batching random numbers.
+    pub batching_rands_bits: Vec<Vec<Boolean<BaseField>>>,
 }
 
 /// Describes the interface for a gadget for a `PolynomialCommitment`
@@ -102,12 +102,12 @@ pub trait PCCheckVar<
     /// An allocated version of `PC::PreparedVerifierKey`.
     type PreparedVerifierKeyVar: AllocVar<PC::PreparedVerifierKey, ConstraintF>
         + Clone
-        + PrepareVar<Self::VerifierKeyVar, ConstraintF>;
+        + PrepareGadget<Self::VerifierKeyVar, ConstraintF>;
     /// An allocated version of `PC::Commitment`.
     type CommitmentVar: AllocVar<PC::Commitment, ConstraintF> + Clone + ToBytesGadget<ConstraintF>;
     /// An allocated version of `PC::PreparedCommitment`.
     type PreparedCommitmentVar: AllocVar<PC::PreparedCommitment, ConstraintF>
-        + PrepareVar<Self::CommitmentVar, ConstraintF>
+        + PrepareGadget<Self::CommitmentVar, ConstraintF>
         + Clone;
     /// An allocated version of `LabeledCommitment<PC::Commitment>`.
     type LabeledCommitmentVar: AllocVar<LabeledCommitment<PC::Commitment>, ConstraintF> + Clone;
@@ -121,7 +121,6 @@ pub trait PCCheckVar<
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that check that `proof_i` is a valid evaluation
     /// proof at `point_i` for the polynomial in `commitment_i`.
-    #[allow(clippy::too_many_arguments)]
     fn batch_check_evaluations(
         cs: ConstraintSystemRef<ConstraintF>,
         verification_key: &Self::VerifierKeyVar,
@@ -129,15 +128,11 @@ pub trait PCCheckVar<
         query_set: &QuerySetVar<PCF, ConstraintF>,
         evaluations: &EvaluationsVar<PCF, ConstraintF>,
         proofs: &[Self::ProofVar],
-        opening_challenges: &[NonNativeFieldVar<PCF, ConstraintF>],
-        opening_challenges_bits: &[Vec<Boolean<ConstraintF>>],
-        batching_rands: &[NonNativeFieldVar<PCF, ConstraintF>],
-        batching_rands_bits: &[Vec<Boolean<ConstraintF>>],
+        rand_data: &PCCheckRandomDataVar<PCF, ConstraintF>,
     ) -> R1CSResult<Boolean<ConstraintF>>;
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that conditionally check that `proof` is a valid evaluation
     /// proof at the points in `query_set` for the combinations `linear_combinations`.
-    #[allow(clippy::too_many_arguments)]
     fn prepared_check_combinations(
         cs: ConstraintSystemRef<ConstraintF>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,
@@ -146,40 +141,44 @@ pub trait PCCheckVar<
         query_set: &QuerySetVar<PCF, ConstraintF>,
         evaluations: &EvaluationsVar<PCF, ConstraintF>,
         proof: &Self::BatchLCProofVar,
-        opening_challenges: &[NonNativeFieldVar<PCF, ConstraintF>],
-        opening_challenges_bits: &[Vec<Boolean<ConstraintF>>],
-        batching_rands: &[NonNativeFieldVar<PCF, ConstraintF>],
-        batching_rands_bits: &[Vec<Boolean<ConstraintF>>],
+        rand_data: &PCCheckRandomDataVar<PCF, ConstraintF>,
     ) -> R1CSResult<Boolean<ConstraintF>>;
 
     /// Create the labeled commitment gadget from the commitment gadget
-    fn create_labeled_commitment_gadget(
+    fn create_labeled_commitment(
         label: String,
         commitment: Self::CommitmentVar,
         degree_bound: Option<FpVar<ConstraintF>>,
     ) -> Self::LabeledCommitmentVar;
 
     /// Create the prepared labeled commitment gadget from the commitment gadget
-    fn create_prepared_labeled_commitment_gadget(
+    fn create_prepared_labeled_commitment(
         label: String,
         commitment: Self::PreparedCommitmentVar,
         degree_bound: Option<FpVar<ConstraintF>>,
     ) -> Self::PreparedLabeledCommitmentVar;
 }
 
+#[derive(Clone, Hash, PartialEq, Eq)]
+/// A labeled point variable, for queries to a polynomial commitment.
+pub struct LabeledPointVar<TargetField: PrimeField, BaseField: PrimeField> {
+    /// The label of the point.
+    /// MUST be a unique identifier in a query set.
+    pub name: String,
+    /// The point value.
+    pub value: NonNativeFieldVar<TargetField, BaseField>,
+}
+
 /// An allocated version of `QuerySet`.
-#[allow(clippy::type_complexity)]
+#[derive(Clone)]
 pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub HashSet<(String, (String, NonNativeFieldVar<TargetField, BaseField>))>,
+    pub HashSet<(String, LabeledPointVar<TargetField, BaseField>)>,
 );
 
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub  HashMap<
-        (String, NonNativeFieldVar<TargetField, BaseField>),
-        NonNativeFieldVar<TargetField, BaseField>,
-    >,
+    pub HashMap<LabeledPointVar<TargetField, BaseField>, NonNativeFieldVar<TargetField, BaseField>>,
 );
 
 impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField, BaseField> {
@@ -189,7 +188,10 @@ impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField,
         lc_string: &str,
         point: &NonNativeFieldVar<TargetField, BaseField>,
     ) -> Result<NonNativeFieldVar<TargetField, BaseField>, SynthesisError> {
-        let key = (String::from(lc_string), point.clone());
+        let key = LabeledPointVar::<TargetField, BaseField> {
+            name: String::from(lc_string),
+            value: point.clone(),
+        };
         Ok(self.0.get(&key).map(|v| (*v).clone()).unwrap())
     }
 }

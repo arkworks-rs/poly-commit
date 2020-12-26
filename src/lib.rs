@@ -43,6 +43,7 @@ pub use constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
@@ -104,23 +105,6 @@ pub type QuerySet<T> = HashSet<(String, (String, T))>;
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<T, F> = HashMap<(String, T), F>;
 
-/// A proof of satisfaction of linear combinations.
-pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
-    /// Evaluation proof.
-    pub proof: PC::BatchProof,
-    /// Evaluations required to verify the proof.
-    pub evals: Option<Vec<F>>,
-}
-
-impl<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> Clone for BatchLCProof<F, P, PC> {
-    fn clone(&self) -> Self {
-        BatchLCProof {
-            proof: self.proof.clone(),
-            evals: self.evals.clone(),
-        }
-    }
-}
-
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
@@ -145,7 +129,11 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     /// The evaluation proof for a single point.
     type Proof: PCProof + Clone;
     /// The evaluation proof for a query set.
-    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
+    type BatchProof: Clone
+        + From<Vec<Self::Proof>>
+        + Into<Vec<Self::Proof>>
+        + CanonicalSerialize
+        + CanonicalDeserialize;
     /// The error type for the scheme.
     type Error: ark_std::error::Error + From<Error>;
 
@@ -727,8 +715,9 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord + Hash>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use ark_ff::{test_rng, Field};
+    use ark_ff::Field;
     use ark_poly::Polynomial;
+    use ark_std::test_rng;
     use rand::{distributions::Distribution, Rng};
 
     struct TestInfo<F: Field, P: Polynomial<F>> {

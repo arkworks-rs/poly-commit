@@ -3,6 +3,8 @@ use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::io::{Read, Write};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
@@ -32,7 +34,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
 
 /// `ComitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -143,7 +145,7 @@ pub struct VerifierKey<E: PairingEngine> {
 
     /// Pairs a degree_bound with its corresponding G2 element, which has been prepared for use in pairings.
     /// Each pair is in the form `(degree_bound, \beta^{degree_bound - max_degree} h),` where `h` is the generator of G2 above
-    pub degree_bounds_and_prepared_neg_powers_of_h: Option<Vec<(usize, E::G2Prepared)>>,
+    pub degree_bounds_and_neg_powers_of_h: Option<Vec<(usize, E::G2Affine)>>,
 
     /// The maximum degree supported by the trimmed parameters that `self` is
     /// a part of.
@@ -157,13 +159,148 @@ pub struct VerifierKey<E: PairingEngine> {
 impl<E: PairingEngine> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
-        self.degree_bounds_and_prepared_neg_powers_of_h
+        self.degree_bounds_and_neg_powers_of_h
             .as_ref()
             .and_then(|v| {
                 v.binary_search_by(|(d, _)| d.cmp(&degree_bound))
                     .ok()
-                    .map(|i| v[i].1.clone())
+                    .map(|i| v[i].1.clone().into())
             })
+    }
+}
+
+impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
+    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize(&mut writer)?;
+        self.gamma_g.serialize(&mut writer)?;
+        self.h.serialize(&mut writer)?;
+        self.beta_h.serialize(&mut writer)?;
+        self.degree_bounds_and_neg_powers_of_h
+            .serialize(&mut writer)?;
+        self.supported_degree.serialize(&mut writer)?;
+        self.max_degree.serialize(&mut writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.g.serialized_size()
+            + self.gamma_g.serialized_size()
+            + self.h.serialized_size()
+            + self.beta_h.serialized_size()
+            + self.degree_bounds_and_neg_powers_of_h.serialized_size()
+            + self.supported_degree.serialized_size()
+            + self.max_degree.serialized_size()
+    }
+
+    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize_uncompressed(&mut writer)?;
+        self.gamma_g.serialize_uncompressed(&mut writer)?;
+        self.h.serialize_uncompressed(&mut writer)?;
+        self.beta_h.serialize_uncompressed(&mut writer)?;
+        self.degree_bounds_and_neg_powers_of_h
+            .serialize_uncompressed(&mut writer)?;
+        self.supported_degree.serialize_uncompressed(&mut writer)?;
+        self.max_degree.serialize_uncompressed(&mut writer)
+    }
+
+    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.g.serialize_unchecked(&mut writer)?;
+        self.gamma_g.serialize_unchecked(&mut writer)?;
+        self.h.serialize_unchecked(&mut writer)?;
+        self.beta_h.serialize_unchecked(&mut writer)?;
+        self.degree_bounds_and_neg_powers_of_h
+            .serialize_unchecked(&mut writer)?;
+        self.supported_degree.serialize_unchecked(&mut writer)?;
+        self.max_degree.serialize_unchecked(&mut writer)
+    }
+
+    fn uncompressed_size(&self) -> usize {
+        self.g.uncompressed_size()
+            + self.gamma_g.uncompressed_size()
+            + self.h.uncompressed_size()
+            + self.beta_h.uncompressed_size()
+            + self.degree_bounds_and_neg_powers_of_h.uncompressed_size()
+            + self.supported_degree.uncompressed_size()
+            + self.max_degree.uncompressed_size()
+    }
+}
+
+impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
+    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
+        let h = E::G2Affine::deserialize(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize(&mut reader)?;
+        let degree_bounds_and_neg_powers_of_h =
+            Option::<Vec<(usize, E::G2Affine)>>::deserialize(&mut reader)?;
+        let supported_degree = usize::deserialize(&mut reader)?;
+        let max_degree = usize::deserialize(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+            degree_bounds_and_neg_powers_of_h,
+            supported_degree,
+            max_degree,
+        })
+    }
+
+    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
+        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
+        let degree_bounds_and_neg_powers_of_h =
+            Option::<Vec<(usize, E::G2Affine)>>::deserialize_uncompressed(&mut reader)?;
+        let supported_degree = usize::deserialize_uncompressed(&mut reader)?;
+        let max_degree = usize::deserialize_uncompressed(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+            degree_bounds_and_neg_powers_of_h,
+            supported_degree,
+            max_degree,
+        })
+    }
+
+    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
+        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
+        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+        let degree_bounds_and_neg_powers_of_h =
+            Option::<Vec<(usize, E::G2Affine)>>::deserialize_unchecked(&mut reader)?;
+        let supported_degree = usize::deserialize_unchecked(&mut reader)?;
+        let max_degree = usize::deserialize_unchecked(&mut reader)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        Ok(Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+            degree_bounds_and_neg_powers_of_h,
+            supported_degree,
+            max_degree,
+        })
     }
 }
 
