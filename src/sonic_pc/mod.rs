@@ -28,7 +28,6 @@ pub struct SonicKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
 }
 
 impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
-    #[allow(clippy::too_many_arguments)]
     fn accumulate_elems_individual_opening_challenges<'a>(
         combined_comms: &mut BTreeMap<Option<usize>, E::G1Projective>,
         combined_witness: &mut E::G1Projective,
@@ -67,7 +66,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
             // Accumulate values in the BTreeMap
             *combined_comms
                 .entry(degree_bound)
-                .or_insert_with(E::G1Projective::zero) += &comm_with_challenge;
+                .or_insert(E::G1Projective::zero()) += &comm_with_challenge;
             curr_challenge = opening_challenges(opening_challenge_counter);
             opening_challenge_counter += 1;
         }
@@ -170,7 +169,7 @@ where
 
         let enforced_degree_bounds = enforced_degree_bounds.map(|bounds| {
             let mut v = bounds.to_vec();
-            v.sort_unstable();
+            v.sort();
             v.dedup();
             v
         });

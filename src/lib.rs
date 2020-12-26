@@ -163,7 +163,6 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     ///
     /// If for some `i`, `polynomials[i].degree_bound().is_some()`, then that
     /// polynomial will have the corresponding degree bound enforced.
-    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
@@ -337,7 +336,6 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     /// On input a list of polynomials, linear combinations of those polynomials,
     /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
-    #[allow(clippy::too_many_arguments)]
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -368,7 +366,6 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
 
     /// Checks that `evaluations` are the true evaluations at `query_set` of the
     /// linear combinations of polynomials committed in `commitments`.
-    #[allow(clippy::too_many_arguments)]
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -486,7 +483,6 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     }
 
     /// open_combinations but with individual challenges
-    #[allow(clippy::too_many_arguments)]
     fn open_combinations_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -523,7 +519,6 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     }
 
     /// check_combinations with individual challenges
-    #[allow(clippy::too_many_arguments)]
     fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -692,7 +687,7 @@ where
     evaluations
 }
 
-fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord + Hash>(
+fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
     linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
     query_set: &QuerySet<T>,
 ) -> QuerySet<T> {
