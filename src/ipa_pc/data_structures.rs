@@ -144,7 +144,7 @@ pub type PreparedCommitment<E> = Commitment<E>;
 impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<G> {
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(vk: &Commitment<G>) -> Self {
-        *vk
+        vk.clone()
     }
 }
 

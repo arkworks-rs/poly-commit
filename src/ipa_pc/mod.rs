@@ -53,9 +53,9 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, &scalars_bigint);
 
-        if let Some(randomizer) = randomizer {
+        if randomizer.is_some() {
             assert!(hiding_generator.is_some());
-            comm += &hiding_generator.unwrap().mul(randomizer);
+            comm += &hiding_generator.unwrap().mul(randomizer.unwrap());
         }
 
         comm
@@ -168,8 +168,8 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let h_prime = h_prime.into_affine();
 
         let check_commitment_elem: G::Projective = Self::cm_commit(
-            &[proof.final_comm_key, h_prime],
-            &[proof.c, v_prime],
+            &[proof.final_comm_key.clone(), h_prime],
+            &[proof.c.clone(), v_prime],
             None,
             None,
         );
@@ -253,21 +253,21 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         let mut commitments = Vec::new();
 
         let mut i = 0;
-        for info in lc_info {
+        for info in lc_info.into_iter() {
             let commitment;
             let label = info.0.clone();
             let degree_bound = info.1;
 
             if degree_bound.is_some() {
                 commitment = Commitment {
-                    comm: comms[i],
-                    shifted_comm: Some(comms[i + 1]),
+                    comm: comms[i].clone(),
+                    shifted_comm: Some(comms[i + 1]).clone(),
                 };
 
                 i += 2;
             } else {
                 commitment = Commitment {
-                    comm: comms[i],
+                    comm: comms[i].clone(),
                     shifted_comm: None,
                 };
 
@@ -277,7 +277,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
             commitments.push(LabeledCommitment::new(label, commitment, degree_bound));
         }
 
-        commitments
+        return commitments;
     }
 
     fn sample_generators(num_generators: usize) -> Vec<G> {
@@ -359,15 +359,15 @@ where
 
         let ck = CommitterKey {
             comm_key: pp.comm_key[0..(supported_degree + 1)].to_vec(),
-            h: pp.h,
-            s: pp.s,
+            h: pp.h.clone(),
+            s: pp.s.clone(),
             max_degree: pp.max_degree(),
         };
 
         let vk = VerifierKey {
             comm_key: pp.comm_key[0..(supported_degree + 1)].to_vec(),
-            h: pp.h,
-            s: pp.s,
+            h: pp.h.clone(),
+            s: pp.s.clone(),
             max_degree: pp.max_degree(),
         };
 
@@ -377,7 +377,6 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
-    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
@@ -543,10 +542,10 @@ where
         let combined_v = combined_polynomial.evaluate(point);
 
         // Pad the coefficients to the appropriate vector size
-        let degree = ck.supported_degree();
+        let d = ck.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = ark_std::log2(degree + 1) as usize;
+        let log_d = ark_std::log2(d + 1) as usize;
 
         let mut combined_commitment;
         let mut hiding_commitment = None;
@@ -555,7 +554,7 @@ where
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
 
-            let mut hiding_polynomial = P::rand(degree, &mut rng);
+            let mut hiding_polynomial = P::rand(d, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
 
             let hiding_rand = G::ScalarField::rand(rng);
@@ -596,10 +595,8 @@ where
             None
         };
 
-        let proof_time = start_timer!(|| format!(
-            "Generating proof for degree {} combined polynomial",
-            degree + 1
-        ));
+        let proof_time =
+            start_timer!(|| format!("Generating proof for degree {} combined polynomial", d + 1));
 
         combined_commitment = combined_commitment_proj.into_affine();
 
@@ -613,17 +610,17 @@ where
         // Pads the coefficients with zeroes to get the number of coeff to be d+1
 
         let mut coeffs = combined_polynomial.coeffs().to_vec();
-        if coeffs.len() < degree + 1 {
-            for _ in coeffs.len()..(degree + 1) {
+        if coeffs.len() < d + 1 {
+            for _ in coeffs.len()..(d + 1) {
                 coeffs.push(G::ScalarField::zero());
             }
         }
         let mut coeffs = coeffs.as_mut_slice();
 
         // Powers of z
-        let mut z: Vec<G::ScalarField> = Vec::with_capacity(degree + 1);
+        let mut z: Vec<G::ScalarField> = Vec::with_capacity(d + 1);
         let mut cur_z: G::ScalarField = G::ScalarField::one();
-        for _ in 0..(degree + 1) {
+        for _ in 0..(d + 1) {
             z.push(cur_z);
             cur_z *= point;
         }
@@ -642,7 +639,7 @@ where
         let mut l_vec = Vec::with_capacity(log_d);
         let mut r_vec = Vec::with_capacity(log_d);
 
-        let mut n = degree + 1;
+        let mut n = d + 1;
         while n > 1 {
             let (coeffs_l, coeffs_r) = coeffs.split_at_mut(n / 2);
             let (z_l, z_r) = z.split_at_mut(n / 2);
