@@ -6,7 +6,6 @@ use ark_std::{
     io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
-    string::ToString,
 };
 use rand_core::RngCore;
 
