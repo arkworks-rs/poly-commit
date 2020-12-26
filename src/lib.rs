@@ -16,7 +16,7 @@ extern crate derivative;
 extern crate bench_utils;
 
 use ark_ff::Field;
-pub use ark_poly::Polynomial;
+pub use ark_poly::{Polynomial, UVPolynomial};
 use rand_core::RngCore;
 
 use ark_std::{
