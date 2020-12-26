@@ -28,7 +28,7 @@ use rayon::prelude::*;
 /// with batching and (optional) hiding property inspired by the univariate scheme
 /// in [[CHMMVW20, "Marlin"]][marlin]
 ///
-/// [pst]: https://eprint.iacr.org/2011/587.pdf
+/// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
 pub struct MarlinPST13<E: PairingEngine, P: MVPolynomial<E::Fr>> {
     _engine: PhantomData<E>,
