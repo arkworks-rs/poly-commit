@@ -54,7 +54,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [sonic]: https://ia.cr/2019/099
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
-[pst]: https://www.iacr.org/archive/tcc2013/77850221/77850221.pdf
+[pst]: https://ia.cr.org/2011/587
 
 ## Reference papers
 
@@ -66,7 +66,7 @@ ASIACRYPT 2010
 Mary Maller, Sean Bowe, Markulf Kohlweiss, Sarah Meiklejohn     
 CCS 2019
 
-[AuroraLight: Improved prover efficiency and SRS size in a Sonic-like system][aurora-light]     
+[AuroraLight: Improved Prover Efficiency and SRS Size in a Sonic-Like System][aurora-light]     
 Ariel Gabizon     
 ePrint, 2019
 
@@ -76,11 +76,11 @@ EUROCRYPT 2020
 
 [Proof-Carrying Data from Accumulation Schemes][pcd-acc]     
 Benedikt Bünz, Alessandro Chiesa, [Pratyush Mishra](https://www.github.com/pratyush), Nicholas Spooner     
-ePrint, 2020
+TCC 2020
 
 [Signatures of Correct Computation][pst]
 Charalampos Papamanthou, Elaine Shi, Roberto Tamassia
-TCC 2020
+TCC 2013
 
 ## Acknowledgements
 
