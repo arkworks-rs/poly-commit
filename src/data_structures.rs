@@ -6,7 +6,6 @@ use ark_std::{
     io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
-    string::ToString,
 };
 use rand_core::RngCore;
 
@@ -115,106 +114,13 @@ pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, 
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct LabeledPolynomial<F: Field, P: Polynomial<F>> {
     label: PolynomialLabel,
     polynomial: Rc<P>,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
     _field: PhantomData<F>,
-}
-
-impl<F: Field, P: Polynomial<F>> CanonicalSerialize for LabeledPolynomial<F, P> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.label.clone().into_bytes().serialize(&mut writer)?;
-        self.polynomial.serialize(&mut writer)?;
-        self.degree_bound.serialize(&mut writer)?;
-        self.hiding_bound.serialize(&mut writer)
-    }
-
-    fn serialized_size(&self) -> usize {
-        self.label.clone().into_bytes().serialized_size()
-            + self.polynomial.serialized_size()
-            + self.degree_bound.serialized_size()
-            + self.hiding_bound.serialized_size()
-    }
-
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.label
-            .clone()
-            .into_bytes()
-            .serialize_uncompressed(&mut writer)?;
-        self.polynomial.serialize_uncompressed(&mut writer)?;
-        self.degree_bound.serialize_uncompressed(&mut writer)?;
-        self.hiding_bound.serialize_uncompressed(&mut writer)
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.label
-            .clone()
-            .into_bytes()
-            .serialize_unchecked(&mut writer)?;
-        self.polynomial.serialize_unchecked(&mut writer)?;
-        self.degree_bound.serialize_unchecked(&mut writer)?;
-        self.hiding_bound.serialize_unchecked(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.label.clone().into_bytes().uncompressed_size()
-            + self.polynomial.uncompressed_size()
-            + self.degree_bound.uncompressed_size()
-            + self.hiding_bound.uncompressed_size()
-    }
-}
-
-impl<F: Field, P: Polynomial<F>> CanonicalDeserialize for LabeledPolynomial<F, P> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let label_bytes = Vec::<u8>::deserialize(&mut reader)?;
-        let label = String::from_utf8_lossy(&label_bytes);
-        let polynomial = Rc::new(P::deserialize(&mut reader)?);
-        let degree_bound = Option::<usize>::deserialize(&mut reader)?;
-        let hiding_bound = Option::<usize>::deserialize(&mut reader)?;
-
-        Ok(Self {
-            label: label.to_string(),
-            polynomial,
-            degree_bound,
-            hiding_bound,
-            _field: PhantomData,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let label_bytes = Vec::<u8>::deserialize_uncompressed(&mut reader)?;
-        let label = String::from_utf8_lossy(&label_bytes);
-        let polynomial = Rc::new(P::deserialize_uncompressed(&mut reader)?);
-        let degree_bound = Option::<usize>::deserialize_uncompressed(&mut reader)?;
-        let hiding_bound = Option::<usize>::deserialize_uncompressed(&mut reader)?;
-
-        Ok(Self {
-            label: label.to_string(),
-            polynomial,
-            degree_bound,
-            hiding_bound,
-            _field: PhantomData,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let label_bytes = Vec::<u8>::deserialize_unchecked(&mut reader)?;
-        let label = String::from_utf8_lossy(&label_bytes);
-        let polynomial = Rc::new(P::deserialize_unchecked(&mut reader)?);
-        let degree_bound = Option::<usize>::deserialize_unchecked(&mut reader)?;
-        let hiding_bound = Option::<usize>::deserialize_unchecked(&mut reader)?;
-
-        Ok(Self {
-            label: label.to_string(),
-            polynomial,
-            degree_bound,
-            hiding_bound,
-            _field: PhantomData,
-        })
-    }
 }
 
 impl<'a, F: Field, P: Polynomial<F>> core::ops::Deref for LabeledPolynomial<F, P> {
