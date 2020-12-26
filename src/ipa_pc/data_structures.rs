@@ -2,11 +2,15 @@ use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
 use ark_ec::AffineCurve;
 use ark_ff::{Field, ToBytes, UniformRand, Zero};
-use ark_std::vec;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::{
+    io::{Read, Write},
+    vec,
+};
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<G: AffineCurve> {
     /// The key used to commit to polynomials.
@@ -27,7 +31,7 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
 
 /// `CommitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -83,7 +87,7 @@ impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierK
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -123,7 +127,7 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -145,7 +149,7 @@ impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<
 }
 
 /// `Randomness` hides the polynomial inside a commitment and is outputted by `InnerProductArg::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -183,7 +187,7 @@ impl<G: AffineCurve> PCRandomness for Randomness<G> {
 }
 
 /// `Proof` is an evaluation proof that is output by `InnerProductArg::open`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -220,7 +224,7 @@ impl<G: AffineCurve> PCProof for Proof<G> {
 
 impl<G: AffineCurve> ToBytes for Proof<G> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.l_vec.write(&mut writer)?;
         self.r_vec.write(&mut writer)?;
         self.final_comm_key.write(&mut writer)?;

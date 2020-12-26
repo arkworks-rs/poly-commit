@@ -1,7 +1,9 @@
-use crate::{Polynomial, Rc, String, Vec};
+use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
 use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Borrow,
+    io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
@@ -12,14 +14,18 @@ pub type PolynomialLabel = String;
 
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
-pub trait PCUniversalParams: Clone + core::fmt::Debug {
+pub trait PCUniversalParams:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
-pub trait PCCommitterKey: Clone + core::fmt::Debug {
+pub trait PCCommitterKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -30,7 +36,9 @@ pub trait PCCommitterKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCVerifierKey: Clone + core::fmt::Debug {
+pub trait PCVerifierKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -48,7 +56,9 @@ pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + ark_ff::ToBytes {
+pub trait PCCommitment:
+    Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -68,7 +78,7 @@ pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
 
 /// Defines the minimal interface of commitment randomness for any polynomial
 /// commitment scheme.
-pub trait PCRandomness: Clone {
+pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 
@@ -87,15 +97,24 @@ pub trait PCRandomness: Clone {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + ark_ff::ToBytes {
+pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
+}
+
+/// A proof of satisfaction of linear combinations.
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
+    /// Evaluation proof.
+    pub proof: PC::BatchProof,
+    /// Evaluations required to verify the proof.
+    pub evals: Option<Vec<F>>,
 }
 
 /// A polynomial along with information about its degree bound (if any), and the
 /// maximum number of queries that will be made to it. This latter number determines
 /// the amount of protection that will be provided to a commitment for this polynomial.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct LabeledPolynomial<F: Field, P: Polynomial<F>> {
     label: PolynomialLabel,
     polynomial: Rc<P>,
@@ -201,7 +220,7 @@ impl<C: PCCommitment> LabeledCommitment<C> {
 
 impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.commitment.write(writer)
     }
 }

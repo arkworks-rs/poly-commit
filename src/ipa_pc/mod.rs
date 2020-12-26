@@ -5,8 +5,7 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitmen
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
-use ark_std::{format, vec};
-use core::{convert::TryInto, marker::PhantomData};
+use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
 use rand_core::RngCore;
 
 mod data_structures;
@@ -150,7 +149,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v);
+        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
@@ -188,9 +187,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
         supported_degree: usize,
         p: &LabeledPolynomial<G::ScalarField, P>,
     ) -> Result<(), Error> {
-        if p.degree() < 1 {
-            return Err(Error::DegreeIsZero);
-        } else if p.degree() > supported_degree {
+        if p.degree() > supported_degree {
             return Err(Error::TooManyCoefficients {
                 num_coefficients: p.degree() + 1,
                 num_powers: supported_degree + 1,
@@ -586,7 +583,7 @@ where
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
-                &(hiding_commitment_proj.mul(hiding_challenge) - &ck.s.mul(combined_rand));
+                &(hiding_commitment.unwrap().mul(hiding_challenge) - &ck.s.mul(combined_rand));
 
             end_timer!(hiding_time);
         }
@@ -811,7 +808,7 @@ where
 
             let check_poly = P::from_coefficients_vec(check_poly.unwrap().compute_coeffs());
             combined_check_poly += (randomizer, &check_poly);
-            combined_final_key += &p.final_comm_key.into_projective().mul(randomizer);
+            combined_final_key += &p.final_comm_key.mul(randomizer);
 
             randomizer = u128::rand(rng).into();
             end_timer!(lc_time);
@@ -1051,6 +1048,14 @@ mod tests {
         DensePoly::rand(degree, rng)
     }
 
+    fn constant_poly<F: PrimeField>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut rand::prelude::StdRng,
+    ) -> DensePoly<F> {
+        DensePoly::from_coefficients_slice(&[F::rand(rng)])
+    }
+
     fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> F {
         F::rand(rng)
     }
@@ -1059,6 +1064,13 @@ mod tests {
     fn single_poly_test() {
         use crate::tests::*;
         single_poly_test::<_, _, PC_JJB2S>(None, rand_poly::<Fr>, rand_point::<Fr>)
+            .expect("test failed for ed_on_bls12_381-blake2s");
+    }
+
+    #[test]
+    fn constant_poly_test() {
+        use crate::tests::*;
+        single_poly_test::<_, _, PC_JJB2S>(None, constant_poly::<Fr>, rand_point::<Fr>)
             .expect("test failed for ed_on_bls12_381-blake2s");
     }
 
