@@ -221,7 +221,7 @@ where
         Ok((witness_polynomial, random_witness_polynomial))
     }
 
-    pub(crate) fn open_with_witness_polynomial(
+    pub(crate) fn open_with_witness_polynomial<'a>(
         powers: &Powers<E>,
         point: P::Point,
         randomness: &Randomness<E::Fr, P>,
@@ -265,7 +265,7 @@ where
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    pub(crate) fn open(
+    pub(crate) fn open<'a>(
         powers: &Powers<E>,
         p: &P,
         point: P::Point,

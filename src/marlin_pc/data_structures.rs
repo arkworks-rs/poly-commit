@@ -44,7 +44,7 @@ pub struct CommitterKey<E: PairingEngine> {
 
 impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
-    pub fn powers(&self) -> kzg10::Powers<E> {
+    pub fn powers<'a>(&self) -> kzg10::Powers<'a, E> {
         kzg10::Powers {
             powers_of_g: self.powers.as_slice().into(),
             powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
@@ -52,10 +52,10 @@ impl<E: PairingEngine> CommitterKey<E> {
     }
 
     /// Obtain powers for committing to shifted polynomials.
-    pub fn shifted_powers(
-        &self,
+    pub fn shifted_powers<'a>(
+        &'a self,
         degree_bound: impl Into<Option<usize>>,
-    ) -> Option<kzg10::Powers<E>> {
+    ) -> Option<kzg10::Powers<'a, E>> {
         self.shifted_powers.as_ref().map(|shifted_powers| {
             let powers_range = if let Some(degree_bound) = degree_bound.into() {
                 assert!(self
@@ -205,13 +205,13 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
                 for (d, shift_power) in degree_bounds_and_shift_powers {
                     let mut prepared_shift_power = Vec::<E::G1Affine>::new();
 
-                    let mut cur = E::G1Projective::from(*shift_power);
+                    let mut cur = E::G1Projective::from(shift_power.clone());
                     for _ in 0..supported_bits {
                         prepared_shift_power.push(cur.clone().into());
                         cur.double_in_place();
                     }
 
-                    res.push((*d, prepared_shift_power));
+                    res.push((d.clone(), prepared_shift_power));
                 }
 
                 Some(res)
@@ -315,7 +315,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     fn prepare(comm: &Commitment<E>) -> Self {
         let prepared_comm = kzg10::PreparedCommitment::<E>::prepare(&comm.comm);
 
-        let shifted_comm = comm.shifted_comm;
+        let shifted_comm = comm.shifted_comm.clone();
 
         Self {
             prepared_comm,
@@ -361,7 +361,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Self> for Randomness<F
                 .as_ref()
                 .unwrap_or(&kzg10::Randomness::empty());
         } else {
-            self.shifted_rand = other.shifted_rand.as_ref().cloned()
+            self.shifted_rand = other.shifted_rand.as_ref().map(|r| r.clone());
         }
     }
 }

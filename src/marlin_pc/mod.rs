@@ -78,7 +78,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> MarlinKZG10<E, P> {
         (combined_comm, combined_shifted_comm)
     }
 
-    fn normalize_commitments(
+    fn normalize_commitments<'a>(
         commitments: Vec<(E::G1Projective, Option<E::G1Projective>)>,
     ) -> Vec<Commitment<E>> {
         let mut comms = Vec::with_capacity(commitments.len());
@@ -95,7 +95,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> MarlinKZG10<E, P> {
             }
         }
         let comms = E::G1Projective::batch_normalization_into_affine(&comms);
-        let s_comms = E::G1Projective::batch_normalization_into_affine(&s_comms);
+        let s_comms = E::G1Projective::batch_normalization_into_affine(&mut s_comms);
         comms
             .into_iter()
             .zip(s_comms)
@@ -151,7 +151,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> MarlinKZG10<E, P> {
                     .get_shift_power(degree_bound)
                     .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
 
-                let mut adjusted_comm = shifted_comm - &shift_power.mul(value);
+                let mut adjusted_comm = shifted_comm - &shift_power.mul(value.clone());
 
                 adjusted_comm *= challenge_i_1;
                 combined_comm += &adjusted_comm;
@@ -217,17 +217,17 @@ where
 
         // Construct the core KZG10 verifier key.
         let vk = kzg10::VerifierKey {
-            g: pp.powers_of_g[0],
+            g: pp.powers_of_g[0].clone(),
             gamma_g: pp.powers_of_gamma_g[&0],
-            h: pp.h,
-            beta_h: pp.beta_h,
+            h: pp.h.clone(),
+            beta_h: pp.beta_h.clone(),
             prepared_h: pp.prepared_h.clone(),
             prepared_beta_h: pp.prepared_beta_h.clone(),
         };
 
         let enforced_degree_bounds = enforced_degree_bounds.map(|v| {
             let mut v = v.to_vec();
-            v.sort_unstable();
+            v.sort();
             v.dedup();
             v
         });
@@ -239,7 +239,7 @@ where
                     (None, None)
                 } else {
                     let mut sorted_enforced_degree_bounds = enforced_degree_bounds.clone();
-                    sorted_enforced_degree_bounds.sort_unstable();
+                    sorted_enforced_degree_bounds.sort();
 
                     let lowest_shifted_power = max_degree
                         - sorted_enforced_degree_bounds
@@ -268,7 +268,7 @@ where
             powers,
             shifted_powers,
             powers_of_gamma_g,
-            enforced_degree_bounds,
+            enforced_degree_bounds: enforced_degree_bounds,
             max_degree,
         };
 
@@ -282,7 +282,6 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
-    #[allow(clippy::type_complexity)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
@@ -309,7 +308,10 @@ where
             let hiding_bound = p.hiding_bound();
             let polynomial: &P = p.polynomial();
 
-            let enforced_degree_bounds: Option<&[usize]> = ck.enforced_degree_bounds.as_deref();
+            let enforced_degree_bounds: Option<&[usize]> = ck
+                .enforced_degree_bounds
+                .as_ref()
+                .map(|bounds| bounds.as_slice());
             kzg10::KZG10::<E, P>::check_degrees_and_bounds(
                 ck.supported_degree(),
                 ck.max_degree,

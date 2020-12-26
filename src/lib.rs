@@ -510,7 +510,7 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
                     let eval = match label {
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
-                            .get(&(l.into(), point.clone()))
+                            .get(&(l.clone().into(), point.clone()))
                             .ok_or(Error::MissingEvaluation { label: l.clone() })?,
                     };
 
