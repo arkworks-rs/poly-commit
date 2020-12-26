@@ -253,7 +253,10 @@ where
             .into_iter()
             .map(|v| E::G1Projective::batch_normalization_into_affine(&v))
             .collect();
-        let beta_h: Vec<_> = betas.iter().map(|b| h.mul(*b).into_affine()).collect();
+        let beta_h: Vec<_> = betas
+            .iter()
+            .map(|b| h.mul((*b).into()).into_affine())
+            .collect();
         let h = h.into_affine();
         let prepared_h = h.into();
         let prepared_beta_h = beta_h.iter().map(|bh| (*bh).into()).collect();
@@ -625,7 +628,7 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer);
+            total_c += &c.mul(randomizer.into());
             ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
@@ -633,8 +636,8 @@ where
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(g_multiplier);
-        total_c -= &gamma_g.mul(gamma_g_multiplier);
+        total_c -= &g.mul(g_multiplier.into());
+        total_c -= &gamma_g.mul(gamma_g_multiplier.into());
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
