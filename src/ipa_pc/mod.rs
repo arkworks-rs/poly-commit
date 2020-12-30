@@ -16,6 +16,7 @@ pub use data_structures::*;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(feature = "r1cs")]
 pub mod constraints;
 
 /// A polynomial commitment scheme based on the hardness of the
