@@ -1,46 +1,24 @@
-use crate::lh_pc::linear_hash::data_structures::{
-    LHCommitment, LHCommitterKey, LHUniversalParameters,
-};
-
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::{to_bytes, PrimeField, ToBytes, Zero};
-use ark_std::ops::{Add, Mul};
+use ark_ff::{PrimeField, ToBytes, Zero};
+use ark_std::{io::{Read, Write}, ops::{Add, Mul}};
 use ark_std::vec::Vec;
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
 
 use ark_std::iter::Sum;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParams<G: AffineCurve>(pub(crate) Vec<G>);
 
-impl<G: AffineCurve> LHUniversalParameters for UniversalParams<G> {
-    fn max_elems_len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CommitterKey<G: AffineCurve> {
     pub(crate) generators: Vec<G>,
     pub(crate) max_elems_len: usize,
 }
 
-impl<G: AffineCurve> LHCommitterKey for CommitterKey<G> {
-    fn max_elems_len(&self) -> usize {
-        self.max_elems_len
-    }
-
-    fn supported_elems_len(&self) -> usize {
-        self.generators.len()
-    }
-}
-
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<G: AffineCurve>(pub G);
 
 impl<G: AffineCurve> Zero for Commitment<G> {
@@ -54,7 +32,7 @@ impl<G: AffineCurve> Zero for Commitment<G> {
 }
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
-    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
     }
 }
@@ -99,11 +77,5 @@ impl<'a, G: AffineCurve> Sum<(G::ScalarField, &'a Self)> for Commitment<G> {
         let sum = VariableBaseMSM::multi_scalar_mul(comms.as_slice(), scalars_bigint.as_slice());
         let mut conversion = G::Projective::batch_normalization_into_affine(&[sum]);
         Self(conversion.pop().unwrap())
-    }
-}
-
-impl<G: AffineCurve> LHCommitment<G::ScalarField> for Commitment<G> {
-    fn size_in_bytes(&self) -> usize {
-        to_bytes![self.0].unwrap().len()
     }
 }

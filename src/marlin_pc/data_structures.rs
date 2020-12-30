@@ -4,7 +4,8 @@ use crate::{
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};
-use ark_std::ops::{Add, AddAssign};
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
+use ark_std::{io::{Read, Write}, ops::{Add, AddAssign}};
 use rand_core::RngCore;
 
 use crate::kzg10;
@@ -91,8 +92,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 }
 
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
-#[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derive(Default, Clone, Debug)]
 pub struct VerifierKey<E: PairingEngine> {
     /// The verification key for the underlying KZG10 scheme.
     pub vk: kzg10::VerifierKey<E>,
@@ -132,7 +132,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.vk.write(&mut writer)?;
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
             writer.write_all(&degree_bounds_and_shift_powers.len().to_le_bytes())?;
@@ -205,7 +205,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -227,7 +227,7 @@ pub struct Commitment<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.comm.write(&mut writer)?;
         let shifted_exists = self.shifted_comm.is_some();
         shifted_exists.write(&mut writer)?;
@@ -285,7 +285,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
 }
 
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Hash(bound = ""),
     Clone(bound = ""),

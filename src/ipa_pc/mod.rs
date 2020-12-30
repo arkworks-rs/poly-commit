@@ -44,6 +44,29 @@ where
     _sponge: PhantomData<S>,
 }
 
+#[inline]
+pub(crate) fn cm_commit<G: AffineCurve>(
+    comm_key: &[G],
+    scalars: &[G::ScalarField],
+    hiding_generator: Option<G>,
+    randomizer: Option<G::ScalarField>,
+) -> G::Projective {
+    let comm_time = start_timer!(|| "cm_commit");
+    let scalars = ark_std::cfg_iter!(scalars)
+        .map(|s| s.into_repr())
+        .collect::<Vec<_>>();
+
+    let mut comm = VariableBaseMSM::multi_scalar_mul(&comm_key, &scalars);
+    end_timer!(comm_time);
+
+    if randomizer.is_some() {
+        assert!(hiding_generator.is_some());
+        comm += &hiding_generator.unwrap().mul(randomizer.unwrap());
+    }
+
+    comm
+}
+
 impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
@@ -57,25 +80,112 @@ where
 
     /// Create a Pedersen commitment to `scalars` using the commitment key `comm_key`.
     /// Optionally, randomize the commitment using `hiding_generator` and `randomizer`.
+    #[inline]
     fn cm_commit(
         comm_key: &[G],
         scalars: &[G::ScalarField],
         hiding_generator: Option<G>,
         randomizer: Option<G::ScalarField>,
     ) -> G::Projective {
-        let scalars_bigint = ark_std::cfg_iter!(scalars)
-            .map(|s| s.into_repr())
-            .collect::<Vec<_>>();
-
-        let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, &scalars_bigint);
-
-        if randomizer.is_some() {
-            assert!(hiding_generator.is_some());
-            comm += &hiding_generator.unwrap().mul(randomizer.unwrap());
-        }
-
-        comm
+        cm_commit(comm_key, scalars, hiding_generator, randomizer)
     }
+
+    fn even_commitment_step(
+        comm_key: &[G],
+        h_prime: G,
+        (coeffs_l, coeffs_r): (&[G::ScalarField], &[G::ScalarField]),
+        (z_l, z_r): (&[G::ScalarField], &[G::ScalarField]),
+    ) -> (G, G) {
+        let n = comm_key.len();
+        let (key_l, key_r) = comm_key.split_at(n / 2);
+
+        let l = Self::cm_commit(key_l, coeffs_r, None, None)
+            + &h_prime.mul(Self::inner_product(coeffs_r, z_l));
+
+        let r = Self::cm_commit(key_r, coeffs_l, None, None)
+            + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
+
+        let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
+        (lr[0], lr[1])
+    }
+
+    fn even_folding_step(
+        comm_key: &[G],
+        round_challenge: G::ScalarField,
+    ) -> Vec<G> {
+        let n = comm_key.len();
+        let (key_l, key_r) = comm_key.split_at(n / 2);
+        if n == 2 {
+            let temp = ark_std::cfg_iter!(key_l)
+                .zip(key_r)
+                .map(|(k_l, k_r)| k_r.mul(round_challenge).add_mixed(k_l))
+                .collect::<Vec<_>>();
+            G::Projective::batch_normalization_into_affine(&temp)
+        } else {
+            comm_key.to_vec()
+        }
+    }
+
+    fn odd_commitment_step(
+        comm_key: &[G],
+        h_prime: G,
+        round_challenge: G::ScalarField,
+        (coeffs_l, coeffs_r): (&[G::ScalarField], &[G::ScalarField]),
+        (z_l, z_r): (&[G::ScalarField], &[G::ScalarField]),
+    ) -> (G, G) {
+        let n = comm_key.len();
+        let (key_l, key_r) = comm_key.split_at(n / 2);
+        assert_eq!(key_l.len(), key_r.len());
+        let (key_l_1, key_l_2) = key_l.split_at(n / 4);
+        let (key_r_1, key_r_2) = key_r.split_at(n / 4);
+
+        let l_bases = [key_l_1, key_r_1, &[h_prime]].concat();
+        let r_bases = [key_l_2, key_r_2, &[h_prime]].concat();
+
+        let coeffs_r_round_ch = ark_std::cfg_iter!(coeffs_r).map(|c| round_challenge * c).collect::<Vec<_>>();
+        let coeffs_l_round_ch = ark_std::cfg_iter!(coeffs_l).map(|c| round_challenge * c).collect::<Vec<_>>();
+
+        let l_coeffs = [coeffs_r, &coeffs_r_round_ch, &[Self::inner_product(coeffs_r, z_l)]].concat();
+        let r_coeffs = [coeffs_l, &coeffs_l_round_ch, &[Self::inner_product(coeffs_l, z_r)]].concat();
+
+        let l = Self::cm_commit(&l_bases, &l_coeffs, None, None);
+        let r = Self::cm_commit(&r_bases, &r_coeffs, None, None);
+        let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
+        (lr[0], lr[1])
+    }
+
+    fn odd_folding_step(
+        comm_key: &[G],
+        prev_round_challenge: G::ScalarField,
+        round_challenge: G::ScalarField,
+    ) -> Vec<G> {
+        let n = comm_key.len();
+        let (key_l, key_r) = comm_key.split_at(n / 2);
+        let key_proj = if n == 2 {
+            ark_std::cfg_iter!(key_l)
+                .zip(key_r)
+                .map(|(k_l, k_r)| k_r.mul(prev_round_challenge).add_mixed(k_l))
+                .collect::<Vec<_>>()
+        } else {
+            let (key_l_1, key_l_2) = key_l.split_at(n / 4);
+            let (key_r_1, key_r_2) = key_r.split_at(n / 4);
+
+            ark_std::cfg_iter!(key_l_1)
+                .zip(key_r_1)
+                .zip(key_l_2)
+                .zip(key_r_2)
+                .map(|(((k_l_1, k_r_1), k_l_2), k_r_2)| {
+                    k_l_2.mul(round_challenge)
+                        .add_mixed(k_l_1)
+                        + &k_r_1.mul(prev_round_challenge)
+                        + &k_r_2.mul(prev_round_challenge * &round_challenge)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        G::Projective::batch_normalization_into_affine(&key_proj)
+    }
+
 
     #[inline]
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
@@ -158,7 +268,10 @@ where
             &point,
             &combined_v
         );
-        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+        let mut round_challenge = sponge
+            .squeeze_field_elements_with_sizes(&[ark_sponge::FieldElementSize::Truncated{ num_bits: 128 }])
+            .pop()
+            .unwrap();
 
         let h_prime = vk.h.mul(round_challenge);
 
@@ -346,10 +459,13 @@ where
         _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         // Ensure that max_degree + 1 is a power of 2
-        let max_degree = (max_degree + 1).next_power_of_two() - 1;
+        let mut max_num_coeffs = max_degree + 1;
+        if !max_num_coeffs.is_power_of_two() {
+            max_num_coeffs = max_num_coeffs.next_power_of_two();
+        }
 
-        let setup_time = start_timer!(|| format!("Sampling {} generators", max_degree + 3));
-        let mut generators = Self::sample_generators(max_degree + 3);
+        let setup_time = start_timer!(|| format!("Sampling {} generators", max_num_coeffs + 2));
+        let mut generators = Self::sample_generators(max_num_coeffs + 2);
         end_timer!(setup_time);
 
         let h = generators.pop().unwrap();
@@ -371,8 +487,11 @@ where
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         // Ensure that supported_degree + 1 is a power of two
-        let supported_degree = (supported_degree + 1).next_power_of_two() - 1;
-        if supported_degree > pp.max_degree() {
+        let mut supported_num_coeffs = supported_degree + 1;
+        if !supported_num_coeffs.is_power_of_two() {
+            supported_num_coeffs = supported_num_coeffs.next_power_of_two();
+        }
+        if supported_num_coeffs > (pp.max_degree() + 1) {
             return Err(Error::TrimmingDegreeTooLarge);
         }
 
@@ -380,18 +499,13 @@ where
             start_timer!(|| format!("Trimming to supported degree of {}", supported_degree));
 
         let ck = CommitterKey {
-            comm_key: pp.comm_key[0..(supported_degree + 1)].to_vec(),
+            comm_key: pp.comm_key[0..supported_num_coeffs].to_vec(),
             h: pp.h.clone(),
             s: pp.s.clone(),
             max_degree: pp.max_degree(),
         };
 
-        let vk = VerifierKey {
-            comm_key: pp.comm_key[0..(supported_degree + 1)].to_vec(),
-            h: pp.h.clone(),
-            s: pp.s.clone(),
-            max_degree: pp.max_degree(),
-        };
+        let vk = ck.clone();
 
         end_timer!(trim_time);
 
@@ -440,14 +554,21 @@ where
                 Randomness::empty()
             };
 
+            let main_commit_time = start_timer!(|| format!(
+                "Unshifted commitment with key size {} and degree {}",
+                polynomial.degree() + 1,
+                polynomial.coeffs().len(),
+            ));
             let comm = Self::cm_commit(
                 &ck.comm_key[..(polynomial.degree() + 1)],
-                &polynomial.coeffs(),
+                polynomial.coeffs(),
                 Some(ck.s),
                 Some(randomness.rand),
             )
             .into();
+            end_timer!(main_commit_time);
 
+            let shifted_commit_time = start_timer!(|| "Shifted commitment");
             let shifted_comm = degree_bound.map(|d| {
                 Self::cm_commit(
                     &ck.comm_key[(ck.supported_degree() - d)..],
@@ -457,6 +578,7 @@ where
                 )
                 .into()
             });
+            end_timer!(shifted_commit_time);
 
             let commitment = Commitment { comm, shifted_comm };
             let labeled_comm = LabeledCommitment::new(label.to_string(), commitment, degree_bound);
@@ -628,7 +750,9 @@ where
             point,
             &combined_v
         ];
-        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+        let mut round_challenge = sponge.squeeze_field_elements_with_sizes(
+            &[ark_sponge::FieldElementSize::Truncated{ num_bits: 128 }]
+        ).pop().unwrap();
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
@@ -649,11 +773,6 @@ where
             cur_z *= point;
         }
         let mut z = z.as_mut_slice();
-
-        // This will be used for transforming the key in each step
-        let mut key_proj: Vec<G::Projective> = ck.comm_key.iter().map(|x| (*x).into()).collect();
-        let mut key_proj = key_proj.as_mut_slice();
-
         let mut temp;
 
         // Key for MSM
@@ -664,28 +783,38 @@ where
         let mut r_vec = Vec::with_capacity(log_d);
 
         let mut n = d + 1;
+        let mut i = 0;
         while n > 1 {
             let (coeffs_l, coeffs_r) = coeffs.split_at_mut(n / 2);
             let (z_l, z_r) = z.split_at_mut(n / 2);
-            let (key_l, key_r) = comm_key.split_at(n / 2);
-            let (key_proj_l, _) = key_proj.split_at_mut(n / 2);
+            let (l, r) = if i % 2 == 0 {
+                Self::even_commitment_step(
+                    comm_key,
+                    h_prime,
+                    (coeffs_l, coeffs_r),
+                    (z_l, z_r),
+                )
+            } else {
+                Self::odd_commitment_step(
+                    comm_key,
+                    h_prime,
+                    round_challenge,
+                    (coeffs_l, coeffs_r),
+                    (z_l, z_r),
+                )
+            };
 
-            let l = Self::cm_commit(key_l, coeffs_r, None, None)
-                + &h_prime.mul(Self::inner_product(coeffs_r, z_l));
+            l_vec.push(l);
+            r_vec.push(r);
 
-            let r = Self::cm_commit(key_r, coeffs_l, None, None)
-                + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
-
-            let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
-            l_vec.push(lr[0]);
-            r_vec.push(lr[1]);
 
             let mut sponge = S::new();
             absorb![
                 &mut sponge,
                 &round_challenge,
-                &ark_ff::to_bytes![lr[0], lr[1]].unwrap()
+                &ark_ff::to_bytes![l, r].unwrap()
             ];
+            let prev_round_challenge = round_challenge;
             round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
@@ -697,17 +826,18 @@ where
                 .zip(z_r)
                 .for_each(|(z_l, z_r)| *z_l += &(round_challenge * &*z_r));
 
-            ark_std::cfg_iter_mut!(key_proj_l)
-                .zip(key_r)
-                .for_each(|(k_l, k_r)| *k_l += &(k_r.mul(round_challenge)));
 
             coeffs = coeffs_l;
             z = z_l;
 
-            key_proj = key_proj_l;
-            temp = G::Projective::batch_normalization_into_affine(key_proj);
+            temp = if i % 2 == 0 {
+                Self::even_folding_step(comm_key, round_challenge)
+            } else {
+                Self::odd_folding_step(comm_key, prev_round_challenge, round_challenge)
+            };
             comm_key = &temp;
 
+            i += 1;
             n /= 2;
         }
 

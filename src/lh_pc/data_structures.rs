@@ -1,66 +1,60 @@
-use crate::lh_pc::linear_hash::data_structures::{
-    LHCommitment, LHCommitterKey, LHUniversalParameters,
-};
-use crate::lh_pc::LinearHashFunction;
-use crate::{PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey, Polynomial, LabeledPolynomial};
+use crate::{PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey, LabeledPolynomial};
 use ark_ff::{to_bytes, Field, ToBytes, Zero};
+use ark_ec::AffineCurve;
 use ark_poly::UVPolynomial;
-use core::marker::PhantomData;
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
+use ark_std::io::{Read, Write};
 use rand_core::RngCore;
+use crate::pedersen;
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
-pub struct UniversalParameters<F: Field, LH: LinearHashFunction<F>>(pub(crate) LH::UniversalParams);
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct UniversalParameters<G: AffineCurve>(pub(crate) pedersen::UniversalParams<G>);
 
-impl<F: Field, LH: LinearHashFunction<F>> PCUniversalParams for UniversalParameters<F, LH> {
+impl<G: AffineCurve> PCUniversalParams for UniversalParameters<G> {
     fn max_degree(&self) -> usize {
-        self.0.max_elems_len() - 1
+        (self.0).0.len() - 1
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
-pub struct CommitterKey<F: Field, LH: LinearHashFunction<F>>(pub(crate) LH::CommitterKey);
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct CommitterKey<G: AffineCurve>(pub(crate) pedersen::CommitterKey<G>);
 
-impl<F: Field, LH: LinearHashFunction<F>> PCCommitterKey for CommitterKey<F, LH> {
+impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
     fn max_degree(&self) -> usize {
-        self.0.max_elems_len() - 1
+        self.0.max_elems_len - 1
     }
 
     fn supported_degree(&self) -> usize {
-        self.0.supported_elems_len() - 1
+        self.0.generators.len() - 1
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
-pub struct VerifierKey<F: Field, LH: LinearHashFunction<F>>(pub(crate) LH::CommitterKey);
+pub type VerifierKey<G> = CommitterKey<G>;
 
-impl<F: Field, LH: LinearHashFunction<F>> PCVerifierKey for VerifierKey<F, LH> {
+impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     fn max_degree(&self) -> usize {
-        self.0.max_elems_len() - 1
+        self.0.max_elems_len - 1
     }
 
     fn supported_degree(&self) -> usize {
-        self.0.supported_elems_len() - 1
+        self.0.generators.len() - 1
     }
 }
 
-impl<F: Field, LH: LinearHashFunction<F>> PCPreparedVerifierKey<VerifierKey<F, LH>>
-    for VerifierKey<F, LH>
+impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>>
+    for VerifierKey<G>
 {
-    fn prepare(vk: &VerifierKey<F, LH>) -> Self {
+    fn prepare(vk: &VerifierKey<G>) -> Self {
         vk.clone()
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Eq(bound = ""), PartialEq(bound = ""))]
-pub struct Commitment<F: Field, LH: LinearHashFunction<F>>(pub LH::Commitment);
+#[derive(Clone, Eq, PartialEq, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct Commitment<G: AffineCurve>(pub pedersen::Commitment<G>);
 
-impl<F: Field, LH: LinearHashFunction<F>> PCCommitment for Commitment<F, LH> {
+impl<G: AffineCurve> PCCommitment for Commitment<G> {
     fn empty() -> Self {
-        Self(LH::Commitment::zero())
+        Self(pedersen::Commitment::zero())
     }
 
     fn has_degree_bound(&self) -> bool {
@@ -68,37 +62,36 @@ impl<F: Field, LH: LinearHashFunction<F>> PCCommitment for Commitment<F, LH> {
     }
 
     fn size_in_bytes(&self) -> usize {
-        LHCommitment::<F>::size_in_bytes(&self.0)
+        unimplemented!()
     }
 }
 
-impl<F: Field, LH: LinearHashFunction<F>> PCPreparedCommitment<Commitment<F, LH>>
-    for Commitment<F, LH>
+impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>>
+    for Commitment<G>
 {
-    fn prepare(comm: &Commitment<F, LH>) -> Self {
+    fn prepare(comm: &Commitment<G>) -> Self {
         comm.clone()
     }
 }
 
-impl<F: Field, LH: LinearHashFunction<F>> Default for Commitment<F, LH> {
+impl<G: AffineCurve> Default for Commitment<G> {
     fn default() -> Self {
-        Self(LH::Commitment::zero())
+        Self::empty()
     }
 }
 
-impl<F: Field, LH: LinearHashFunction<F>> ToBytes for Commitment<F, LH> {
-    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
+impl<G: AffineCurve> ToBytes for Commitment<G> {
+    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""))]
-pub struct Randomness(pub(crate) ());
+#[derive(Clone)]
+pub struct Randomness;
 
 impl PCRandomness for Randomness {
     fn empty() -> Self {
-        Self(())
+        Self
     }
 
     fn rand<R: RngCore>(
@@ -107,16 +100,15 @@ impl PCRandomness for Randomness {
         _: Option<usize>,
         _rng: &mut R,
     ) -> Self {
-        Self(())
+        Self
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""))]
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Proof<F: Field, P: UVPolynomial<F>>(pub LabeledPolynomial<F, P>);
 
 impl<F: Field, P: UVPolynomial<F>> ToBytes for Proof<F, P> {
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         writer.write_all((to_bytes!(self.0.coeffs())?).as_slice())
     }
 }

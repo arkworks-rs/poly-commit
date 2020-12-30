@@ -5,7 +5,9 @@ use ark_std::{
     borrow::Cow,
     marker::PhantomData,
     ops::{Add, AddAssign},
+    io::{Read, Write},
 };
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
@@ -80,7 +82,7 @@ pub struct VerifierKey<E: PairingEngine> {
 
 impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.g.write(&mut writer)?;
         self.gamma_g.write(&mut writer)?;
         self.h.write(&mut writer)?;
@@ -124,7 +126,7 @@ impl<E: PairingEngine> PreparedVerifierKey<E> {
 }
 
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -141,7 +143,7 @@ pub struct Commitment<E: PairingEngine>(
 
 impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
     }
 }
@@ -203,7 +205,7 @@ impl<E: PairingEngine> PreparedCommitment<E> {
 }
 
 /// `Randomness` hides the polynomial inside a commitment. It is output by `KZG10::commit`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Hash(bound = ""),
     Clone(bound = ""),
@@ -285,7 +287,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
 }
 
 /// `Proof` is an evaluation proof that is output by `KZG10::open`.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -316,7 +318,7 @@ impl<E: PairingEngine> PCProof for Proof<E> {
 
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
-    fn write<W: ark_std::io::Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
+    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
         self.w.write(&mut writer)?;
         self.random_v
             .as_ref()

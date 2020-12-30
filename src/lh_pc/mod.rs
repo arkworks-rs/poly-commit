@@ -1,12 +1,11 @@
-use crate::lh_pc::error::LHPCError;
-use crate::lh_pc::linear_hash::data_structures::LHUniversalParameters;
-use crate::lh_pc::linear_hash::LinearHashFunction;
 use crate::{BTreeMap, BTreeSet, ToString, Vec, PolynomialLabel};
 use crate::{
-    Error, Evaluations, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCVerifierKey,
-    Polynomial, PolynomialCommitment, QuerySet,
+    Error, Evaluations, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PolynomialCommitment, QuerySet, PCUniversalParams,
 };
+use crate::pedersen;
+use crate::pedersen::PedersenCommitment;
 use ark_ff::{Field, UniformRand, Zero};
+use ark_ec::AffineCurve;
 use ark_std::vec;
 use core::marker::PhantomData;
 use rand_core::RngCore;
@@ -16,15 +15,14 @@ use ark_poly::UVPolynomial;
 pub use data_structures::*;
 
 pub mod error;
-pub mod linear_hash;
+use error::LHPCError;
 
-pub struct LinearHashPC<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F>> {
-    _field: PhantomData<F>,
+pub struct LinearHashPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
+    _field: PhantomData<G>,
     _polynomial: PhantomData<P>,
-    _lh: PhantomData<LH>,
 }
 
-impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> LinearHashPC<F, P, LH> {
+impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> LinearHashPC<G, P> {
     fn check_degrees(supported_degree: usize, p: &P) -> Result<(), LHPCError> {
         if p.degree() < 1 {
             return Err(LHPCError::pc_error(Error::DegreeIsZero));
@@ -40,7 +38,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> LinearHa
 
     fn check_degrees_and_bounds(
         supported_degree: usize,
-        p: &LabeledPolynomial<F, P>,
+        p: &LabeledPolynomial<G::ScalarField, P>,
     ) -> Result<(), LHPCError> {
         Self::check_degrees(supported_degree, p.polynomial())?;
         if p.degree_bound().is_some() {
@@ -51,18 +49,18 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> LinearHa
     }
 }
 
-impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> PolynomialCommitment<F, P>
-    for LinearHashPC<F, P, LH>
+impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::ScalarField, P>
+    for LinearHashPC<G, P>
 {
-    type UniversalParams = UniversalParameters<F, LH>;
-    type CommitterKey = CommitterKey<F, LH>;
-    type VerifierKey = VerifierKey<F, LH>;
-    type PreparedVerifierKey = VerifierKey<F, LH>;
-    type Commitment = Commitment<F, LH>;
-    type PreparedCommitment = Commitment<F, LH>;
+    type UniversalParams = UniversalParameters<G>;
+    type CommitterKey = CommitterKey<G>;
+    type VerifierKey = VerifierKey<G>;
+    type PreparedVerifierKey = VerifierKey<G>;
+    type Commitment = Commitment<G>;
+    type PreparedCommitment = Commitment<G>;
     type Randomness = Randomness;
-    type Proof = Proof<F, P>;
-    type BatchProof = Vec<Proof<F, P>>;
+    type Proof = Proof<G::ScalarField, P>;
+    type BatchProof = Vec<Proof<G::ScalarField, P>>;
     type Error = LHPCError;
 
     fn setup<R: RngCore>(
@@ -70,7 +68,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
         _: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        let lh_pp = LH::setup(max_degree + 1, rng).map_err(|e| LHPCError::lh_error(e))?;
+        let lh_pp = PedersenCommitment::setup(max_degree + 1, rng).map_err(|e| LHPCError::lh_error(e))?;
         Ok(UniversalParameters(lh_pp))
     }
 
@@ -80,19 +78,19 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
         _supported_hiding_bound: usize,
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        if supported_degree + 1 > pp.0.max_elems_len() {
+        if supported_degree > pp.max_degree() {
             return Err(LHPCError::pc_error(Error::TrimmingDegreeTooLarge));
         }
 
-        let lh_ck = LH::trim(&pp.0, supported_degree + 1).map_err(|e| LHPCError::lh_error(e))?;
+        let lh_ck = PedersenCommitment::trim(&pp.0, supported_degree + 1).map_err(|e| LHPCError::lh_error(e))?;
         let ck = CommitterKey(lh_ck.clone());
-        let vk = VerifierKey(lh_ck);
+        let vk = ck.clone();
         Ok((ck, vk))
     }
 
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -112,11 +110,11 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
             let polynomial = labeled_polynomial.polynomial();
             let mut coeffs = polynomial.coeffs().to_vec();
             while coeffs.len() < ck.supported_degree() + 1 {
-                coeffs.push(F::zero());
+                coeffs.push(G::ScalarField::zero());
             }
 
             let lh_commitment =
-                LH::commit(&ck.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+                PedersenCommitment::commit(&ck.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
             let comm = Commitment(lh_commitment);
             let labeled_comm = LabeledCommitment::new(
                 labeled_polynomial.label().clone(),
@@ -126,16 +124,16 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
             commitments.push(labeled_comm);
         }
 
-        let randomness = vec![Randomness(()); commitments.len()];
+        let randomness = vec![Randomness; commitments.len()];
         Ok((commitments, randomness))
     }
 
     fn open_individual_opening_challenges<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        _point: &F,
-        opening_challenges: &dyn Fn(u64) -> F,
+        _point: &G::ScalarField,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         _rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -163,10 +161,10 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
     fn check_individual_opening_challenges<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        point: &F,
-        values: impl IntoIterator<Item = F>,
+        point: &G::ScalarField,
+        values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &dyn Fn(u64) -> F,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -178,7 +176,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
             return Ok(false);
         }
 
-        let mut accumulated_value = F::zero();
+        let mut accumulated_value = G::ScalarField::zero();
         let mut scalar_commitment_pairs = Vec::new();
 
         let mut i = 0;
@@ -188,7 +186,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
             }
 
             let cur_challenge = opening_challenges(i);
-            accumulated_value += &(value.mul(cur_challenge));
+            accumulated_value += &(value * &cur_challenge);
             scalar_commitment_pairs.push((cur_challenge, &commitment.commitment().0));
             i += 1;
         }
@@ -200,12 +198,12 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
 
         let mut coeffs = proof.0.coeffs().to_vec();
         while coeffs.len() < supported_degree + 1 {
-            coeffs.push(F::zero());
+            coeffs.push(G::ScalarField::zero());
         }
 
         let accumulated_commitment = scalar_commitment_pairs.into_iter().sum();
         let expected_commitment =
-            LH::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+            PedersenCommitment::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
 
         Ok(expected_commitment.eq(&accumulated_commitment))
     }
@@ -213,10 +211,10 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
     fn batch_check_individual_opening_challenges<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<F>,
-        values: &Evaluations<F, P::Point>,
+        query_set: &QuerySet<G::ScalarField>,
+        values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &dyn Fn(u64) -> F,
+        opening_challenges: &dyn Fn(u64) -> G::ScalarField,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -233,29 +231,29 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
 
         assert_eq!(proof.len(), query_to_labels_map.len());
 
-        let mut expected_value: F = F::zero();
+        let mut expected_value = G::ScalarField::zero();
         let mut randomizers = Vec::new();
         let mut proof_commitments = Vec::new();
 
-        let mut accumulated_value = F::zero();
+        let mut accumulated_value = G::ScalarField::zero();
         let mut scalar_commitment_pairs = Vec::new();
 
         for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
-            let query_challenge: F = u128::rand(rng).into();
-            expected_value += &p.0.evaluate(&query.1).mul(query_challenge);
+            let query_challenge: G::ScalarField = u128::rand(rng).into();
+            expected_value += &(p.0.evaluate(&query.1) * &query_challenge);
 
             let mut coeffs = p.0.coeffs().to_vec();
             while coeffs.len() < supported_degree + 1 {
-                coeffs.push(F::zero());
+                coeffs.push(G::ScalarField::zero());
             }
             let proof_commitment =
-                LH::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+                PedersenCommitment::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
             randomizers.push(query_challenge);
             proof_commitments.push(proof_commitment);
 
             let mut i = 0;
             for label in labels.into_iter() {
-                let cur_challenge = query_challenge.mul(opening_challenges(i));
+                let cur_challenge = query_challenge * &opening_challenges(i);
                 let commitment = commitments.get(label).ok_or(Error::MissingPolynomial {
                     label: label.to_string(),
                 })?;
@@ -267,7 +265,7 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
                             label: label.to_string(),
                         })?;
 
-                accumulated_value += &(v_i.mul(cur_challenge));
+                accumulated_value += &(cur_challenge * v_i);
                 scalar_commitment_pairs.push((cur_challenge, &commitment.commitment().0));
                 i += 1;
             }
@@ -277,11 +275,11 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
             return Ok(false);
         }
 
-        let expected_scalar_commitment_pairs: Vec<(F, &LH::Commitment)> =
+        let expected_scalar_commitment_pairs: Vec<(G::ScalarField, &pedersen::Commitment<G>)> =
             randomizers.into_iter().zip(&proof_commitments).collect();
 
-        let accumulated_commitment: LH::Commitment = scalar_commitment_pairs.into_iter().sum();
-        let expected_commitment: LH::Commitment =
+        let accumulated_commitment: pedersen::Commitment<G> = scalar_commitment_pairs.into_iter().sum();
+        let expected_commitment: pedersen::Commitment<G> =
             expected_scalar_commitment_pairs.into_iter().sum();
 
         Ok(accumulated_commitment == expected_commitment)
@@ -290,14 +288,14 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
     /*
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<F>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, F>>,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<F>,
-        opening_challenge: F,
+        query_set: &QuerySet<G::ScalarField>,
+        opening_challenge: G::ScalarField,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<F, Self>, Self::Error>
+    ) -> Result<BatchLCProof<G::ScalarField, Self>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
@@ -375,18 +373,15 @@ impl<F: Field, P: UVPolynomial<F>, LH: LinearHashFunction<F> + 'static> Polynomi
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use super::linear_hash::pedersen::PedersenCommitment;
+    use crate::pedersen::PedersenCommitment;
     use super::LinearHashPC;
 
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;
-    use blake2::Blake2s;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 
-    type PC<F, P, LH> = LinearHashPC<F, P, LH>;
-    type LH_PED = PedersenCommitment<EdwardsAffine, Blake2s>;
-    type PC_PED = PC<Fr, DensePolynomial<Fr>, LH_PED>;
+    type PC_PED = LinearHashPC<EdwardsAffine, DensePolynomial<Fr>>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,
