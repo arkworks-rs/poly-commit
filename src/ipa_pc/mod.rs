@@ -2,10 +2,9 @@ use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
-
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
-use ark_sponge::{absorb, Absorbable, CryptographicSponge};
+use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::{format, vec};
 use core::{convert::TryInto, marker::PhantomData};
 use digest::Digest;
@@ -16,6 +15,8 @@ pub use data_structures::*;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+
+pub mod constraints;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
@@ -212,31 +213,21 @@ where
         let mut combined_commitment_proj = G::Projective::zero();
         let mut combined_v = G::ScalarField::zero();
 
-        let mut opening_challenge_counter = 0;
-        let mut cur_challenge = opening_challenges(opening_challenge_counter);
-        opening_challenge_counter += 1;
-
-        let labeled_commitments = commitments.into_iter();
-        let values = values.into_iter();
-
-        for (labeled_commitment, value) in labeled_commitments.zip(values) {
+        for (i, (labeled_commitment, value)) in commitments.into_iter().zip(values).enumerate() {
+            let cur_challenge = opening_challenges((2 * i) as u64);
             let commitment = labeled_commitment.commitment();
             combined_v += &(cur_challenge * &value);
-            combined_commitment_proj += &labeled_commitment.commitment().comm.mul(cur_challenge);
-            cur_challenge = opening_challenges(opening_challenge_counter);
-            opening_challenge_counter += 1;
+            combined_commitment_proj += &commitment.comm.mul(cur_challenge);
 
             let degree_bound = labeled_commitment.degree_bound();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
 
             if let Some(degree_bound) = degree_bound {
+                let cur_challenge = opening_challenges((2 * i + 1) as u64);
                 let shift = point.pow([(vk.supported_degree() - degree_bound) as u64]);
                 combined_v += &(cur_challenge * &value * &shift);
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
             }
-
-            cur_challenge = opening_challenges(opening_challenge_counter);
-            opening_challenge_counter += 1;
         }
 
         let mut combined_commitment = combined_commitment_proj.into_affine();
@@ -249,11 +240,15 @@ where
             let mut sponge = S::new();
             absorb!(
                 &mut sponge,
-                &ark_ff::to_bytes![combined_commitment, hiding_comm].unwrap(),
+                &ark_ff::to_bytes![combined_commitment].unwrap(),
+                &ark_ff::to_bytes![hiding_comm].unwrap(),
                 &point,
                 &combined_v
             );
-            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            let hiding_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
 
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
@@ -269,7 +264,7 @@ where
             &combined_v
         );
         let mut round_challenge = sponge
-            .squeeze_field_elements_with_sizes(&[ark_sponge::FieldElementSize::Truncated{ num_bits: 128 }])
+            .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
             .pop()
             .unwrap();
 
@@ -285,9 +280,14 @@ where
             absorb!(
                 &mut sponge,
                 &round_challenge,
-                &ark_ff::to_bytes![l, r].unwrap()
+                &ark_ff::to_bytes![l].unwrap(),
+                &ark_ff::to_bytes![r].unwrap()
             );
-            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+
+            round_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
 
             round_challenges.push(round_challenge);
             round_commitment_proj +=
@@ -718,11 +718,15 @@ where
             let mut sponge = S::new();
             absorb![
                 &mut sponge,
-                &ark_ff::to_bytes![combined_commitment, hiding_commitment.unwrap()].unwrap(),
+                &ark_ff::to_bytes![combined_commitment].unwrap(),
+                &ark_ff::to_bytes![hiding_commitment.unwrap()].unwrap(),
                 point,
                 &combined_v
             ];
-            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            let hiding_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
@@ -812,10 +816,15 @@ where
             absorb![
                 &mut sponge,
                 &round_challenge,
-                &ark_ff::to_bytes![l, r].unwrap()
+                &ark_ff::to_bytes![l].unwrap(),
+                &ark_ff::to_bytes![r].unwrap()
             ];
             let prev_round_challenge = round_challenge;
-            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            round_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
+
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
             ark_std::cfg_iter_mut!(coeffs_l)
@@ -1197,13 +1206,15 @@ mod tests {
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
-    use ark_sponge::digest_sponge::DigestSponge;
+    use ark_sponge::dummy::DummySponge;
     use blake2::Blake2s;
+    use ark_sponge::digest_sponge::DigestSponge;
     use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
-    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, DigestSponge<Fr, Sha512>>;
+    type PC_JJB2S =
+        PC<EdwardsAffine, Blake2s, UniPoly, DigestSponge<Fr, Sha512> /*DummySponge*/>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,
