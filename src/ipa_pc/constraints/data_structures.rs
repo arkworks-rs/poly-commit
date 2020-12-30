@@ -2,9 +2,11 @@ use crate::ipa_pc::{Commitment, CommitterKey, Proof};
 use crate::LabeledCommitment;
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
-use ark_ff::Field;
+use ark_ff::PrimeField;
+use ark_ff::{BitIteratorLE, Field};
 use ark_nonnative_field::NonNativeFieldVar;
 use ark_r1cs_std::alloc::{AllocVar, AllocationMode};
+use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
 use ark_r1cs_std::ToBitsGadget;
@@ -164,7 +166,7 @@ where
     /// The second element is the linear combination of all the randomness
     /// used for commitments to the opened polynomials, along with the
     /// randomness used for the commitment to the hiding polynomial.
-    pub hiding_var: Option<(C, NNFieldVar<G>)>,
+    pub hiding_var: Option<(C, Vec<Boolean<ConstraintF<G>>>)>,
 }
 
 impl<G, C> AllocVar<Proof<G>, ConstraintF<G>> for ProofVar<G, C>
@@ -214,12 +216,13 @@ where
                 || Ok(proof.borrow().hiding_comm.clone().unwrap()),
                 mode,
             )?;
-            let rand_var = NNFieldVar::<G>::new_variable(
-                ns.clone(),
-                || Ok(proof.borrow().rand.clone().unwrap()),
-                mode,
-            )?;
-            Some((hiding_comm_var, rand_var))
+
+            let rand_bits_var =
+                BitIteratorLE::without_trailing_zeros((&proof.borrow().rand.unwrap()).into_repr())
+                    .map(|b| Boolean::new_variable(ns.clone(), || Ok(b), mode))
+                    .collect::<Result<Vec<_>, SynthesisError>>()?;
+
+            Some((hiding_comm_var, rand_bits_var))
         } else {
             None
         };
@@ -292,18 +295,18 @@ where
 {
     pub fn commit(
         comm_key: &[C],
-        scalars: &[NNFieldVar<G>],
-        hiding: Option<(&C, &NNFieldVar<G>)>,
+        scalars: &[Vec<Boolean<ConstraintF<G>>>],
+        hiding: Option<(&C, &Vec<Boolean<ConstraintF<G>>>)>,
     ) -> Result<C, SynthesisError> {
         assert!(scalars.len() <= comm_key.len());
 
         let mut comm = C::zero();
         for (c, s) in comm_key.iter().zip(scalars) {
-            comm += c.scalar_mul_le(s.to_bits_le()?.iter())?;
+            comm += c.scalar_mul_le(s.iter())?;
         }
 
         if let Some((hiding_generator, randomizer)) = &hiding {
-            comm += &hiding_generator.scalar_mul_le(randomizer.to_bits_le()?.iter())?;
+            comm += &hiding_generator.scalar_mul_le(randomizer.iter())?;
         }
 
         Ok(comm)

@@ -1,7 +1,9 @@
 use crate::Vec;
 use ark_ec::AffineCurve;
-use ark_marlin::fiat_shamir::constraints::FiatShamirRngVar;
-use ark_marlin::fiat_shamir::FiatShamirRng;
+use ark_marlin::fiat_shamir::constraints::{
+    AlgebraicSpongeVar, FiatShamirAlgebraicSpongeRngVar, FiatShamirRngVar,
+};
+use ark_marlin::fiat_shamir::{AlgebraicSponge, FiatShamirRng};
 use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
@@ -11,6 +13,7 @@ use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
 pub mod data_structures;
+use ark_r1cs_std::bits::uint8::UInt8;
 pub use data_structures::*;
 
 pub struct InnerProductArgPCGadget<G, C, S, SV>
@@ -44,11 +47,6 @@ where
         proof_var: &ProofVar<G, C>,
         opening_challenge_vars: &dyn Fn(u64) -> NNFieldVar<G>,
     ) -> Result<(Boolean<ConstraintF<G>>, SuccinctCheckPolynomialVar<G>), SynthesisError> {
-        // To substitute sponge
-        // TODO: Remove when implemented sponge
-        //let two = G::ScalarField::one() + &G::ScalarField::one();
-        //let two_var = NNFieldVar::<G>::new_constant(cs.clone(), two)?;
-
         let d = vk_var.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
@@ -75,22 +73,21 @@ where
             }
         }
 
+        let combined_eval_bytes_var = combined_eval_var.to_bytes()?;
+        let point_bytes_var = point_var.to_bytes()?;
+
         if let Some((hiding_comm_var, rand_var)) = &proof_var.hiding_var {
             let mut hiding_challenge_sponge_var = SV::new(cs.clone());
             hiding_challenge_sponge_var
                 .absorb_bytes(combined_commitment_var.to_bytes()?.as_slice())?;
             hiding_challenge_sponge_var.absorb_bytes(hiding_comm_var.to_bytes()?.as_slice())?;
-            hiding_challenge_sponge_var.absorb_bytes(point_var.to_bytes()?.as_slice())?;
-            hiding_challenge_sponge_var.absorb_bytes(combined_eval_var.to_bytes()?.as_slice())?;
+            hiding_challenge_sponge_var.absorb_bytes(point_bytes_var.as_slice())?;
+            hiding_challenge_sponge_var.absorb_bytes(combined_eval_bytes_var.as_slice())?;
 
-            let hiding_challenge_var = hiding_challenge_sponge_var
-                .squeeze_field_elements(1)?
-                .pop()
-                .unwrap();
-
+            let hiding_challenge_bits_var = hiding_challenge_sponge_var.squeeze_bits(128)?;
             combined_commitment_var += &(hiding_comm_var
-                .scalar_mul_le(hiding_challenge_var.to_bits_le()?.iter())?
-                - &(vk_var.s_var.scalar_mul_le(rand_var.to_bits_le()?.iter())?));
+                .scalar_mul_le(hiding_challenge_bits_var.iter())?
+                - &(vk_var.s_var.scalar_mul_le(rand_var.iter())?));
         }
 
         let mut round_challenge_vars = Vec::with_capacity(log_d);
@@ -98,20 +95,21 @@ where
         // Challenge for each round
         let mut round_challenge_sponge_var = SV::new(cs.clone());
         round_challenge_sponge_var.absorb_bytes(combined_commitment_var.to_bytes()?.as_slice())?;
-        round_challenge_sponge_var.absorb_bytes(point_var.to_bytes()?.as_slice());
-        round_challenge_sponge_var.absorb_bytes(combined_eval_var.to_bytes()?.as_slice());
+        round_challenge_sponge_var.absorb_bytes(point_bytes_var.as_slice());
+        round_challenge_sponge_var.absorb_bytes(combined_eval_bytes_var.as_slice());
 
-        let mut round_challenge_var = round_challenge_sponge_var
-            .squeeze_field_elements(1)?
-            .pop()
-            .unwrap();
+        // Initialize challenges
+        let mut round_challenge_field_elements_and_bits =
+            round_challenge_sponge_var.squeeze_128_bits_field_elements_and_bits(1)?;
+        let mut round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
+        let mut round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
         let h_prime_var = vk_var
             .h_var
-            .scalar_mul_le(round_challenge_var.to_bits_le()?.iter())?;
+            .scalar_mul_le(round_challenge_bits_var.iter())?;
 
         let mut round_commitment_var = combined_commitment_var
-            + &h_prime_var.scalar_mul_le(combined_eval_var.to_bits_le()?.iter())?;
+            + &h_prime_var.scalar_mul_le(combined_eval_bytes_var.to_bits_le()?.iter())?;
 
         for (l_var, r_var) in proof_var.l_var_vec.iter().zip(&proof_var.r_var_vec) {
             let mut round_challenge_sponge_var = SV::new(cs.clone());
@@ -119,15 +117,15 @@ where
             round_challenge_sponge_var.absorb_bytes(l_var.to_bytes()?.as_slice())?;
             round_challenge_sponge_var.absorb_bytes(r_var.to_bytes()?.as_slice())?;
 
-            round_challenge_var = round_challenge_sponge_var
-                .squeeze_field_elements(1)?
-                .pop()
-                .unwrap();
+            // Update challenges
+            round_challenge_field_elements_and_bits =
+                round_challenge_sponge_var.squeeze_128_bits_field_elements_and_bits(1)?;
+            round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
+            round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
             round_commitment_var +=
                 &(l_var.scalar_mul_le(round_challenge_var.inverse()?.to_bits_le()?.iter()))?;
-            round_commitment_var +=
-                &(r_var.scalar_mul_le(round_challenge_var.to_bits_le()?.iter())?);
+            round_commitment_var += &(r_var.scalar_mul_le(round_challenge_bits_var.iter())?);
 
             round_challenge_vars.push(round_challenge_var.clone());
         }
@@ -137,7 +135,7 @@ where
 
         let check_commitment_elem_var = CMCommitGadget::<G, C>::commit(
             &[proof_var.final_comm_key_var.clone(), h_prime_var],
-            &[proof_var.c_var.clone(), v_prime_var],
+            &[proof_var.c_var.to_bits_le()?, v_prime_var.to_bits_le()?],
             None,
         )?;
 
@@ -182,7 +180,11 @@ where
         let check_poly_coeffs = check_poly_var.compute_coeff_vars();
         let final_key_var = CMCommitGadget::<G, C>::commit(
             vk_var.comm_key_var.as_slice(),
-            check_poly_coeffs.as_slice(),
+            check_poly_coeffs
+                .iter()
+                .map(|c| c.to_bits_le())
+                .collect::<Result<Vec<_>, SynthesisError>>()?
+                .as_slice(),
             None,
         )?;
 

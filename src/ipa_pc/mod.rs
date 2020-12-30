@@ -4,7 +4,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
-use ark_sponge::{absorb, Absorbable, CryptographicSponge};
+use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::{format, vec};
 use core::{convert::TryInto, marker::PhantomData};
 use digest::Digest;
@@ -135,7 +135,10 @@ where
                 &point,
                 &combined_v
             );
-            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            let hiding_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
 
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
@@ -150,7 +153,10 @@ where
             &point,
             &combined_v
         );
-        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+        let mut round_challenge = sponge
+            .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+            .pop()
+            .unwrap();
 
         let h_prime = vk.h.mul(round_challenge);
 
@@ -168,7 +174,10 @@ where
                 &ark_ff::to_bytes![r].unwrap()
             );
 
-            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            round_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
 
             round_challenges.push(round_challenge);
             round_commitment_proj +=
@@ -595,7 +604,10 @@ where
                 point,
                 &combined_v
             ];
-            let hiding_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            let hiding_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj += &(hiding_commitment_proj.mul(hiding_challenge.into())
@@ -623,7 +635,10 @@ where
             point,
             &combined_v
         ];
-        let mut round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+        let mut round_challenge = sponge
+            .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+            .pop()
+            .unwrap();
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
@@ -682,7 +697,10 @@ where
                 &ark_ff::to_bytes![lr[0]].unwrap(),
                 &ark_ff::to_bytes![lr[1]].unwrap()
             ];
-            round_challenge = sponge.squeeze_field_elements(1).pop().unwrap();
+            round_challenge = sponge
+                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .pop()
+                .unwrap();
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
             ark_std::cfg_iter_mut!(coeffs_l)
