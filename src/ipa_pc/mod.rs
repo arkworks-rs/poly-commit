@@ -279,7 +279,7 @@ where
             let mut sponge = S::new();
             absorb!(
                 &mut sponge,
-                &round_challenge,
+                &ark_ff::to_bytes![round_challenge].unwrap()[0..16],
                 &ark_ff::to_bytes![l].unwrap(),
                 &ark_ff::to_bytes![r].unwrap()
             );
@@ -811,11 +811,10 @@ where
             l_vec.push(l);
             r_vec.push(r);
 
-
             let mut sponge = S::new();
             absorb![
                 &mut sponge,
-                &round_challenge,
+                &ark_ff::to_bytes![round_challenge].unwrap()[0..16],
                 &ark_ff::to_bytes![l].unwrap(),
                 &ark_ff::to_bytes![r].unwrap()
             ];
@@ -1209,7 +1208,6 @@ mod tests {
     use ark_sponge::dummy::DummySponge;
     use blake2::Blake2s;
     use ark_sponge::digest_sponge::DigestSponge;
-    use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;

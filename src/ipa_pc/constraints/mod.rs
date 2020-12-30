@@ -113,7 +113,7 @@ where
 
         for (l_var, r_var) in proof_var.l_var_vec.iter().zip(&proof_var.r_var_vec) {
             let mut round_challenge_sponge_var = SV::new(cs.clone());
-            round_challenge_sponge_var.absorb_bytes(round_challenge_var.to_bytes()?.as_slice())?;
+            round_challenge_sponge_var.absorb_bytes(&(round_challenge_var.to_bytes()?)[0..16])?;
             round_challenge_sponge_var.absorb_bytes(l_var.to_bytes()?.as_slice())?;
             round_challenge_sponge_var.absorb_bytes(r_var.to_bytes()?.as_slice())?;
 
@@ -125,6 +125,7 @@ where
 
             round_commitment_var +=
                 &(l_var.scalar_mul_le(round_challenge_var.inverse()?.to_bits_le()?.iter()))?;
+
             round_commitment_var += &(r_var.scalar_mul_le(round_challenge_bits_var.iter())?);
 
             round_challenge_vars.push(round_challenge_var.clone());
