@@ -1,12 +1,12 @@
 use crate::{Polynomial, Rc, String, Vec};
 use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Borrow,
+    io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
-    io::{Read, Write},
 };
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
 use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
@@ -50,7 +50,9 @@ pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
+pub trait PCCommitment:
+    Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 

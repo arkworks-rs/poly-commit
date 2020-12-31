@@ -2,9 +2,9 @@ use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
 use ark_ec::AffineCurve;
 use ark_ff::{Field, ToBytes, UniformRand, Zero};
-use ark_std::vec;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
+use ark_std::vec;
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
@@ -79,7 +79,9 @@ impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierK
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(
+    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize,
+)]
 pub struct Commitment<G: AffineCurve> {
     /// A Pedersen commitment to the polynomial.
     pub comm: G,
@@ -132,7 +134,9 @@ impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<
 }
 
 /// `Randomness` hides the polynomial inside a commitment and is outputted by `InnerProductArg::commit`.
-#[derive(Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(
+    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize,
+)]
 pub struct Randomness<G: AffineCurve> {
     /// Randomness is some scalar field element.
     pub rand: G::ScalarField,

@@ -2,9 +2,10 @@ use crate::ipa_pc::{Commitment, CommitterKey, Proof};
 use crate::LabeledCommitment;
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
+use ark_ff::One;
 use ark_ff::PrimeField;
 use ark_ff::{BitIteratorLE, Field};
-use ark_nonnative_field::NonNativeFieldVar;
+use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_r1cs_std::alloc::{AllocVar, AllocationMode};
 use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::fields::FieldVar;
@@ -267,12 +268,20 @@ impl<G: AffineCurve> SuccinctCheckPolynomialVar<G> {
         let challenges = &self.0;
         let log_d = challenges.len();
 
+        let mut point_2 = point.clone();
+        let mut powers: Vec<NNFieldVar<G>> = Vec::with_capacity(log_d);
+        powers.push(point_2.clone());
+        for _ in 1..log_d {
+            powers.push(point_2.square_in_place()?.clone());
+        }
+        powers.reverse();
+
+        let one = NonNativeFieldMulResultVar::<G::ScalarField, ConstraintF<G>>::constant(
+            G::ScalarField::one(),
+        );
         let mut product = NNFieldVar::<G>::one();
-        for (i, challenge) in challenges.iter().enumerate() {
-            let i = i + 1;
-            let elem_degree: u64 = (1 << (log_d - i)) as u64;
-            let elem = point.pow_by_constant(&[elem_degree])?;
-            product *= &(NNFieldVar::<G>::one() + &(elem * challenge));
+        for (power, challenge) in challenges.iter().zip(&powers) {
+            product *= &(&one + &(power.mul_without_reduce(challenge)?)).reduce()?;
         }
 
         Ok(product)

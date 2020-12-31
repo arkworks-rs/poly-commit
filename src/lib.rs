@@ -79,7 +79,6 @@ pub mod sonic_pc;
 /// The Pedersen commitment scheme.
 pub mod pedersen;
 
-
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
 /// The construction is detailed in [[BCMS20]][pcdas].

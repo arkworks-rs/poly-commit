@@ -111,10 +111,7 @@ where
         (lr[0], lr[1])
     }
 
-    fn even_folding_step(
-        comm_key: &[G],
-        round_challenge: G::ScalarField,
-    ) -> Vec<G> {
+    fn even_folding_step(comm_key: &[G], round_challenge: G::ScalarField) -> Vec<G> {
         let n = comm_key.len();
         let (key_l, key_r) = comm_key.split_at(n / 2);
         if n == 2 {
@@ -144,11 +141,25 @@ where
         let l_bases = [key_l_1, key_r_1, &[h_prime]].concat();
         let r_bases = [key_l_2, key_r_2, &[h_prime]].concat();
 
-        let coeffs_r_round_ch = ark_std::cfg_iter!(coeffs_r).map(|c| round_challenge * c).collect::<Vec<_>>();
-        let coeffs_l_round_ch = ark_std::cfg_iter!(coeffs_l).map(|c| round_challenge * c).collect::<Vec<_>>();
+        let coeffs_r_round_ch = ark_std::cfg_iter!(coeffs_r)
+            .map(|c| round_challenge * c)
+            .collect::<Vec<_>>();
+        let coeffs_l_round_ch = ark_std::cfg_iter!(coeffs_l)
+            .map(|c| round_challenge * c)
+            .collect::<Vec<_>>();
 
-        let l_coeffs = [coeffs_r, &coeffs_r_round_ch, &[Self::inner_product(coeffs_r, z_l)]].concat();
-        let r_coeffs = [coeffs_l, &coeffs_l_round_ch, &[Self::inner_product(coeffs_l, z_r)]].concat();
+        let l_coeffs = [
+            coeffs_r,
+            &coeffs_r_round_ch,
+            &[Self::inner_product(coeffs_r, z_l)],
+        ]
+        .concat();
+        let r_coeffs = [
+            coeffs_l,
+            &coeffs_l_round_ch,
+            &[Self::inner_product(coeffs_l, z_r)],
+        ]
+        .concat();
 
         let l = Self::cm_commit(&l_bases, &l_coeffs, None, None);
         let r = Self::cm_commit(&r_bases, &r_coeffs, None, None);
@@ -177,8 +188,7 @@ where
                 .zip(key_l_2)
                 .zip(key_r_2)
                 .map(|(((k_l_1, k_r_1), k_l_2), k_r_2)| {
-                    k_l_2.mul(round_challenge)
-                        .add_mixed(k_l_1)
+                    k_l_2.mul(round_challenge).add_mixed(k_l_1)
                         + &k_r_1.mul(prev_round_challenge)
                         + &k_r_2.mul(prev_round_challenge * &round_challenge)
                 })
@@ -187,7 +197,6 @@ where
 
         G::Projective::batch_normalization_into_affine(&key_proj)
     }
-
 
     #[inline]
     fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
@@ -258,12 +267,9 @@ where
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
         let mut sponge = S::new();
-        absorb!(
-            &mut sponge,
-            &ark_ff::to_bytes![combined_commitment].unwrap(),
-            &point,
-            &combined_v
-        );
+        // TODO: Separate absorption
+        sponge.absorb(&ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap());
+
         let mut round_challenge = sponge
             .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
             .pop()
@@ -278,11 +284,15 @@ where
 
         for (l, r) in l_iter.zip(r_iter) {
             let mut sponge = S::new();
-            absorb!(
-                &mut sponge,
-                &ark_ff::to_bytes![round_challenge].unwrap()[0..16],
-                &ark_ff::to_bytes![l].unwrap(),
-                &ark_ff::to_bytes![r].unwrap()
+
+            let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
+            round_challenge_bytes.resize_with(16, || 0u8);
+            // TODO: Separate absorption
+            sponge.absorb(
+                &round_challenge_bytes
+                    .into_iter()
+                    .chain(ark_ff::to_bytes![l, r].unwrap())
+                    .collect::<Vec<_>>(),
             );
 
             round_challenge = sponge
@@ -730,8 +740,8 @@ where
                 .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
-            combined_commitment_proj +=
-                &(hiding_commitment_proj.mul(hiding_challenge.into()) - &ck.s.mul(combined_rand.into()));
+            combined_commitment_proj += &(hiding_commitment_proj.mul(hiding_challenge.into())
+                - &ck.s.mul(combined_rand.into()));
 
             end_timer!(hiding_time);
         }
@@ -749,15 +759,14 @@ where
 
         // ith challenge
         let mut sponge = S::new();
-        absorb![
-            &mut sponge,
-            &ark_ff::to_bytes![combined_commitment].unwrap(),
-            point,
-            &combined_v
-        ];
-        let mut round_challenge = sponge.squeeze_field_elements_with_sizes(
-            &[ark_sponge::FieldElementSize::Truncated{ num_bits: 128 }]
-        ).pop().unwrap();
+        sponge.absorb(&ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap());
+
+        let mut round_challenge = sponge
+            .squeeze_field_elements_with_sizes(&[ark_sponge::FieldElementSize::Truncated {
+                num_bits: 128,
+            }])
+            .pop()
+            .unwrap();
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
@@ -793,12 +802,7 @@ where
             let (coeffs_l, coeffs_r) = coeffs.split_at_mut(n / 2);
             let (z_l, z_r) = z.split_at_mut(n / 2);
             let (l, r) = if i % 2 == 0 {
-                Self::even_commitment_step(
-                    comm_key,
-                    h_prime,
-                    (coeffs_l, coeffs_r),
-                    (z_l, z_r),
-                )
+                Self::even_commitment_step(comm_key, h_prime, (coeffs_l, coeffs_r), (z_l, z_r))
             } else {
                 Self::odd_commitment_step(
                     comm_key,
@@ -813,12 +817,16 @@ where
             r_vec.push(r);
 
             let mut sponge = S::new();
-            absorb![
-                &mut sponge,
-                &ark_ff::to_bytes![round_challenge].unwrap()[0..16],
-                &ark_ff::to_bytes![l].unwrap(),
-                &ark_ff::to_bytes![r].unwrap()
-            ];
+
+            let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
+            round_challenge_bytes.resize_with(16, || 0u8);
+            sponge.absorb(
+                &round_challenge_bytes
+                    .into_iter()
+                    .chain(ark_ff::to_bytes![l, r].unwrap())
+                    .collect::<Vec<_>>(),
+            );
+
             let prev_round_challenge = round_challenge;
             round_challenge = sponge
                 .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
@@ -834,7 +842,6 @@ where
             ark_std::cfg_iter_mut!(z_l)
                 .zip(z_r)
                 .for_each(|(z_l, z_r)| *z_l += &(round_challenge * &*z_r));
-
 
             coeffs = coeffs_l;
             z = z_l;
@@ -1206,9 +1213,9 @@ mod tests {
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_sponge::digest_sponge::DigestSponge;
     use ark_sponge::dummy::DummySponge;
     use blake2::Blake2s;
-    use ark_sponge::digest_sponge::DigestSponge;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;

@@ -1,13 +1,13 @@
 use crate::*;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Cow,
+    io::{Read, Write},
     marker::PhantomData,
     ops::{Add, AddAssign},
-    io::{Read, Write},
 };
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]

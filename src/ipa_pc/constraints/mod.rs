@@ -7,12 +7,15 @@ use ark_marlin::fiat_shamir::{AlgebraicSponge, FiatShamirRng};
 use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
+use ark_r1cs_std::R1CSVar;
 use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
+use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
 pub mod data_structures;
+use ark_ec::group::Group;
 use ark_r1cs_std::bits::uint8::UInt8;
 pub use data_structures::*;
 
@@ -47,6 +50,7 @@ where
         proof_var: &ProofVar<G, C>,
         opening_challenge_vars: &dyn Fn(u64) -> NNFieldVar<G>,
     ) -> Result<(Boolean<ConstraintF<G>>, SuccinctCheckPolynomialVar<G>), SynthesisError> {
+        let start = cs.num_constraints();
         let d = vk_var.supported_degree();
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
@@ -59,17 +63,29 @@ where
             commitment_vars.into_iter().zip(value_vars).enumerate()
         {
             let cur_challenge_var: NNFieldVar<G> = opening_challenge_vars((2 * i) as u64);
-            combined_eval_var += &((&cur_challenge_var).mul(value_var));
-            combined_commitment_var += &commitment_var
-                .comm_var
-                .scalar_mul_le((cur_challenge_var.to_bits_le()?).iter())?;
+            // TODO: A bit hacky. May want to revert or change later on?
+            // TODO: Replace combined_eval_var operations with mul_without_reduce?
+            if !cur_challenge_var.is_one()?.value()? {
+                combined_eval_var += &((&cur_challenge_var).mul(value_var));
+                combined_commitment_var += &commitment_var
+                    .comm_var
+                    .scalar_mul_le((cur_challenge_var.to_bits_le()?).iter())?;
+            } else {
+                combined_eval_var += value_var;
+                combined_commitment_var += &commitment_var.comm_var;
+            }
 
             if let Some((degree_bound, shifted_commitment_var)) = &commitment_var.shifted_comm_var {
-                let cur_challenge_var: NNFieldVar<G> = opening_challenge_vars((2 * i + 1) as u64);
                 let shift_var = point_var.pow_by_constant(&[(d - degree_bound) as u64])?;
-                combined_eval_var += &((&cur_challenge_var).mul((&value_var).mul(&shift_var)));
-                combined_commitment_var += &shifted_commitment_var
-                    .scalar_mul_le((cur_challenge_var.to_bits_le()?).iter())?;
+                let cur_challenge_var: NNFieldVar<G> = opening_challenge_vars((2 * i + 1) as u64);
+                if !cur_challenge_var.is_one()?.value()? {
+                    combined_eval_var += &((&cur_challenge_var).mul((&value_var).mul(&shift_var)));
+                    combined_commitment_var += &shifted_commitment_var
+                        .scalar_mul_le((cur_challenge_var.to_bits_le()?).iter())?;
+                } else {
+                    combined_eval_var += &(&value_var).mul(&shift_var);
+                    combined_commitment_var += shifted_commitment_var;
+                }
             }
         }
 
@@ -77,7 +93,9 @@ where
         let point_bytes_var = point_var.to_bytes()?;
 
         if let Some((hiding_comm_var, rand_var)) = &proof_var.hiding_var {
-            let mut hiding_challenge_sponge_var = SV::new(cs.clone());
+            let mut hiding_challenge_sponge_var =
+                SV::new(ns!(cs, "hiding_challenge_sponge_var").cs());
+
             hiding_challenge_sponge_var
                 .absorb_bytes(combined_commitment_var.to_bytes()?.as_slice())?;
             hiding_challenge_sponge_var.absorb_bytes(hiding_comm_var.to_bytes()?.as_slice())?;
@@ -93,10 +111,17 @@ where
         let mut round_challenge_vars = Vec::with_capacity(log_d);
 
         // Challenge for each round
-        let mut round_challenge_sponge_var = SV::new(cs.clone());
-        round_challenge_sponge_var.absorb_bytes(combined_commitment_var.to_bytes()?.as_slice())?;
-        round_challenge_sponge_var.absorb_bytes(point_bytes_var.as_slice());
-        round_challenge_sponge_var.absorb_bytes(combined_eval_bytes_var.as_slice());
+        let mut round_challenge_sponge_var =
+            SV::new(ns!(cs, "round_challenge_sponge_var_init").cs());
+        round_challenge_sponge_var.absorb_bytes(
+            combined_commitment_var
+                .to_bytes()?
+                .into_iter()
+                .chain(point_bytes_var.clone())
+                .chain(combined_eval_bytes_var.clone())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )?;
 
         // Initialize challenges
         let mut round_challenge_field_elements_and_bits =
@@ -112,10 +137,22 @@ where
             + &h_prime_var.scalar_mul_le(combined_eval_bytes_var.to_bits_le()?.iter())?;
 
         for (l_var, r_var) in proof_var.l_var_vec.iter().zip(&proof_var.r_var_vec) {
-            let mut round_challenge_sponge_var = SV::new(cs.clone());
-            round_challenge_sponge_var.absorb_bytes(&(round_challenge_var.to_bytes()?)[0..16])?;
-            round_challenge_sponge_var.absorb_bytes(l_var.to_bytes()?.as_slice())?;
-            round_challenge_sponge_var.absorb_bytes(r_var.to_bytes()?.as_slice())?;
+            let mut round_challenge_sponge_var =
+                SV::new(ns!(cs, "round_challenge_sponge_var").cs());
+
+            let round_challenge_bytes_var = round_challenge_bits_var
+                .chunks(8)
+                .map(UInt8::<ConstraintF<G>>::from_bits_le)
+                .collect::<Vec<_>>();
+
+            round_challenge_sponge_var.absorb_bytes(
+                round_challenge_bytes_var
+                    .into_iter()
+                    .chain(l_var.to_bytes()?)
+                    .chain(r_var.to_bytes()?)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?;
 
             // Update challenges
             round_challenge_field_elements_and_bits =
@@ -141,6 +178,7 @@ where
         )?;
 
         let result_var = round_commitment_var.is_eq(&check_commitment_elem_var)?;
+        println!("Succinct_check {:}", cs.num_constraints() - start);
         Ok((result_var, check_poly_var))
     }
 
@@ -167,7 +205,7 @@ where
         }
 
         let (succinct_check_result_var, check_poly_var) = Self::succinct_check(
-            cs.clone(),
+            ns!(cs, "succinct_check").cs(),
             vk_var,
             commitment_vars,
             point_var,

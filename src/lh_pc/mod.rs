@@ -1,11 +1,12 @@
-use crate::{BTreeMap, BTreeSet, ToString, Vec, PolynomialLabel};
-use crate::{
-    Error, Evaluations, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PolynomialCommitment, QuerySet, PCUniversalParams,
-};
 use crate::pedersen;
 use crate::pedersen::PedersenCommitment;
-use ark_ff::{Field, UniformRand, Zero};
+use crate::{BTreeMap, BTreeSet, PolynomialLabel, ToString, Vec};
+use crate::{
+    Error, Evaluations, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams,
+    PolynomialCommitment, QuerySet,
+};
 use ark_ec::AffineCurve;
+use ark_ff::{Field, UniformRand, Zero};
 use ark_std::vec;
 use core::marker::PhantomData;
 use rand_core::RngCore;
@@ -68,7 +69,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         _: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        let lh_pp = PedersenCommitment::setup(max_degree + 1, rng).map_err(|e| LHPCError::lh_error(e))?;
+        let lh_pp =
+            PedersenCommitment::setup(max_degree + 1, rng).map_err(|e| LHPCError::lh_error(e))?;
         Ok(UniversalParameters(lh_pp))
     }
 
@@ -82,7 +84,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
             return Err(LHPCError::pc_error(Error::TrimmingDegreeTooLarge));
         }
 
-        let lh_ck = PedersenCommitment::trim(&pp.0, supported_degree + 1).map_err(|e| LHPCError::lh_error(e))?;
+        let lh_ck = PedersenCommitment::trim(&pp.0, supported_degree + 1)
+            .map_err(|e| LHPCError::lh_error(e))?;
         let ck = CommitterKey(lh_ck.clone());
         let vk = ck.clone();
         Ok((ck, vk))
@@ -113,14 +116,11 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
                 coeffs.push(G::ScalarField::zero());
             }
 
-            let lh_commitment =
-                PedersenCommitment::commit(&ck.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+            let lh_commitment = PedersenCommitment::commit(&ck.0, coeffs.as_slice())
+                .map_err(|e| LHPCError::lh_error(e))?;
             let comm = Commitment(lh_commitment);
-            let labeled_comm = LabeledCommitment::new(
-                labeled_polynomial.label().clone(),
-                comm,
-                None,
-            );
+            let labeled_comm =
+                LabeledCommitment::new(labeled_polynomial.label().clone(), comm, None);
             commitments.push(labeled_comm);
         }
 
@@ -152,7 +152,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
             i += 1;
         }
 
-        let combined_polynomial = LabeledPolynomial::new(PolynomialLabel::new(), combined_polynomial, None, None);
+        let combined_polynomial =
+            LabeledPolynomial::new(PolynomialLabel::new(), combined_polynomial, None, None);
 
         let proof = Proof(combined_polynomial);
         Ok(proof)
@@ -202,8 +203,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         }
 
         let accumulated_commitment = scalar_commitment_pairs.into_iter().sum();
-        let expected_commitment =
-            PedersenCommitment::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+        let expected_commitment = PedersenCommitment::commit(&vk.0, coeffs.as_slice())
+            .map_err(|e| LHPCError::lh_error(e))?;
 
         Ok(expected_commitment.eq(&accumulated_commitment))
     }
@@ -246,8 +247,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
             while coeffs.len() < supported_degree + 1 {
                 coeffs.push(G::ScalarField::zero());
             }
-            let proof_commitment =
-                PedersenCommitment::commit(&vk.0, coeffs.as_slice()).map_err(|e| LHPCError::lh_error(e))?;
+            let proof_commitment = PedersenCommitment::commit(&vk.0, coeffs.as_slice())
+                .map_err(|e| LHPCError::lh_error(e))?;
             randomizers.push(query_challenge);
             proof_commitments.push(proof_commitment);
 
@@ -278,7 +279,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         let expected_scalar_commitment_pairs: Vec<(G::ScalarField, &pedersen::Commitment<G>)> =
             randomizers.into_iter().zip(&proof_commitments).collect();
 
-        let accumulated_commitment: pedersen::Commitment<G> = scalar_commitment_pairs.into_iter().sum();
+        let accumulated_commitment: pedersen::Commitment<G> =
+            scalar_commitment_pairs.into_iter().sum();
         let expected_commitment: pedersen::Commitment<G> =
             expected_scalar_commitment_pairs.into_iter().sum();
 
@@ -373,8 +375,8 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use crate::pedersen::PedersenCommitment;
     use super::LinearHashPC;
+    use crate::pedersen::PedersenCommitment;
 
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ed_on_bls12_381::Fr;

@@ -4,8 +4,11 @@ use crate::{
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
-use ark_std::{io::{Read, Write}, ops::{Add, AddAssign}};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::{
+    io::{Read, Write},
+    ops::{Add, AddAssign},
+};
 use rand_core::RngCore;
 
 use crate::kzg10;

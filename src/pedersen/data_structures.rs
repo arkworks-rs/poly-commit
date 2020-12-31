@@ -1,9 +1,12 @@
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{PrimeField, ToBytes, Zero};
-use ark_std::{io::{Read, Write}, ops::{Add, Mul}};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::vec::Vec;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
+use ark_std::{
+    io::{Read, Write},
+    ops::{Add, Mul},
+};
 
 use ark_std::iter::Sum;
 #[cfg(feature = "parallel")]

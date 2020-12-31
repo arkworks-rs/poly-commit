@@ -560,7 +560,11 @@ where
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
                 randomness += (*coeff, cur_rand);
-                comm += &curr_comm.commitment().0.into_projective().mul((*coeff).into());
+                comm += &curr_comm
+                    .commitment()
+                    .0
+                    .into_projective()
+                    .mul((*coeff).into());
             }
 
             let lc_poly =

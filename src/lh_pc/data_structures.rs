@@ -1,11 +1,14 @@
-use crate::{PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey, LabeledPolynomial};
-use ark_ff::{to_bytes, Field, ToBytes, Zero};
+use crate::pedersen;
+use crate::{
+    LabeledPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
+    PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,
+};
 use ark_ec::AffineCurve;
+use ark_ff::{to_bytes, Field, ToBytes, Zero};
 use ark_poly::UVPolynomial;
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use rand_core::RngCore;
-use crate::pedersen;
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParameters<G: AffineCurve>(pub(crate) pedersen::UniversalParams<G>);
@@ -41,9 +44,7 @@ impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     }
 }
 
-impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>>
-    for VerifierKey<G>
-{
+impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for VerifierKey<G> {
     fn prepare(vk: &VerifierKey<G>) -> Self {
         vk.clone()
     }
@@ -66,9 +67,7 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
     }
 }
 
-impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>>
-    for Commitment<G>
-{
+impl<G: AffineCurve> PCPreparedCommitment<Commitment<G>> for Commitment<G> {
     fn prepare(comm: &Commitment<G>) -> Self {
         comm.clone()
     }
