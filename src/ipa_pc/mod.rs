@@ -1216,6 +1216,7 @@ mod tests {
     use ark_sponge::digest_sponge::DigestSponge;
     use ark_sponge::dummy::DummySponge;
     use blake2::Blake2s;
+    use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;

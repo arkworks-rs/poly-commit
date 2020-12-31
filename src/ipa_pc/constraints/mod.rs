@@ -43,7 +43,7 @@ where
     /// O(log d), where d is the degree of the committed polynomials.
     pub fn succinct_check<'a>(
         cs: ConstraintSystemRef<ConstraintF<G>>,
-        vk_var: &VerifierKeyVar<G, C>,
+        svk_var: &SuccinctVerifierKeyVar<G, C>,
         commitment_vars: impl IntoIterator<Item = &'a CommitmentVar<G, C>>,
         point_var: &NNFieldVar<G>,
         value_vars: impl IntoIterator<Item = &'a NNFieldVar<G>>,
@@ -51,7 +51,7 @@ where
         opening_challenge_vars: &dyn Fn(u64) -> NNFieldVar<G>,
     ) -> Result<(Boolean<ConstraintF<G>>, SuccinctCheckPolynomialVar<G>), SynthesisError> {
         let start = cs.num_constraints();
-        let d = vk_var.supported_degree();
+        let d = svk_var.supported_degree;
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ark_std::log2(d + 1) as usize;
@@ -105,7 +105,7 @@ where
             let hiding_challenge_bits_var = hiding_challenge_sponge_var.squeeze_bits(128)?;
             combined_commitment_var += &(hiding_comm_var
                 .scalar_mul_le(hiding_challenge_bits_var.iter())?
-                - &(vk_var.s_var.scalar_mul_le(rand_var.iter())?));
+                - &(svk_var.s_var.scalar_mul_le(rand_var.iter())?));
         }
 
         let mut round_challenge_vars = Vec::with_capacity(log_d);
@@ -129,7 +129,7 @@ where
         let mut round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
         let mut round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
-        let h_prime_var = vk_var
+        let h_prime_var = svk_var
             .h_var
             .scalar_mul_le(round_challenge_bits_var.iter())?;
 
@@ -182,6 +182,7 @@ where
         Ok((result_var, check_poly_var))
     }
 
+    /*
     pub fn check<'a>(
         cs: ConstraintSystemRef<ConstraintF<G>>,
         vk_var: &VerifierKeyVar<G, C>,
@@ -231,14 +232,14 @@ where
             check_result_var.and(&(final_key_var.is_eq(&proof_var.final_comm_key_var)?))?;
         Ok(check_result_var)
     }
+
+     */
 }
 
 #[cfg(test)]
 pub mod tests {
-    use crate::ipa_pc::constraints::{
-        CommitmentVar, InnerProductArgPCGadget, NNFieldVar, ProofVar, VerifierKeyVar,
-    };
-    use crate::ipa_pc::InnerProductArgPC;
+    use crate::ipa_pc::constraints::{CommitmentVar, InnerProductArgPCGadget, NNFieldVar, ProofVar, VerifierKeyVar, SuccinctVerifierKeyVar};
+    use crate::ipa_pc::{InnerProductArgPC, SuccinctVerifierKey};
     use crate::{LabeledPolynomial, PolynomialCommitment, PolynomialLabel};
     use ark_ed_on_bls12_381::constraints::EdwardsVar;
     use ark_ed_on_bls12_381::EdwardsAffine;
@@ -257,10 +258,10 @@ pub mod tests {
     use ark_sponge::poseidon::PoseidonSpongeWrapper;
     use blake2::Blake2s;
 
-    type G = EdwardsAffine;
-    type C = EdwardsVar;
-    type F = ark_ed_on_bls12_381::Fr;
-    type ConstraintF = ark_ed_on_bls12_381::Fq;
+    type G = ark_pallas::Affine;
+    type C = ark_pallas::constraints::GVar;
+    type F = ark_pallas::Fr;
+    type ConstraintF = ark_pallas::Fq;
 
     type UniPoly = DensePoly<F>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
@@ -315,8 +316,10 @@ pub mod tests {
         .unwrap());
 
         let cs = ConstraintSystem::<ConstraintF>::new_ref();
-        let vk_var: VerifierKeyVar<G, C> =
-            VerifierKeyVar::<G, C>::new_constant(cs.clone(), vk).unwrap();
+        let svk = SuccinctVerifierKey::from_vk(&vk);
+        let vk_var: SuccinctVerifierKeyVar<G, C> =
+            SuccinctVerifierKeyVar::<G, C>::new_constant(cs.clone(), svk).unwrap();
+
         let commitment_var =
             CommitmentVar::<G, C>::new_constant(cs.clone(), commitment[0].clone()).unwrap();
         let point_var = NNFieldVar::<G>::new_constant(cs.clone(), point).unwrap();
@@ -338,7 +341,7 @@ pub mod tests {
 
          */
 
-        let check = InnerProductArgPCGadget::<G, C, Poseidon, PoseidonVar>::check(
+        let check = InnerProductArgPCGadget::<G, C, Poseidon, PoseidonVar>::succinct_check(
             cs.clone(),
             &vk_var,
             vec![&commitment_var],
@@ -349,7 +352,7 @@ pub mod tests {
         )
         .unwrap();
 
-        check.enforce_equal(&Boolean::TRUE);
+        check.0.enforce_equal(&Boolean::TRUE);
 
         assert!(cs.is_satisfied().unwrap());
     }

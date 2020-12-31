@@ -1,5 +1,5 @@
-use crate::ipa_pc::{Commitment, CommitterKey, Proof};
-use crate::LabeledCommitment;
+use crate::ipa_pc::{Commitment, CommitterKey, Proof, SuccinctVerifierKey};
+use crate::{LabeledCommitment, PCVerifierKey};
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
 use ark_ff::One;
@@ -17,6 +17,50 @@ use ark_std::marker::PhantomData;
 
 pub type ConstraintF<G> = <<G as AffineCurve>::BaseField as Field>::BasePrimeField;
 pub type NNFieldVar<G> = NonNativeFieldVar<<G as AffineCurve>::ScalarField, ConstraintF<G>>;
+
+pub struct SuccinctVerifierKeyVar<G, C>
+    where
+        G: AffineCurve,
+        C: CurveVar<G::Projective, ConstraintF<G>>,
+{
+    /// A random group generator.
+    pub h_var: C,
+
+    /// A random group generator that is to be used to make
+    /// a commitment hiding.
+    pub s_var: C,
+
+    pub supported_degree: usize,
+
+    /// Phantom data
+    pub _affine: PhantomData<G>,
+}
+
+impl<G, C> AllocVar<SuccinctVerifierKey<G>, ConstraintF<G>> for SuccinctVerifierKeyVar<G, C>
+    where
+        G: AffineCurve,
+        C: CurveVar<G::Projective, ConstraintF<G>>,
+{
+    fn new_variable<T: Borrow<SuccinctVerifierKey<G>>>(
+        cs: impl Into<Namespace<ConstraintF<G>>>,
+        f: impl FnOnce() -> Result<T, SynthesisError>,
+        mode: AllocationMode,
+    ) -> Result<Self, SynthesisError> {
+        let ns = cs.into();
+        let key = f()?;
+
+        let supported_degree = key.borrow().supported_degree;
+        let h_var = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
+        let s_var = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
+
+        Ok(Self {
+            h_var,
+            s_var,
+            supported_degree,
+            _affine: PhantomData,
+        })
+    }
+}
 
 pub struct CommitterKeyVar<G, C>
 where

@@ -58,6 +58,23 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 pub type VerifierKey<G> = CommitterKey<G>;
 
+#[derive(Default, Hash, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct SuccinctVerifierKey<G: AffineCurve> {
+    pub h: G,
+    pub s: G,
+    pub supported_degree: usize,
+}
+
+impl<G: AffineCurve> SuccinctVerifierKey<G> {
+    pub fn from_vk(vk: &VerifierKey<G>) -> Self {
+        Self {
+            h: vk.h,
+            s: vk.s,
+            supported_degree: vk.comm_key.len() - 1
+        }
+    }
+}
+
 impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     fn max_degree(&self) -> usize {
         self.max_degree
