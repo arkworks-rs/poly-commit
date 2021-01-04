@@ -1,3 +1,7 @@
+use crate::multilinear_pc::data_structures::{
+    Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
+};
+use crate::Error;
 use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField};
@@ -6,26 +10,22 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_std::collections::LinkedList;
 use ark_std::iter::FromIterator;
 use ark_std::marker::PhantomData;
+use ark_std::vec::Vec;
 use ark_std::UniformRand;
 use rand_core::RngCore;
-
-use crate::multilinear_pc::data_structures::{
-    Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
-};
-use crate::Error;
 
 /// data structures used by multilinear extension commitment scheme
 pub mod data_structures;
 
 /// Polynomial Commitment Scheme on multilinear extensions.
-pub struct MultilinearPC<E: PairingEngine, P: MultilinearExtension<E::Fr>> {
+pub struct MultilinearPC<E: PairingEngine> {
     _engine: PhantomData<E>,
-    _polynomial: PhantomData<P>,
 }
 
-impl<E: PairingEngine, P: MultilinearExtension<E::Fr>> MultilinearPC<E, P> {
+impl<E: PairingEngine> MultilinearPC<E> {
     /// setup
     pub fn setup<R: RngCore>(num_vars: usize, rng: &mut R) -> Result<UniversalParams<E>, Error> {
+        assert!(num_vars > 0, "constant polynomial not supported");
         let g: E::G1Projective = E::G1Projective::rand(rng);
         let h: E::G2Projective = E::G2Projective::rand(rng);
         let g = g.into_affine();
@@ -254,4 +254,87 @@ fn eq_extension<F: Field>(t: &[F]) -> Vec<DenseMultilinearExtension<F>> {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::multilinear_pc::data_structures::UniversalParams;
+    use crate::multilinear_pc::MultilinearPC;
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::PairingEngine;
+    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+    use ark_std::vec::Vec;
+    use ark_std::{test_rng, UniformRand};
+    use rand_core::RngCore;
+    type E = Bls12_381;
+    type Fr = <E as PairingEngine>::Fr;
+
+    fn test_polynomial<R: RngCore>(
+        uni_params: &UniversalParams<E>,
+        poly: &impl MultilinearExtension<Fr>,
+        rng: &mut R,
+    ) {
+        let nv = uni_params.nv;
+        assert_ne!(nv, 0);
+        let (ck, vk) = MultilinearPC::<E>::get_keys(&uni_params);
+        let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
+        let com = MultilinearPC::commit(&ck, poly);
+        let proof = MultilinearPC::open(&ck, poly, &point);
+
+        let value = poly.evaluate(&point);
+        let result = MultilinearPC::check(&vk, &com, &point, value, &proof);
+        assert!(result);
+    }
+
+    #[test]
+    fn setup_commit_verify_correct_polynomials() {
+        let mut rng = test_rng();
+
+        // normal polynomials
+        let uni_params =
+            MultilinearPC::setup(10, &mut rng).expect("Unable to Setup Universal Parameters");
+
+        let poly1 = DenseMultilinearExtension::rand(10, 10, &mut rng);
+        test_polynomial(&uni_params, &poly1, &mut rng);
+
+        let poly2 = SparseMultilinearExtension::rand_with_config(10, 1 << 5, &mut rng);
+        test_polynomial(&uni_params, &poly2, &mut rng);
+
+        // single-variate polynomials
+        let uni_params_2 = MultilinearPC::setup(1, &mut rng)
+            .expect("Unable to setup single-variate universal parameters");
+
+        let poly3 = DenseMultilinearExtension::rand(1, 1, &mut rng);
+        test_polynomial(&uni_params_2, &poly3, &mut rng);
+
+        let poly4 = SparseMultilinearExtension::rand_with_config(1, 1 << 1, &mut rng);
+        test_polynomial(&uni_params_2, &poly4, &mut rng);
+    }
+
+    #[test]
+    #[should_panic]
+    fn setup_commit_verify_constant_polynomial() {
+        let mut rng = test_rng();
+
+        // normal polynomials
+        MultilinearPC::<E>::setup(0, &mut rng).unwrap();
+    }
+
+    #[test]
+    fn setup_commit_verify_incorrect_polynomial() {
+        let mut rng = test_rng();
+        let nv = 8;
+        let uni_params =
+            MultilinearPC::setup(nv, &mut rng).expect("Unable to Setup Universal Parameters");
+        let poly = DenseMultilinearExtension::rand(nv, nv, &mut rng);
+        let nv = uni_params.nv;
+        let (ck, vk) = MultilinearPC::<E>::get_keys(&uni_params);
+        let point: Vec<_> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
+        let com = MultilinearPC::commit(&ck, &poly);
+        let proof = MultilinearPC::open(&ck, &poly, &point);
+
+        let value = poly.evaluate(&point);
+        let result = MultilinearPC::check(&vk, &com, &point, value + &(1u16.into()), &proof);
+        assert!(!result);
+    }
 }
