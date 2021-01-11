@@ -2,14 +2,14 @@
 name = "ark-poly-commit"
 version = "0.1.0"
 authors = [
-  "Alessandro Chiesa <alexch@berkeley.edu>",
-  "Mary Maller <mary.maller.15@ucl.ac.uk>",
-  "Yuncong Hu <huyuncongh@gmail.com>",
-  "William Lin",
-  "Pratyush Mishra <pratyush@berkeley.edu>",
-  "Noah Vesely <noah.vesely.18@ucl.ac.uk>",
-  "Nicholas Ward <npward@berkeley.edu>",
-  "arkworks contributors"
+    "Alessandro Chiesa <alexch@berkeley.edu>",
+    "Mary Maller <mary.maller.15@ucl.ac.uk>",
+    "Yuncong Hu <huyuncongh@gmail.com>",
+    "William Lin",
+    "Pratyush Mishra <pratyush@berkeley.edu>",
+    "Noah Vesely <noah.vesely.18@ucl.ac.uk>",
+    "Nicholas Ward <npward@berkeley.edu>",
+    "arkworks contributors"
 ]
 description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
 repository = "https://github.com/arkworks-rs/poly-commit"
@@ -21,29 +21,29 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-ark-serialize = { git = "https://github.com/tsunrise/algebra/", branch="multilinear", default-features = false, features = [ "derive" ] }
-ark-ff = { git = "https://github.com/tsunrise/algebra/", branch="multilinear", default-features = false }
-ark-ec = { git = "https://github.com/tsunrise/algebra/", branch="multilinear", default-features = false }
-ark-poly = { git = "https://github.com/tsunrise/algebra/", branch="multilinear", default-features = false }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra/", default-features = false, features = ["derive"] }
+ark-ff = { git = "https://github.com/arkworks-rs/algebra/", default-features = false }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra/", default-features = false }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra/", default-features = false }
 
 ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = false }
-#ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false, optional = true }
-#ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", default-features = false, optional = true }
-#ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative", default-features = false, optional = true }
+ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false, optional = true }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", default-features = false, optional = true }
+ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative", default-features = false, optional = true }
 hashbrown = { version = "0.9", optional = true }
 
-bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
+bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false }
 
 rand_core = { version = "0.5", default-features = false }
 digest = "0.8"
 rayon = { version = "1", optional = true }
-derivative = { version = "2", features = [ "use_core" ] }
+derivative = { version = "2", features = ["use_core"] }
 
 [dev-dependencies]
 rand = { version = "0.7", default-features = false }
-ark-ed-on-bls12-381 = { git = "https://github.com/tsunrise/curves", branch="multilinear", default-features = false }
-ark-bls12-381 = { git = "https://github.com/tsunrise/curves", branch="multilinear", default-features = false, features = [ "curve" ] }
-ark-bls12-377 = { git = "https://github.com/tsunrise/curves", branch="multilinear", default-features = false, features = [ "curve" ] }
+ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-features = false }
+ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = ["curve"] }
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = ["curve"] }
 blake2 = { version = "0.8", default-features = false }
 
 [profile.release]
@@ -59,8 +59,8 @@ incremental = true
 debug = true
 
 [features]
-default = [ "std", "parallel" ]
-std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-serialize/std" ]
-#r1cs = [ "ark-relations", "ark-r1cs-std", "ark-nonnative-field", "hashbrown" ]
-print-trace = [ "bench-utils/print-trace" ]
-parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
+default = ["std", "parallel"]
+std = ["ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-serialize/std"]
+r1cs = ["ark-relations", "ark-r1cs-std", "ark-nonnative-field", "hashbrown"]
+print-trace = ["bench-utils/print-trace"]
+parallel = ["std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]

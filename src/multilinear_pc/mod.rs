@@ -281,7 +281,7 @@ mod tests {
         let com = MultilinearPC::commit(&ck, poly);
         let proof = MultilinearPC::open(&ck, poly, &point);
 
-        let value = poly.evaluate(&point);
+        let value = poly.evaluate(&point).unwrap();
         let result = MultilinearPC::check(&vk, &com, &point, value, &proof);
         assert!(result);
     }
@@ -294,7 +294,7 @@ mod tests {
         let uni_params =
             MultilinearPC::setup(10, &mut rng).expect("Unable to Setup Universal Parameters");
 
-        let poly1 = DenseMultilinearExtension::rand(10, 10, &mut rng);
+        let poly1 = DenseMultilinearExtension::rand(10, &mut rng);
         test_polynomial(&uni_params, &poly1, &mut rng);
 
         let poly2 = SparseMultilinearExtension::rand_with_config(10, 1 << 5, &mut rng);
@@ -304,7 +304,7 @@ mod tests {
         let uni_params_2 = MultilinearPC::setup(1, &mut rng)
             .expect("Unable to setup single-variate universal parameters");
 
-        let poly3 = DenseMultilinearExtension::rand(1, 1, &mut rng);
+        let poly3 = DenseMultilinearExtension::rand(1, &mut rng);
         test_polynomial(&uni_params_2, &poly3, &mut rng);
 
         let poly4 = SparseMultilinearExtension::rand_with_config(1, 1 << 1, &mut rng);
@@ -326,14 +326,14 @@ mod tests {
         let nv = 8;
         let uni_params =
             MultilinearPC::setup(nv, &mut rng).expect("Unable to Setup Universal Parameters");
-        let poly = DenseMultilinearExtension::rand(nv, nv, &mut rng);
+        let poly = DenseMultilinearExtension::rand(nv, &mut rng);
         let nv = uni_params.nv;
         let (ck, vk) = MultilinearPC::<E>::get_keys(&uni_params);
         let point: Vec<_> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
         let com = MultilinearPC::commit(&ck, &poly);
         let proof = MultilinearPC::open(&ck, &poly, &point);
 
-        let value = poly.evaluate(&point);
+        let value = poly.evaluate(&point).unwrap();
         let result = MultilinearPC::check(&vk, &com, &point, value + &(1u16.into()), &proof);
         assert!(!result);
     }
