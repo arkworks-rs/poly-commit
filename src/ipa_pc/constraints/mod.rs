@@ -160,9 +160,18 @@ where
             round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
             round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
-            round_commitment_var +=
-                &(l_var.scalar_mul_le(round_challenge_var.inverse()?.to_bits_le()?.iter()))?;
-
+            // Instead of directly computing
+            // `l_var.scalar_mul_le(round_challenge_var.inverse()?.to_bits_le()?.iter())`,
+            // we instead allocate a variable `temp` whose value is `l_var * round_challenge.inverse()`,
+            // and then enforce that `temp * round_challenge == l_var`
+            let l_times_round_ch_inv = C::new_witness(ns!(cs, "l * round_ch^{-1}"), || {
+                let mut l_val = l_var.value()?;
+                l_val *= round_challenge_var.value()?.inverse().unwrap();
+                Ok(l_val)
+            })?;
+            let claimed_l_var = l_times_round_ch_inv.scalar_mul_le(round_challenge_bits_var.iter())?;
+            claimed_l_var.enforce_eq(&l_var)?;
+            round_commitment_var += &l_times_round_ch_inv;
             round_commitment_var += &(r_var.scalar_mul_le(round_challenge_bits_var.iter())?);
 
             round_challenge_vars.push(round_challenge_var.clone());
