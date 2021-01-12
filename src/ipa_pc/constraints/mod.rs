@@ -1,5 +1,6 @@
 use crate::Vec;
 use ark_ec::AffineCurve;
+use ark_ff::Field;
 use ark_marlin::fiat_shamir::constraints::{
     AlgebraicSpongeVar, FiatShamirAlgebraicSpongeRngVar, FiatShamirRngVar,
 };
@@ -170,7 +171,7 @@ where
                 Ok(l_val)
             })?;
             let claimed_l_var = l_times_round_ch_inv.scalar_mul_le(round_challenge_bits_var.iter())?;
-            claimed_l_var.enforce_eq(&l_var)?;
+            claimed_l_var.enforce_equal(&l_var)?;
             round_commitment_var += &l_times_round_ch_inv;
             round_commitment_var += &(r_var.scalar_mul_le(round_challenge_bits_var.iter())?);
 
