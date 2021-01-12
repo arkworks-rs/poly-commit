@@ -3,7 +3,7 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
-use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_ff::{to_bytes, Field, One, PrimeField, ToConstraintField, UniformRand, Zero};
 use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::{format, vec};
 use core::{convert::TryInto, marker::PhantomData};
@@ -32,17 +32,19 @@ pub mod constraints;
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct InnerProductArgPC<G, D, P, S>
+pub struct InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve,
-    G::ScalarField: Absorbable<G::ScalarField>,
+    G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
-    S: CryptographicSponge<G::ScalarField>,
+    CF: PrimeField,
+    Vec<CF>: Absorbable<CF>,
+    S: CryptographicSponge<CF>,
 {
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
     _poly: PhantomData<P>,
+    _constraint_field: PhantomData<CF>,
     _sponge: PhantomData<S>,
 }
 
@@ -69,13 +71,14 @@ pub(crate) fn cm_commit<G: AffineCurve>(
     comm
 }
 
-impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
+impl<G, D, P, CF, S> InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve,
-    G::ScalarField: Absorbable<G::ScalarField>,
+    G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
-    S: CryptographicSponge<G::ScalarField>,
+    CF: PrimeField,
+    Vec<CF>: Absorbable<CF>,
+    S: CryptographicSponge<CF>,
 {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
@@ -247,16 +250,18 @@ where
             let hiding_comm = proof.hiding_comm.unwrap();
             let rand = proof.rand.unwrap();
 
-            let mut sponge = S::new();
+            let mut hiding_challenge_sponge = S::new();
             absorb!(
-                &mut sponge,
-                &ark_ff::to_bytes![combined_commitment].unwrap(),
-                &ark_ff::to_bytes![hiding_comm].unwrap(),
-                &point,
-                &combined_v
+                &mut hiding_challenge_sponge,
+                combined_commitment.to_field_elements().unwrap(),
+                hiding_comm.to_field_elements().unwrap(),
+                &to_bytes![point, combined_v].unwrap()
             );
-            let hiding_challenge = sponge
-                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+
+            let hiding_challenge: G::ScalarField = hiding_challenge_sponge
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
+                    num_bits: 128,
+                }])
                 .pop()
                 .unwrap();
 
@@ -266,12 +271,17 @@ where
 
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
-        let mut sponge = S::new();
-        // TODO: Separate absorption
-        sponge.absorb(&ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap());
+        let mut round_challenge_sponge = S::new();
+        absorb!(
+            &mut round_challenge_sponge,
+            combined_commitment.to_field_elements().unwrap(),
+            &to_bytes![point, combined_v].unwrap()
+        );
 
-        let mut round_challenge = sponge
-            .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+        let mut round_challenge: G::ScalarField = round_challenge_sponge
+            .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
+                num_bits: 128,
+            }])
             .pop()
             .unwrap();
 
@@ -283,20 +293,18 @@ where
         let r_iter = proof.r_vec.iter();
 
         for (l, r) in l_iter.zip(r_iter) {
-            let mut sponge = S::new();
+            let mut round_challenge_sponge = S::new();
 
-            let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
+            let mut round_challenge_bytes = to_bytes![round_challenge].unwrap();
             round_challenge_bytes.resize_with(16, || 0u8);
-            // TODO: Separate absorption
-            sponge.absorb(
-                &round_challenge_bytes
-                    .into_iter()
-                    .chain(ark_ff::to_bytes![l, r].unwrap())
-                    .collect::<Vec<_>>(),
-            );
+            round_challenge_sponge.absorb(&round_challenge_bytes);
+            round_challenge_sponge.absorb(&l.to_field_elements().unwrap());
+            round_challenge_sponge.absorb(&r.to_field_elements().unwrap());
 
-            round_challenge = sponge
-                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+            round_challenge = round_challenge_sponge
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
+                    num_bits: 128,
+                }])
                 .pop()
                 .unwrap();
 
@@ -445,13 +453,14 @@ where
     }
 }
 
-impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P, S>
+impl<G, D, P, CF, S> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve,
-    G::ScalarField: Absorbable<G::ScalarField>,
+    G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
-    S: CryptographicSponge<G::ScalarField>,
+    CF: PrimeField,
+    Vec<CF>: Absorbable<CF>,
+    S: CryptographicSponge<CF>,
 {
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
@@ -727,15 +736,17 @@ where
             combined_commitment = batch.pop().unwrap();
 
             let mut sponge = S::new();
-            absorb![
+            absorb!(
                 &mut sponge,
-                &ark_ff::to_bytes![combined_commitment].unwrap(),
-                &ark_ff::to_bytes![hiding_commitment.unwrap()].unwrap(),
-                point,
-                &combined_v
-            ];
-            let hiding_challenge = sponge
-                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                combined_commitment.to_field_elements().unwrap(),
+                hiding_commitment.unwrap().to_field_elements().unwrap(),
+                &to_bytes![point, &combined_v].unwrap()
+            );
+
+            let hiding_challenge: G::ScalarField = sponge
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
+                    num_bits: 128,
+                }])
                 .pop()
                 .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
@@ -759,12 +770,16 @@ where
 
         // ith challenge
         let mut sponge = S::new();
-        sponge.absorb(&ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap());
+        absorb!(
+            &mut sponge,
+            &combined_commitment.to_field_elements().unwrap(),
+            &to_bytes![point, combined_v].unwrap()
+        );
 
-        let mut round_challenge = sponge
-            .squeeze_field_elements_with_sizes(&[ark_sponge::FieldElementSize::Truncated {
-                num_bits: 128,
-            }])
+        let mut round_challenge: G::ScalarField = sponge
+            .squeeze_nonnative_field_elements_with_sizes(&[
+                ark_sponge::FieldElementSize::Truncated { num_bits: 128 },
+            ])
             .pop()
             .unwrap();
 
@@ -820,16 +835,15 @@ where
 
             let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
             round_challenge_bytes.resize_with(16, || 0u8);
-            sponge.absorb(
-                &round_challenge_bytes
-                    .into_iter()
-                    .chain(ark_ff::to_bytes![l, r].unwrap())
-                    .collect::<Vec<_>>(),
-            );
+            sponge.absorb(&round_challenge_bytes);
+            sponge.absorb(&l.to_field_elements().unwrap());
+            sponge.absorb(&r.to_field_elements().unwrap());
 
             let prev_round_challenge = round_challenge;
             round_challenge = sponge
-                .squeeze_field_elements_with_sizes(&[FieldElementSize::Truncated { num_bits: 128 }])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
+                    num_bits: 128,
+                }])
                 .pop()
                 .unwrap();
 
@@ -1210,18 +1224,16 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::InnerProductArgPC;
-    use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
+    use ark_ed_on_bls12_381::{EdwardsAffine, Fq, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
-    use ark_sponge::digest_sponge::DigestSponge;
-    use ark_sponge::dummy::DummySponge;
+    use ark_sponge::poseidon::PoseidonSponge;
     use blake2::Blake2s;
     use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
-    type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
-    type PC_JJB2S =
-        PC<EdwardsAffine, Blake2s, UniPoly, DigestSponge<Fr, Sha512> /*DummySponge*/>;
+    type PC<E, D, P, CF, S> = InnerProductArgPC<E, D, P, CF, S>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, Fq, PoseidonSponge<Fq>>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,

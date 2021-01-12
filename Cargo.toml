@@ -38,10 +38,10 @@ derivative = { version = "2", features = [ "use_core" ] }
 
 # Dependencies for r1cs
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives.git", branch = "main", default-features = false, optional = true }
-ark-marlin = { git = "https://github.com/Will-Lin4/marlin", branch = "constraints", default-features = false, features = [ "density-optimized" ] }
 ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative", default-features = false, optional = true }
 ark-relations = { git = "https://github.com/arkworks-rs/snark", default-features = false, optional = true }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std", default-features = false, optional = true }
+tracing = { version = "0.1", default-features = false, features = [ "attributes" ] }
 
 [dev-dependencies]
 rand = { version = "0.7", default-features = false }
@@ -66,8 +66,8 @@ debug = true
 [features]
 #default = [ "std", "parallel", "r1cs" ]
 default = [ "std", "r1cs" ]
-std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-serialize/std" ]
+std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-serialize/std", "ark-sponge/std" ]
 print-trace = [ "bench-utils/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
-r1cs = [ "ark-crypto-primitives/r1cs", "ark-marlin/density-optimized", "ark-nonnative-field", "ark-relations", "ark-r1cs-std" ]
+r1cs = [ "ark-crypto-primitives/r1cs", "ark-nonnative-field", "ark-relations", "ark-r1cs-std", "ark-sponge/r1cs" ]
 

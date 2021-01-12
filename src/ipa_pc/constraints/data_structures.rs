@@ -19,9 +19,9 @@ pub type ConstraintF<G> = <<G as AffineCurve>::BaseField as Field>::BasePrimeFie
 pub type NNFieldVar<G> = NonNativeFieldVar<<G as AffineCurve>::ScalarField, ConstraintF<G>>;
 
 pub struct SuccinctVerifierKeyVar<G, C>
-    where
-        G: AffineCurve,
-        C: CurveVar<G::Projective, ConstraintF<G>>,
+where
+    G: AffineCurve,
+    C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     /// A random group generator.
     pub h_var: C,
@@ -37,9 +37,9 @@ pub struct SuccinctVerifierKeyVar<G, C>
 }
 
 impl<G, C> AllocVar<SuccinctVerifierKey<G>, ConstraintF<G>> for SuccinctVerifierKeyVar<G, C>
-    where
-        G: AffineCurve,
-        C: CurveVar<G::Projective, ConstraintF<G>>,
+where
+    G: AffineCurve,
+    C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     fn new_variable<T: Borrow<SuccinctVerifierKey<G>>>(
         cs: impl Into<Namespace<ConstraintF<G>>>,

@@ -70,7 +70,7 @@ impl<G: AffineCurve> SuccinctVerifierKey<G> {
         Self {
             h: vk.h,
             s: vk.s,
-            supported_degree: vk.comm_key.len() - 1
+            supported_degree: vk.comm_key.len() - 1,
         }
     }
 }

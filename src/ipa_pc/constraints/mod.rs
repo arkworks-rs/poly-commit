@@ -1,47 +1,43 @@
 use crate::Vec;
+use ark_ec::group::Group;
 use ark_ec::AffineCurve;
 use ark_ff::Field;
-use ark_marlin::fiat_shamir::constraints::{
-    AlgebraicSpongeVar, FiatShamirAlgebraicSpongeRngVar, FiatShamirRngVar,
-};
-use ark_marlin::fiat_shamir::{AlgebraicSponge, FiatShamirRng};
 use ark_r1cs_std::bits::boolean::Boolean;
+use ark_r1cs_std::bits::uint8::UInt8;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
-use ark_r1cs_std::R1CSVar;
+use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
 use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
 use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use ark_sponge::constraints::CryptographicSpongeVar;
+use ark_sponge::FieldElementSize;
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
 pub mod data_structures;
-use ark_ec::group::Group;
-use ark_r1cs_std::bits::uint8::UInt8;
 pub use data_structures::*;
 
-pub struct InnerProductArgPCGadget<G, C, S, SV>
+pub struct InnerProductArgPCGadget<G, C, S>
 where
     G: AffineCurve,
-    C: CurveVar<G::Projective, ConstraintF<G>>,
-    S: FiatShamirRng<G::ScalarField, ConstraintF<G>>,
-    SV: FiatShamirRngVar<G::ScalarField, ConstraintF<G>, S>,
+    C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
+    S: CryptographicSpongeVar<ConstraintF<G>>,
 {
     pub _affine: PhantomData<G>,
     pub _curve_var: PhantomData<C>,
     pub _sponge: PhantomData<S>,
-    pub _sponge_var: PhantomData<SV>,
 }
 
-impl<G, C, S, SV> InnerProductArgPCGadget<G, C, S, SV>
+impl<G, C, S> InnerProductArgPCGadget<G, C, S>
 where
     G: AffineCurve,
-    C: CurveVar<G::Projective, ConstraintF<G>>,
-    S: FiatShamirRng<G::ScalarField, ConstraintF<G>>,
-    SV: FiatShamirRngVar<G::ScalarField, ConstraintF<G>, S>,
+    C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
+    S: CryptographicSpongeVar<ConstraintF<G>>,
 {
     /// The succinct portion of `PC::check`. This algorithm runs in time
     /// O(log d), where d is the degree of the committed polynomials.
+    #[tracing::instrument(target = "r1cs", skip(cs, svk_var, commitment_vars, point_var, value_vars, proof_var, opening_challenge_vars))]
     pub fn succinct_check<'a>(
         cs: ConstraintSystemRef<ConstraintF<G>>,
         svk_var: &SuccinctVerifierKeyVar<G, C>,
@@ -91,17 +87,28 @@ where
         }
 
         let combined_eval_bytes_var = combined_eval_var.to_bytes()?;
-        let point_bytes_var = point_var.to_bytes()?;
+
+        let mut point_and_combined_eval_bytes_var = point_var.to_bytes()?;
+        point_and_combined_eval_bytes_var.extend_from_slice(combined_eval_bytes_var.as_slice());
+
+        let point_and_combined_eval_fp_vars =
+            point_and_combined_eval_bytes_var.to_constraint_field()?;
 
         if let Some((hiding_comm_var, rand_var)) = &proof_var.hiding_var {
             let mut hiding_challenge_sponge_var =
-                SV::new(ns!(cs, "hiding_challenge_sponge_var").cs());
+                S::new(ns!(cs, "hiding_challenge_sponge_var").cs());
 
-            hiding_challenge_sponge_var
-                .absorb_bytes(combined_commitment_var.to_bytes()?.as_slice())?;
-            hiding_challenge_sponge_var.absorb_bytes(hiding_comm_var.to_bytes()?.as_slice())?;
-            hiding_challenge_sponge_var.absorb_bytes(point_bytes_var.as_slice())?;
-            hiding_challenge_sponge_var.absorb_bytes(combined_eval_bytes_var.as_slice())?;
+            hiding_challenge_sponge_var.absorb(
+                combined_commitment_var
+                    .to_constraint_field()?
+                    .as_slice(),
+            )?;
+            hiding_challenge_sponge_var.absorb(
+                hiding_comm_var
+                    .to_constraint_field()?
+                    .as_slice(),
+            )?;
+            hiding_challenge_sponge_var.absorb(point_and_combined_eval_fp_vars.as_slice())?;
 
             let hiding_challenge_bits_var = hiding_challenge_sponge_var.squeeze_bits(128)?;
             combined_commitment_var += &(hiding_comm_var
@@ -113,20 +120,16 @@ where
 
         // Challenge for each round
         let mut round_challenge_sponge_var =
-            SV::new(ns!(cs, "round_challenge_sponge_var_init").cs());
-        round_challenge_sponge_var.absorb_bytes(
-            combined_commitment_var
-                .to_bytes()?
-                .into_iter()
-                .chain(point_bytes_var.clone())
-                .chain(combined_eval_bytes_var.clone())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        )?;
+            S::new(ns!(cs, "round_challenge_sponge_var_init").cs());
+        round_challenge_sponge_var
+            .absorb(combined_commitment_var.to_constraint_field()?.as_slice())?;
+        round_challenge_sponge_var.absorb(point_and_combined_eval_fp_vars.as_slice())?;
 
         // Initialize challenges
-        let mut round_challenge_field_elements_and_bits =
-            round_challenge_sponge_var.squeeze_128_bits_field_elements_and_bits(1)?;
+        let mut round_challenge_field_elements_and_bits = round_challenge_sponge_var
+            .squeeze_nonnative_field_element_with_sizes::<G::ScalarField>(
+            &[FieldElementSize::Truncated { num_bits: 128 }],
+        )?;
         let mut round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
         let mut round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
@@ -138,26 +141,22 @@ where
             + &h_prime_var.scalar_mul_le(combined_eval_bytes_var.to_bits_le()?.iter())?;
 
         for (l_var, r_var) in proof_var.l_var_vec.iter().zip(&proof_var.r_var_vec) {
-            let mut round_challenge_sponge_var =
-                SV::new(ns!(cs, "round_challenge_sponge_var").cs());
+            let mut round_challenge_sponge_var = S::new(ns!(cs, "round_challenge_sponge_var").cs());
 
             let round_challenge_bytes_var = round_challenge_bits_var
                 .chunks(8)
                 .map(UInt8::<ConstraintF<G>>::from_bits_le)
                 .collect::<Vec<_>>();
 
-            round_challenge_sponge_var.absorb_bytes(
-                round_challenge_bytes_var
-                    .into_iter()
-                    .chain(l_var.to_bytes()?)
-                    .chain(r_var.to_bytes()?)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )?;
+            round_challenge_sponge_var.absorb(round_challenge_bytes_var.to_constraint_field()?.as_slice());
+            round_challenge_sponge_var.absorb(l_var.to_constraint_field()?.as_slice());
+            round_challenge_sponge_var.absorb(r_var.to_constraint_field()?.as_slice());
 
             // Update challenges
-            round_challenge_field_elements_and_bits =
-                round_challenge_sponge_var.squeeze_128_bits_field_elements_and_bits(1)?;
+            round_challenge_field_elements_and_bits = round_challenge_sponge_var
+                .squeeze_nonnative_field_element_with_sizes(&[FieldElementSize::Truncated {
+                    num_bits: 128,
+                }])?;
             round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
             round_challenge_bits_var = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
@@ -170,7 +169,8 @@ where
                 l_val *= round_challenge_var.value()?.inverse().unwrap();
                 Ok(l_val)
             })?;
-            let claimed_l_var = l_times_round_ch_inv.scalar_mul_le(round_challenge_bits_var.iter())?;
+            let claimed_l_var =
+                l_times_round_ch_inv.scalar_mul_le(round_challenge_bits_var.iter())?;
             claimed_l_var.enforce_equal(&l_var)?;
             round_commitment_var += &l_times_round_ch_inv;
             round_commitment_var += &(r_var.scalar_mul_le(round_challenge_bits_var.iter())?);
@@ -188,7 +188,7 @@ where
         )?;
 
         let result_var = round_commitment_var.is_eq(&check_commitment_elem_var)?;
-        println!("Succinct_check {:}", cs.num_constraints() - start);
+        //println!("Succinct_check {:}", cs.num_constraints() - start);
         Ok((result_var, check_poly_var))
     }
 
@@ -248,16 +248,15 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::ipa_pc::constraints::{CommitmentVar, InnerProductArgPCGadget, NNFieldVar, ProofVar, VerifierKeyVar, SuccinctVerifierKeyVar};
+    use crate::ipa_pc::constraints::{
+        CommitmentVar, InnerProductArgPCGadget, NNFieldVar, ProofVar, SuccinctVerifierKeyVar,
+        VerifierKeyVar,
+    };
     use crate::ipa_pc::{InnerProductArgPC, SuccinctVerifierKey};
     use crate::{LabeledPolynomial, PolynomialCommitment, PolynomialLabel};
     use ark_ed_on_bls12_381::constraints::EdwardsVar;
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ff::{test_rng, One, UniformRand};
-    use ark_marlin::fiat_shamir::constraints::FiatShamirAlgebraicSpongeRngVar;
-    use ark_marlin::fiat_shamir::poseidon::constraints::PoseidonSpongeVar;
-    use ark_marlin::fiat_shamir::poseidon::PoseidonSponge;
-    use ark_marlin::fiat_shamir::FiatShamirAlgebraicSpongeRng;
     use ark_poly::polynomial::univariate::DensePolynomial;
     use ark_poly::{univariate::DensePolynomial as DensePoly, Polynomial, UVPolynomial};
     use ark_r1cs_std::alloc::AllocVar;
@@ -265,25 +264,18 @@ pub mod tests {
     use ark_r1cs_std::eq::EqGadget;
     use ark_r1cs_std::fields::FieldVar;
     use ark_relations::r1cs::ConstraintSystem;
-    use ark_sponge::poseidon::PoseidonSpongeWrapper;
+    use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
+    use ark_sponge::poseidon::PoseidonSponge;
     use blake2::Blake2s;
 
     type G = ark_pallas::Affine;
     type C = ark_pallas::constraints::GVar;
     type F = ark_pallas::Fr;
-    type ConstraintF = ark_pallas::Fq;
+    type CF = ark_pallas::Fq;
 
     type UniPoly = DensePoly<F>;
-    type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
-    type PC_JJB2S = PC<G, Blake2s, UniPoly, PoseidonSpongeWrapper<F, ConstraintF>>;
-
-    type Poseidon = FiatShamirAlgebraicSpongeRng<F, ConstraintF, PoseidonSponge<ConstraintF>>;
-    type PoseidonVar = FiatShamirAlgebraicSpongeRngVar<
-        F,
-        ConstraintF,
-        PoseidonSponge<ConstraintF>,
-        PoseidonSpongeVar<ConstraintF>,
-    >;
+    type PC<E, D, P, CF, S> = InnerProductArgPC<E, D, P, CF, S>;
+    type PC_JJB2S = PC<G, Blake2s, UniPoly, CF, PoseidonSponge<CF>>;
 
     #[test]
     pub fn basic() {
@@ -325,7 +317,7 @@ pub mod tests {
         )
         .unwrap());
 
-        let cs = ConstraintSystem::<ConstraintF>::new_ref();
+        let cs = ConstraintSystem::<CF>::new_ref();
         let svk = SuccinctVerifierKey::from_vk(&vk);
         let vk_var: SuccinctVerifierKeyVar<G, C> =
             SuccinctVerifierKeyVar::<G, C>::new_constant(cs.clone(), svk).unwrap();
@@ -351,7 +343,7 @@ pub mod tests {
 
          */
 
-        let check = InnerProductArgPCGadget::<G, C, Poseidon, PoseidonVar>::succinct_check(
+        let check = InnerProductArgPCGadget::<G, C, PoseidonSpongeVar<CF>>::succinct_check(
             cs.clone(),
             &vk_var,
             vec![&commitment_var],
