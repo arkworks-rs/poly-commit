@@ -22,12 +22,12 @@ use rand_core::RngCore;
 use ark_std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
+    format,
     hash::Hash,
     iter::FromIterator,
     rc::Rc,
     string::{String, ToString},
     vec::Vec,
-    format
 };
 
 /// Data structures used by a polynomial commitment scheme.
