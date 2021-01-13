@@ -12,16 +12,16 @@ pub type EvaluationHyperCubeOnG2<E: PairingEngine> = Vec<E::G2Affine>;
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 pub struct UniversalParams<E: PairingEngine> {
     /// number of variables
-    pub nv: usize,
-    /// pp_k defined by libra
+    pub num_vars: usize,
+    /// `pp_{num_vars}`, `pp_{num_vars - 1}`, `pp_{num_vars - 2}`, ..., defined by XZZPD19
     pub powers_of_g: Vec<EvaluationHyperCubeOnG1<E>>,
-    /// pp_h defined by libra
+    /// `pp_{num_vars}`, `pp_{num_vars - 1}`, `pp_{num_vars - 2}`, ..., defined by XZZPD19
     pub powers_of_h: Vec<EvaluationHyperCubeOnG2<E>>,
     /// generator for G1
     pub g: E::G1Affine,
     /// generator for G2
     pub h: E::G2Affine,
-    /// g^t1, g^t2, ...
+    /// g^randomness
     pub g_mask: Vec<E::G1Affine>,
 }
 
