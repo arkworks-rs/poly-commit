@@ -22,7 +22,6 @@ use rand_core::RngCore;
 use ark_std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    format,
     hash::Hash,
     iter::FromIterator,
     rc::Rc,
