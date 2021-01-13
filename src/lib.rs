@@ -27,6 +27,7 @@ use ark_std::{
     rc::Rc,
     string::{String, ToString},
     vec::Vec,
+    format
 };
 
 /// Data structures used by a polynomial commitment scheme.
