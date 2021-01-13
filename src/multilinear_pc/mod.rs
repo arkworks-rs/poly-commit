@@ -130,24 +130,6 @@ impl<E: PairingEngine> MultilinearPC<E> {
         (ck, vk)
     }
 
-    /// get committer key and verifier key from universal parameters
-    fn get_keys(params: &UniversalParams<E>) -> (CommitterKey<E>, VerifierKey<E>) {
-        let ck = CommitterKey {
-            powers_of_h: params.powers_of_h.to_vec(),
-            powers_of_g: params.powers_of_g.to_vec(),
-            g: params.g,
-            h: params.h,
-            nv: params.num_vars,
-        };
-        let vk = VerifierKey {
-            nv: params.num_vars,
-            g: params.g.clone(),
-            h: params.h.clone(),
-            g_mask_random: params.g_mask.clone(),
-        };
-        (ck, vk)
-    }
-
     /// commit
     pub fn commit(
         ck: &CommitterKey<E>,
