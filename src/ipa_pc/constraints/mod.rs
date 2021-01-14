@@ -127,7 +127,7 @@ where
 
         // Initialize challenges
         let mut round_challenge_field_elements_and_bits = round_challenge_sponge_var
-            .squeeze_nonnative_field_element_with_sizes::<G::ScalarField>(
+            .squeeze_nonnative_field_elements_with_sizes::<G::ScalarField>(
             &[FieldElementSize::Truncated { num_bits: 128 }],
         )?;
         let mut round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
@@ -154,7 +154,7 @@ where
 
             // Update challenges
             round_challenge_field_elements_and_bits = round_challenge_sponge_var
-                .squeeze_nonnative_field_element_with_sizes(&[FieldElementSize::Truncated {
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
                     num_bits: 128,
                 }])?;
             round_challenge_var = round_challenge_field_elements_and_bits.0.pop().unwrap();
