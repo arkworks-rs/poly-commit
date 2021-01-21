@@ -99,14 +99,15 @@ where
         let powers_of_gamma_g = (0..=supported_hiding_bound + 1)
             .map(|i| pp.powers_of_gamma_g[&i])
             .collect::<Vec<_>>();
+
         end_timer!(ck_time);
 
         // Construct the core KZG10 verifier key.
         let vk = kzg10::VerifierKey {
-            g: pp.powers_of_g[0],
+            g: pp.powers_of_g[0].clone(),
             gamma_g: pp.powers_of_gamma_g[&0],
-            h: pp.h,
-            beta_h: pp.beta_h,
+            h: pp.h.clone(),
+            beta_h: pp.beta_h.clone(),
             prepared_h: pp.prepared_h.clone(),
             prepared_beta_h: pp.prepared_beta_h.clone(),
         };
@@ -124,8 +125,11 @@ where
                 if enforced_degree_bounds.is_empty() {
                     (None, None)
                 } else {
+                    let mut sorted_enforced_degree_bounds = enforced_degree_bounds.clone();
+                    sorted_enforced_degree_bounds.sort();
+
                     let lowest_shifted_power = max_degree
-                        - enforced_degree_bounds
+                        - sorted_enforced_degree_bounds
                             .last()
                             .ok_or(Error::EmptyDegreeBounds)?;
 
@@ -139,7 +143,7 @@ where
 
                     let degree_bounds_and_shift_powers = enforced_degree_bounds
                         .iter()
-                        .map(|d| (*d, pp.powers_of_g[max_degree - d]))
+                        .map(|d| (*d, pp.powers_of_g[max_degree - *d]))
                         .collect();
                     (Some(shifted_powers), Some(degree_bounds_and_shift_powers))
                 }
@@ -278,6 +282,8 @@ where
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = opening_challenges(opening_challenge_counter);
             opening_challenge_counter += 1;
+
+            assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
             p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, &rand.rand);
