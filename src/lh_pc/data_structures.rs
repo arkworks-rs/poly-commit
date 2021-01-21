@@ -15,16 +15,16 @@ pub struct UniversalParameters<G: AffineCurve>(pub(crate) pedersen::UniversalPar
 
 impl<G: AffineCurve> PCUniversalParams for UniversalParameters<G> {
     fn max_degree(&self) -> usize {
-        (self.0).0.len() - 1
+        self.0.generators.len() - 1
     }
 }
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
-pub struct CommitterKey<G: AffineCurve>(pub(crate) pedersen::CommitterKey<G>);
+pub struct CommitterKey<G: AffineCurve>(pub(crate) pedersen::CommitterKey<G>, pub(crate) usize);
 
 impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
     fn max_degree(&self) -> usize {
-        self.0.max_elems_len - 1
+        self.1 - 1
     }
 
     fn supported_degree(&self) -> usize {
@@ -36,7 +36,7 @@ pub type VerifierKey<G> = CommitterKey<G>;
 
 impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     fn max_degree(&self) -> usize {
-        self.0.max_elems_len - 1
+        self.1 - 1
     }
 
     fn supported_degree(&self) -> usize {

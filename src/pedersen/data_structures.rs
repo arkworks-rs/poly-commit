@@ -13,12 +13,21 @@ use ark_std::iter::Sum;
 use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
-pub struct UniversalParams<G: AffineCurve>(pub(crate) Vec<G>);
+pub struct UniversalParams<G: AffineCurve> {
+    pub(crate) generators: Vec<G>,
+    pub(crate) hiding_generator: G,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CommitterKey<G: AffineCurve> {
     pub(crate) generators: Vec<G>,
-    pub(crate) max_elems_len: usize,
+    pub(crate) hiding_generator: G,
+}
+
+impl<G: AffineCurve> CommitterKey<G> {
+    pub fn supported_elems_len(&self) -> usize {
+        self.generators.len()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]

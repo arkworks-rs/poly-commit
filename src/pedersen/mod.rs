@@ -27,7 +27,7 @@ impl<G: AffineCurve> PedersenCommitment<G> {
         max_num_elems: usize,
         _rng: &mut R,
     ) -> Result<UniversalParams<G>, Error> {
-        let generators: Vec<_> = ark_std::cfg_into_iter!(0..max_num_elems)
+        let generators: Vec<_> = ark_std::cfg_into_iter!(0..(max_num_elems + 1))
             .map(|i| {
                 let i = i as u64;
                 let mut hash = Blake2s::digest(&to_bytes![&Self::PROTOCOL_NAME, i].unwrap());
@@ -43,8 +43,13 @@ impl<G: AffineCurve> PedersenCommitment<G> {
             })
             .collect();
 
-        let generators = G::Projective::batch_normalization_into_affine(&generators);
-        let pp = UniversalParams(generators);
+        let mut generators = G::Projective::batch_normalization_into_affine(&generators);
+        let hiding_generator = generators.pop().unwrap();
+
+        let pp = UniversalParams {
+            generators,
+            hiding_generator
+        };
         Ok(pp)
     }
 
@@ -52,24 +57,32 @@ impl<G: AffineCurve> PedersenCommitment<G> {
         pp: &UniversalParams<G>,
         supported_num_elems: usize,
     ) -> Result<CommitterKey<G>, Error> {
-        let trimmed = pp.0[0..supported_num_elems].to_vec();
         let ck = CommitterKey {
-            generators: trimmed,
-            max_elems_len: pp.0.len(),
+            generators: pp.generators[0..supported_num_elems].to_vec(),
+            hiding_generator: pp.hiding_generator,
         };
 
         Ok(ck)
     }
 
-    pub fn commit(ck: &CommitterKey<G>, elems: &[G::ScalarField]) -> Result<Commitment<G>, Error> {
+    pub fn commit(
+        ck: &CommitterKey<G>,
+        elems: &[G::ScalarField],
+        randomizer: Option<G::ScalarField>,
+    ) -> Result<Commitment<G>, Error> {
         let scalars_bigint = ark_std::cfg_iter!(elems)
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
 
-        let comm = VariableBaseMSM::multi_scalar_mul(&ck.generators, &scalars_bigint);
+        let mut comm = VariableBaseMSM::multi_scalar_mul(&ck.generators, &scalars_bigint);
+        if let Some(randomizer) = randomizer {
+            comm += ck.hiding_generator.mul(randomizer);
+        }
+
         let conversion = G::Projective::batch_normalization_into_affine(&[comm])
             .pop()
             .unwrap();
+
         Ok(Commitment(conversion))
     }
 }

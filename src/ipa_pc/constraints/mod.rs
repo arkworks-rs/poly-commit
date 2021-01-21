@@ -37,7 +37,18 @@ where
 {
     /// The succinct portion of `PC::check`. This algorithm runs in time
     /// O(log d), where d is the degree of the committed polynomials.
-    #[tracing::instrument(target = "r1cs", skip(cs, svk_var, commitment_vars, point_var, value_vars, proof_var, opening_challenge_vars))]
+    #[tracing::instrument(
+        target = "r1cs",
+        skip(
+            cs,
+            svk_var,
+            commitment_vars,
+            point_var,
+            value_vars,
+            proof_var,
+            opening_challenge_vars
+        )
+    )]
     pub fn succinct_check<'a>(
         cs: ConstraintSystemRef<ConstraintF<G>>,
         svk_var: &SuccinctVerifierKeyVar<G, C>,
@@ -98,16 +109,10 @@ where
             let mut hiding_challenge_sponge_var =
                 S::new(ns!(cs, "hiding_challenge_sponge_var").cs());
 
-            hiding_challenge_sponge_var.absorb(
-                combined_commitment_var
-                    .to_constraint_field()?
-                    .as_slice(),
-            )?;
-            hiding_challenge_sponge_var.absorb(
-                hiding_comm_var
-                    .to_constraint_field()?
-                    .as_slice(),
-            )?;
+            hiding_challenge_sponge_var
+                .absorb(combined_commitment_var.to_constraint_field()?.as_slice())?;
+            hiding_challenge_sponge_var
+                .absorb(hiding_comm_var.to_constraint_field()?.as_slice())?;
             hiding_challenge_sponge_var.absorb(point_and_combined_eval_fp_vars.as_slice())?;
 
             let hiding_challenge_bits_var = hiding_challenge_sponge_var.squeeze_bits(128)?;
@@ -148,7 +153,8 @@ where
                 .map(UInt8::<ConstraintF<G>>::from_bits_le)
                 .collect::<Vec<_>>();
 
-            round_challenge_sponge_var.absorb(round_challenge_bytes_var.to_constraint_field()?.as_slice());
+            round_challenge_sponge_var
+                .absorb(round_challenge_bytes_var.to_constraint_field()?.as_slice());
             round_challenge_sponge_var.absorb(l_var.to_constraint_field()?.as_slice());
             round_challenge_sponge_var.absorb(r_var.to_constraint_field()?.as_slice());
 
