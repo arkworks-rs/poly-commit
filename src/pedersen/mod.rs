@@ -76,7 +76,7 @@ impl<G: AffineCurve> PedersenCommitment<G> {
 
         let mut comm = VariableBaseMSM::multi_scalar_mul(&ck.generators, &scalars_bigint);
         if let Some(randomizer) = randomizer {
-            comm += ck.hiding_generator.mul(randomizer);
+            comm += &ck.hiding_generator.mul(randomizer);
         }
 
         let conversion = G::Projective::batch_normalization_into_affine(&[comm])
