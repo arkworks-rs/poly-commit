@@ -6,7 +6,6 @@ use ark_std::vec::Vec;
 use blake2::Blake2s;
 use core::marker::PhantomData;
 use digest::Digest;
-use rand_core::RngCore;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -23,9 +22,8 @@ impl<G: AffineCurve> PedersenCommitment<G> {
 }
 
 impl<G: AffineCurve> PedersenCommitment<G> {
-    pub fn setup<R: RngCore>(
+    pub fn setup(
         max_num_elems: usize,
-        _rng: &mut R,
     ) -> Result<UniversalParams<G>, Error> {
         let generators: Vec<_> = ark_std::cfg_into_iter!(0..(max_num_elems + 1))
             .map(|i| {
