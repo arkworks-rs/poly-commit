@@ -30,7 +30,7 @@ impl<G: AffineCurve> CommitterKey<G> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<G: AffineCurve>(pub G);
 
 impl<G: AffineCurve> Zero for Commitment<G> {
