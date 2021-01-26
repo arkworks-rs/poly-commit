@@ -8,8 +8,7 @@ use ark_std::vec;
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
-#[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derive(Default, Clone, Debug)]
 pub struct UniversalParams<G: AffineCurve> {
     /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
@@ -58,7 +57,9 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 pub type VerifierKey<G> = CommitterKey<G>;
 
+/// A succinct subportion of the verifier key. This is used in succinct checking.
 #[derive(Default, Hash, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[allow(missing_docs)]
 pub struct SuccinctVerifierKey<G: AffineCurve> {
     pub h: G,
     pub s: G,
@@ -66,6 +67,7 @@ pub struct SuccinctVerifierKey<G: AffineCurve> {
 }
 
 impl<G: AffineCurve> SuccinctVerifierKey<G> {
+    /// Construct `Self` from a full `VerifierKey`. 
     pub fn from_vk(vk: &VerifierKey<G>) -> Self {
         Self {
             h: vk.h,

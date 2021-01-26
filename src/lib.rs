@@ -86,6 +86,9 @@ pub mod pedersen;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
 
+/// A simple polynomial commitment scheme from [[BCLMS20]][bclms].
+///
+/// [bclms]: https://eprint.iacr.org/2020/1618
 pub mod lh_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations

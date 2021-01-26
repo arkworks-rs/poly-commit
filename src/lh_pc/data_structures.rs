@@ -10,6 +10,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError
 use ark_std::io::{Read, Write};
 use rand_core::RngCore;
 
+/// Public parameters for PC_LH. These are just the public parameters for a Pedersen commitment.
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParameters<G: AffineCurve>(pub(crate) pedersen::UniversalParams<G>);
 
@@ -19,6 +20,7 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParameters<G> {
     }
 }
 
+/// Commitment key for PC_LH. This is just the commitment key for a Pedersen commitment.
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CommitterKey<G: AffineCurve>(pub(crate) pedersen::CommitterKey<G>, pub(crate) usize);
 
@@ -32,6 +34,7 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
     }
 }
 
+/// Verifier key for PC_LH. This is equal to the commitment key.
 pub type VerifierKey<G> = CommitterKey<G>;
 
 impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
@@ -50,6 +53,7 @@ impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for VerifierKey<G> {
     }
 }
 
+/// Commitment to a polynomial in PC_LH. This is equal to a Pedersen commitment.
 #[derive(Clone, Eq, PartialEq, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<G: AffineCurve>(pub pedersen::Commitment<G>);
 
@@ -85,6 +89,7 @@ impl<G: AffineCurve> ToBytes for Commitment<G> {
     }
 }
 
+/// Opening randomness for PC_LH.
 #[derive(Clone)]
 pub struct Randomness;
 
@@ -103,6 +108,7 @@ impl PCRandomness for Randomness {
     }
 }
 
+/// An evaluation proof in PC_LH. This is just equal to the polynomial itself.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Proof<F: Field, P: UVPolynomial<F>>(pub LabeledPolynomial<F, P>);
 

@@ -1,5 +1,5 @@
 use crate::ipa_pc::{Commitment, CommitterKey, Proof, SuccinctVerifierKey};
-use crate::{LabeledCommitment, PCVerifierKey};
+use crate::LabeledCommitment;
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
 use ark_ff::One;
@@ -10,25 +10,25 @@ use ark_r1cs_std::alloc::{AllocVar, AllocationMode};
 use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
-use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{Namespace, SynthesisError};
 use ark_std::borrow::Borrow;
 use ark_std::marker::PhantomData;
 
-pub type ConstraintF<G> = <<G as AffineCurve>::BaseField as Field>::BasePrimeField;
-pub type NNFieldVar<G> = NonNativeFieldVar<<G as AffineCurve>::ScalarField, ConstraintF<G>>;
+pub(crate) type ConstraintF<G> = <<G as AffineCurve>::BaseField as Field>::BasePrimeField;
+pub(crate) type NNFieldVar<G> = NonNativeFieldVar<<G as AffineCurve>::ScalarField, ConstraintF<G>>;
 
+/// The R1CS equivalent of `SuccinctVerifierKey`.
 pub struct SuccinctVerifierKeyVar<G, C>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     /// A random group generator.
-    pub h_var: C,
+    pub h: C,
 
     /// A random group generator that is to be used to make
     /// a commitment hiding.
-    pub s_var: C,
+    pub s: C,
 
     pub supported_degree: usize,
 
@@ -50,12 +50,12 @@ where
         let key = f()?;
 
         let supported_degree = key.borrow().supported_degree;
-        let h_var = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
-        let s_var = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
+        let h = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
+        let s = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
 
         Ok(Self {
-            h_var,
-            s_var,
+            h,
+            s,
             supported_degree,
             _affine: PhantomData,
         })
@@ -68,14 +68,14 @@ where
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     /// The key used to commit to polynomials.
-    pub comm_key_var: Vec<C>,
+    pub comm_key: Vec<C>,
 
     /// A random group generator.
-    pub h_var: C,
+    pub h: C,
 
     /// A random group generator that is to be used to make
     /// a commitment hiding.
-    pub s_var: C,
+    pub s: C,
 
     /// Phantom data
     pub _affine: PhantomData<G>,
@@ -87,7 +87,7 @@ where
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     pub fn supported_degree(&self) -> usize {
-        self.comm_key_var.len() - 1
+        self.comm_key.len() - 1
     }
 }
 
@@ -104,20 +104,20 @@ where
         let ns = cs.into();
         let key = f()?;
 
-        let comm_key_var = key
+        let comm_key = key
             .borrow()
             .comm_key
             .iter()
             .map(|elem| C::new_variable(ns.clone(), || Ok(elem.clone()), mode))
             .collect::<Result<Vec<C>, SynthesisError>>()?;
 
-        let h_var = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
-        let s_var = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
+        let h = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
+        let s = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
 
         Ok(Self {
-            comm_key_var,
-            h_var,
-            s_var,
+            comm_key,
+            h,
+            s,
             _affine: PhantomData,
         })
     }
@@ -135,12 +135,12 @@ where
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     /// A Pedersen commitment to the polynomial.
-    pub comm_var: C,
+    pub comm: C,
 
     /// The degree bound and a Pedersen commitment to the shifted polynomial.
     /// This is `none` if the committed polynomial does not
     /// enforce a strict degree bound.
-    pub shifted_comm_var: Option<(usize, C)>,
+    pub shifted_comm: Option<(usize, C)>,
 
     pub _affine: PhantomData<G>,
 }
@@ -158,7 +158,7 @@ where
         let ns = cs.into();
         let lc = f()?;
 
-        let comm_var = C::new_variable(
+        let comm = C::new_variable(
             ns.clone(),
             || Ok(lc.borrow().commitment().comm.clone()),
             mode,
@@ -169,7 +169,7 @@ where
             lc.borrow().commitment().shifted_comm.is_some()
         );
 
-        let shifted_comm_var = if lc.borrow().degree_bound().is_some() {
+        let shifted_comm = if lc.borrow().degree_bound().is_some() {
             Some((
                 lc.borrow().degree_bound().unwrap(),
                 C::new_variable(
@@ -183,8 +183,8 @@ where
         };
 
         Ok(Self {
-            comm_var,
-            shifted_comm_var,
+            comm,
+            shifted_comm,
             _affine: PhantomData,
         })
     }
@@ -196,22 +196,22 @@ where
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     /// Vector of left elements for each of the log_d iterations in `open`
-    pub l_var_vec: Vec<C>,
+    pub l_vec: Vec<C>,
 
     /// Vector of right elements for each of the log_d iterations within `open`
-    pub r_var_vec: Vec<C>,
+    pub r_vec: Vec<C>,
 
     /// Committer key from the last iteration within `open`
-    pub final_comm_key_var: C,
+    pub final_comm_key: C,
 
     /// Coefficient from the last iteration within `open`
-    pub c_var: NNFieldVar<G>,
+    pub c: NNFieldVar<G>,
 
     /// The first element is the commitment to the blinding polynomial.
     /// The second element is the linear combination of all the randomness
     /// used for commitments to the opened polynomials, along with the
     /// randomness used for the commitment to the hiding polynomial.
-    pub hiding_var: Option<(C, Vec<Boolean<ConstraintF<G>>>)>,
+    pub hiding: Option<(C, Vec<Boolean<ConstraintF<G>>>)>,
 }
 
 impl<G, C> AllocVar<Proof<G>, ConstraintF<G>> for ProofVar<G, C>
@@ -227,27 +227,27 @@ where
         let ns = cs.into();
         let proof = f()?;
 
-        let l_var_vec: Vec<C> = proof
+        let l_vec: Vec<C> = proof
             .borrow()
             .l_vec
             .iter()
             .map(|elem| C::new_variable(ns.clone(), || Ok(elem.clone()), mode))
             .collect::<Result<Vec<C>, SynthesisError>>()?;
 
-        let r_var_vec: Vec<C> = proof
+        let r_vec: Vec<C> = proof
             .borrow()
             .r_vec
             .iter()
             .map(|elem| C::new_variable(ns.clone(), || Ok(elem.clone()), mode))
             .collect::<Result<Vec<C>, SynthesisError>>()?;
 
-        let final_comm_key_var = C::new_variable(
+        let final_comm_key = C::new_variable(
             ns.clone(),
             || Ok(proof.borrow().final_comm_key.clone()),
             mode,
         )?;
 
-        let c_var =
+        let c =
             NNFieldVar::<G>::new_variable(ns.clone(), || Ok(proof.borrow().c.clone()), mode)?;
 
         assert_eq!(
@@ -255,29 +255,29 @@ where
             proof.borrow().rand.is_some()
         );
 
-        let hiding_var = if proof.borrow().hiding_comm.is_some() {
-            let hiding_comm_var = C::new_variable(
+        let hiding = if proof.borrow().hiding_comm.is_some() {
+            let hiding_comm = C::new_variable(
                 ns.clone(),
                 || Ok(proof.borrow().hiding_comm.clone().unwrap()),
                 mode,
             )?;
 
-            let rand_bits_var =
+            let rand_bits =
                 BitIteratorLE::without_trailing_zeros((&proof.borrow().rand.unwrap()).into_repr())
                     .map(|b| Boolean::new_variable(ns.clone(), || Ok(b), mode))
                     .collect::<Result<Vec<_>, SynthesisError>>()?;
 
-            Some((hiding_comm_var, rand_bits_var))
+            Some((hiding_comm, rand_bits))
         } else {
             None
         };
 
         Ok(Self {
-            l_var_vec,
-            r_var_vec,
-            final_comm_key_var,
-            c_var,
-            hiding_var,
+            l_vec,
+            r_vec,
+            final_comm_key,
+            c,
+            hiding,
         })
     }
 }
@@ -289,22 +289,22 @@ pub struct SuccinctCheckPolynomialVar<G: AffineCurve>(pub Vec<NNFieldVar<G>>);
 
 impl<G: AffineCurve> SuccinctCheckPolynomialVar<G> {
     /// Computes the coefficients of the underlying degree `d` polynomial.
-    pub fn compute_coeff_vars(&self) -> Vec<NNFieldVar<G>> {
-        let challenge_vars = &self.0;
-        let log_d = challenge_vars.len();
+    pub fn compute_coeffs(&self) -> Vec<NNFieldVar<G>> {
+        let challenges = &self.0;
+        let log_d = challenges.len();
 
-        let mut coeff_vars = vec![NNFieldVar::<G>::one(); 1 << log_d];
-        for (i, challenge) in challenge_vars.iter().enumerate() {
+        let mut coeffs = vec![NNFieldVar::<G>::one(); 1 << log_d];
+        for (i, challenge) in challenges.iter().enumerate() {
             let i = i + 1;
             let elem_degree = 1 << (log_d - i);
-            for start in (elem_degree..coeff_vars.len()).step_by(elem_degree * 2) {
+            for start in (elem_degree..coeffs.len()).step_by(elem_degree * 2) {
                 for offset in 0..elem_degree {
-                    coeff_vars[start + offset] *= challenge;
+                    coeffs[start + offset] *= challenge;
                 }
             }
         }
 
-        coeff_vars
+        coeffs
     }
 
     /// Evaluate `self` at `point` in time `O(log_d)`.
@@ -338,7 +338,7 @@ where
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
     pub _affine: PhantomData<G>,
-    pub _curve_var: PhantomData<C>,
+    pub _curve: PhantomData<C>,
 }
 
 impl<G, C> CMCommitGadget<G, C>
@@ -346,6 +346,7 @@ where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
+    /// Commit to `scalars` using `comm_key`.
     pub fn commit(
         comm_key: &[C],
         scalars: &[Vec<Boolean<ConstraintF<G>>>],
