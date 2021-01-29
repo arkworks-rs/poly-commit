@@ -1,13 +1,7 @@
-use crate::{
-    constraints::{EvaluationsVar, PCCheckVar, QuerySetVar},
-    data_structures::LabeledCommitment,
-    kzg10::{Proof, VerifierKey as KZG10VerifierKey},
-    marlin_pc::{
-        data_structures::{Commitment, VerifierKey},
-        MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
-    },
-    BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareVar, String, ToString, Vec,
-};
+use crate::{constraints::{EvaluationsVar, LabeledPointVar, PCCheckVar, PCCheckRandomDataVar, QuerySetVar}, data_structures::LabeledCommitment, kzg10::{Proof, VerifierKey as KZG10VerifierKey}, marlin_pc::{
+    data_structures::{Commitment, VerifierKey},
+    MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
+}, BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareGadget, String, ToString, Vec, LinearCombinationCoeffVar};
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
@@ -395,7 +389,7 @@ where
     }
 }
 
-impl<CycleE, PG> PrepareVar<VerifierKeyVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
+impl<CycleE, PG> PrepareGadget<VerifierKeyVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedVerifierKeyVar<CycleE, PG>
 where
     CycleE: CycleEngine,
@@ -751,7 +745,7 @@ where
     }
 }
 
-impl<CycleE, PG> PrepareVar<CommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
+impl<CycleE, PG> PrepareGadget<CommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedCommitmentVar<CycleE, PG>
 where
     CycleE: CycleEngine,
@@ -767,23 +761,6 @@ where
     fn prepare(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
         let supported_bits = <<CycleE::E2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
-
-        let mut cur: PG::G1Var = unprepared.comm.clone();
-        for _ in 0..supported_bits {
-            prepared_comm.push(cur.clone());
-            cur.double_in_place()?;
-        }
-
-        Ok(Self {
-            prepared_comm,
-            shifted_comm: unprepared.shifted_comm.clone(),
-        })
-    }
-
-    #[tracing::instrument(target = "r1cs", skip(unprepared))]
-    fn prepare_small(unprepared: &CommitmentVar<CycleE, PG>) -> R1CSResult<Self> {
-        let mut prepared_comm = Vec::<PG::G1Var>::new();
-        let supported_bits = 128;
 
         let mut cur: PG::G1Var = unprepared.comm.clone();
         for _ in 0..supported_bits {
@@ -1007,7 +984,7 @@ where
     }
 }
 
-impl<CycleE, PG> PrepareVar<LabeledCommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
+impl<CycleE, PG> PrepareGadget<LabeledCommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedLabeledCommitmentVar<CycleE, PG>
 where
     CycleE: CycleEngine,
@@ -1192,7 +1169,7 @@ where
 
             let BatchLCProof { proof, evals } = proof.borrow().clone();
 
-            let proofs: Vec<Proof<_>> = proof;
+            let proofs: Vec<Proof<_>> = proof.to_vec();
             let proofs: Vec<ProofVar<CycleE, PG>> = proofs
                 .iter()
                 .map(|p| {
@@ -1361,10 +1338,10 @@ where
 
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, (point_label, point)) in query_set.0.iter() {
+        for (label, point) in query_set.0.iter() {
             let labels = query_to_labels_map
-                .entry((*point_label).clone())
-                .or_insert((point, BTreeSet::new()));
+                .entry(point.name.clone())
+                .or_insert((point.value.clone(), BTreeSet::new()));
             labels.1.insert(label);
         }
 
@@ -1395,7 +1372,7 @@ where
             for label in labels.into_iter() {
                 let commitment_lc = commitment_lcs.get(label).unwrap().clone();
 
-                let v_i = evaluations.0.get(&(label.clone(), point.clone())).unwrap();
+                let v_i = evaluations.0.get(&LabeledPointVar { name: label.clone(), value: point.clone() }).unwrap();
 
                 comms_to_combine.push(commitment_lc.1.clone());
                 values_to_combine.push(v_i.clone());
@@ -1669,28 +1646,23 @@ where
             <CycleE::E1 as PairingEngine>::Fr,
         >,
         proofs: &[Self::ProofVar],
-        opening_challenges: &[NonNativeFieldVar<
+        rand_data: &PCCheckRandomDataVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
-        >],
-        opening_challenges_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
-        batching_rands: &[NonNativeFieldVar<
-            <CycleE::E2 as PairingEngine>::Fr,
-            <CycleE::E1 as PairingEngine>::Fr,
-        >],
-        batching_rands_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+        >
     ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
-        let mut batching_rands = batching_rands.to_vec();
-        let mut batching_rands_bits = batching_rands_bits.to_vec();
+        let mut batching_rands = rand_data.batching_rands.to_vec();
+        let mut batching_rands_bits = rand_data.batching_rands_bits.to_vec();
 
         let commitments: BTreeMap<_, _> =
             commitments.iter().map(|c| (c.label.clone(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, (point_label, point)) in query_set.0.iter() {
+        for (label, point) in query_set.0.iter() {
             let labels = query_to_labels_map
-                .entry((*point_label).clone())
-                .or_insert((point, BTreeSet::new()));
+                .entry(point.name.clone())
+                .or_insert((point.value.clone()
+                            , BTreeSet::new()));
             labels.1.insert(label);
         }
 
@@ -1709,7 +1681,7 @@ where
                     commitment.commitment.shifted_comm.is_some()
                 );
 
-                let v_i = evaluations.0.get(&(label.clone(), point.clone())).unwrap();
+                let v_i = evaluations.0.get(&LabeledPointVar { name: label.clone(), value: point.clone() }).unwrap();
 
                 comms_to_combine.push(commitment.clone());
                 values_to_combine.push(v_i.clone());
@@ -1727,8 +1699,8 @@ where
             for (labeled_commitment, value) in
                 comms_to_combine.into_iter().zip(values_to_combine.iter())
             {
-                let challenge = opening_challenges[opening_challenges_counter].clone();
-                let challenge_bits = opening_challenges_bits[opening_challenges_counter].clone();
+                let challenge = rand_data.opening_challenges[opening_challenges_counter].clone();
+                let challenge_bits = rand_data.opening_challenges_bits[opening_challenges_counter].clone();
                 opening_challenges_counter += 1;
 
                 let LabeledCommitmentVar {
@@ -1750,7 +1722,7 @@ where
                 // v_i is the evaluation, in the cocmbined commitment,
                 if let Some(degree_bound) = degree_bound {
                     let challenge_shifted_bits =
-                        opening_challenges_bits[opening_challenges_counter].clone();
+                        rand_data.opening_challenges_bits[opening_challenges_counter].clone();
                     opening_challenges_counter += 1;
 
                     let shifted_comm = shifted_comm.as_ref().unwrap().clone();
@@ -1873,16 +1845,10 @@ where
             <CycleE::E1 as PairingEngine>::Fr,
         >,
         proof: &Self::BatchLCProofVar,
-        opening_challenges: &[NonNativeFieldVar<
+        rand_data: &PCCheckRandomDataVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
-        >],
-        opening_challenges_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
-        batching_rands: &[NonNativeFieldVar<
-            <CycleE::E2 as PairingEngine>::Fr,
-            <CycleE::E1 as PairingEngine>::Fr,
-        >],
-        batching_rands_bits: &[Vec<Boolean<<CycleE::E1 as PairingEngine>::Fr>>],
+        >,
     ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
         let BatchLCProofVar { proofs, .. } = proof;
 
@@ -1903,35 +1869,40 @@ where
 
             let mut coeffs_and_comms = Vec::new();
 
-            for (coeff, label, negate) in lc.terms.iter() {
+            for (coeff, label) in lc.terms.iter() {
                 if label.is_one() {
-                    assert!(coeff.is_some());
-
-                    let coeff = coeff.clone().unwrap();
-
-                    for (&(ref label, _), ref mut eval) in evaluations.0.iter_mut() {
-                        if label == &lc_label {
-                            if negate.eq(&true) {
-                                **eval = (**eval).clone() + &coeff;
-                            } else {
-                                **eval = (**eval).clone() - &coeff;
-                            }
+                    for (label, ref mut eval) in evaluations.0.iter_mut() {
+                        if label.name == lc_label {
+                            match coeff.clone() {
+                                LinearCombinationCoeffVar::One => **eval = (**eval).clone() - &NonNativeFieldVar::one(),
+                                LinearCombinationCoeffVar::MinusOne => **eval = (**eval).clone() + &NonNativeFieldVar::one(),
+                                LinearCombinationCoeffVar::Var(variable) => **eval = (**eval).clone() - &variable,
+                            };
                         }
                     }
                 } else {
                     let label: &String = label.try_into().unwrap();
                     let &cur_comm = label_comm_map.get(label).unwrap();
+                    let negate = match coeff {
+                        LinearCombinationCoeffVar::One | LinearCombinationCoeffVar::Var(_) => false,
+                        LinearCombinationCoeffVar::MinusOne => true,
+                    };
 
                     if num_polys == 1 && cur_comm.degree_bound.is_some() {
-                        assert!(coeff.is_none());
-                        assert!(negate.eq(&false));
+                        assert!(!negate);
                     }
+
+                    let coeff = match coeff {
+                        LinearCombinationCoeffVar::One => Some(NonNativeFieldVar::one()),
+                        LinearCombinationCoeffVar::MinusOne => Some(NonNativeFieldVar::zero() - NonNativeFieldVar::one()),
+                        LinearCombinationCoeffVar::Var(variable) => Some(variable.clone())
+                    };
 
                     coeffs_and_comms.push((
                         coeff.clone(),
                         cur_comm.degree_bound.clone(),
                         cur_comm.prepared_commitment.clone(),
-                        *negate,
+                        negate,
                     ));
                 }
             }
@@ -1942,18 +1913,18 @@ where
         Self::prepared_batch_check_evaluations(
             cs,
             prepared_verification_key,
-            &lc_info,
+            lc_info.as_slice(),
             &query_set,
             &evaluations,
             proofs,
-            opening_challenges,
-            opening_challenges_bits,
-            batching_rands,
-            batching_rands_bits,
+            &rand_data.opening_challenges,
+            &rand_data.opening_challenges_bits,
+            &rand_data.batching_rands,
+            &rand_data.batching_rands_bits,
         )
     }
 
-    fn create_labeled_commitment_gadget(
+    fn create_labeled_commitment(
         label: String,
         commitment: Self::CommitmentVar,
         degree_bound: Option<FpVar<<CycleE::E1 as PairingEngine>::Fr>>,
@@ -1965,7 +1936,7 @@ where
         }
     }
 
-    fn create_prepared_labeled_commitment_gadget(
+    fn create_prepared_labeled_commitment(
         label: String,
         prepared_commitment: Self::PreparedCommitmentVar,
         degree_bound: Option<FpVar<<CycleE::E1 as PairingEngine>::Fr>>,
