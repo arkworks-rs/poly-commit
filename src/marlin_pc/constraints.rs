@@ -1,7 +1,14 @@
-use crate::{constraints::{EvaluationsVar, LabeledPointVar, PCCheckVar, PCCheckRandomDataVar, QuerySetVar}, data_structures::LabeledCommitment, kzg10::{Proof, VerifierKey as KZG10VerifierKey}, marlin_pc::{
-    data_structures::{Commitment, VerifierKey},
-    MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
-}, BTreeMap, BTreeSet, BatchLCProof, LinearCombinationVar, PrepareGadget, String, ToString, Vec, LinearCombinationCoeffVar};
+use crate::{
+    constraints::{EvaluationsVar, LabeledPointVar, PCCheckRandomDataVar, PCCheckVar, QuerySetVar},
+    data_structures::LabeledCommitment,
+    kzg10::{Proof, VerifierKey as KZG10VerifierKey},
+    marlin_pc::{
+        data_structures::{Commitment, VerifierKey},
+        MarlinKZG10, PreparedCommitment, PreparedVerifierKey,
+    },
+    BTreeMap, BTreeSet, BatchLCProof, LinearCombinationCoeffVar, LinearCombinationVar,
+    PrepareGadget, String, ToString, Vec,
+};
 use ark_ec::{CycleEngine, PairingEngine};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
@@ -1372,7 +1379,13 @@ where
             for label in labels.into_iter() {
                 let commitment_lc = commitment_lcs.get(label).unwrap().clone();
 
-                let v_i = evaluations.0.get(&LabeledPointVar { name: label.clone(), value: point.clone() }).unwrap();
+                let v_i = evaluations
+                    .0
+                    .get(&LabeledPointVar {
+                        name: label.clone(),
+                        value: point.clone(),
+                    })
+                    .unwrap();
 
                 comms_to_combine.push(commitment_lc.1.clone());
                 values_to_combine.push(v_i.clone());
@@ -1649,7 +1662,7 @@ where
         rand_data: &PCCheckRandomDataVar<
             <CycleE::E2 as PairingEngine>::Fr,
             <CycleE::E1 as PairingEngine>::Fr,
-        >
+        >,
     ) -> R1CSResult<Boolean<<CycleE::E1 as PairingEngine>::Fr>> {
         let mut batching_rands = rand_data.batching_rands.to_vec();
         let mut batching_rands_bits = rand_data.batching_rands_bits.to_vec();
@@ -1661,8 +1674,7 @@ where
         for (label, point) in query_set.0.iter() {
             let labels = query_to_labels_map
                 .entry(point.name.clone())
-                .or_insert((point.value.clone()
-                            , BTreeSet::new()));
+                .or_insert((point.value.clone(), BTreeSet::new()));
             labels.1.insert(label);
         }
 
@@ -1681,7 +1693,13 @@ where
                     commitment.commitment.shifted_comm.is_some()
                 );
 
-                let v_i = evaluations.0.get(&LabeledPointVar { name: label.clone(), value: point.clone() }).unwrap();
+                let v_i = evaluations
+                    .0
+                    .get(&LabeledPointVar {
+                        name: label.clone(),
+                        value: point.clone(),
+                    })
+                    .unwrap();
 
                 comms_to_combine.push(commitment.clone());
                 values_to_combine.push(v_i.clone());
@@ -1700,7 +1718,8 @@ where
                 comms_to_combine.into_iter().zip(values_to_combine.iter())
             {
                 let challenge = rand_data.opening_challenges[opening_challenges_counter].clone();
-                let challenge_bits = rand_data.opening_challenges_bits[opening_challenges_counter].clone();
+                let challenge_bits =
+                    rand_data.opening_challenges_bits[opening_challenges_counter].clone();
                 opening_challenges_counter += 1;
 
                 let LabeledCommitmentVar {
@@ -1874,9 +1893,15 @@ where
                     for (label, ref mut eval) in evaluations.0.iter_mut() {
                         if label.name == lc_label {
                             match coeff.clone() {
-                                LinearCombinationCoeffVar::One => **eval = (**eval).clone() - &NonNativeFieldVar::one(),
-                                LinearCombinationCoeffVar::MinusOne => **eval = (**eval).clone() + &NonNativeFieldVar::one(),
-                                LinearCombinationCoeffVar::Var(variable) => **eval = (**eval).clone() - &variable,
+                                LinearCombinationCoeffVar::One => {
+                                    **eval = (**eval).clone() - &NonNativeFieldVar::one()
+                                }
+                                LinearCombinationCoeffVar::MinusOne => {
+                                    **eval = (**eval).clone() + &NonNativeFieldVar::one()
+                                }
+                                LinearCombinationCoeffVar::Var(variable) => {
+                                    **eval = (**eval).clone() - &variable
+                                }
                             };
                         }
                     }
@@ -1894,8 +1919,10 @@ where
 
                     let coeff = match coeff {
                         LinearCombinationCoeffVar::One => Some(NonNativeFieldVar::one()),
-                        LinearCombinationCoeffVar::MinusOne => Some(NonNativeFieldVar::zero() - NonNativeFieldVar::one()),
-                        LinearCombinationCoeffVar::Var(variable) => Some(variable.clone())
+                        LinearCombinationCoeffVar::MinusOne => {
+                            Some(NonNativeFieldVar::zero() - NonNativeFieldVar::one())
+                        }
+                        LinearCombinationCoeffVar::Var(variable) => Some(variable.clone()),
                     };
 
                     coeffs_and_comms.push((
