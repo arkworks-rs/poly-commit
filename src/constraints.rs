@@ -73,7 +73,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// A collection of random data used in the polynomial commitment checking.
 pub struct PCCheckRandomDataVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// Opening challenges.
