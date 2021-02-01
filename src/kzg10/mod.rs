@@ -370,10 +370,7 @@ where
         Ok(result)
     }
 
-    pub(crate) fn check_degree_is_too_large(
-        degree: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_degree_is_too_large(degree: usize, num_powers: usize) -> Result<(), Error> {
         let num_coefficients = degree + 1;
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
