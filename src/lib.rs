@@ -44,6 +44,13 @@ pub mod error;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
 
+/// Univariate and multivariate polynomial commitment schemes
+/// which (optionally) enable hiding commitments by following
+/// the approach outlined in [[CHMMVW20, "Marlin"]][marlin].
+///
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod marlin;
+
 /// A random number generator that bypasses some limitations of the Rust borrow
 /// checker.
 pub mod optional_rng;
@@ -69,7 +76,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod marlin_pc;
+pub use marlin::marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
 /// modified to obtain batching and to enforce strict
@@ -90,6 +97,7 @@ pub mod sonic_pc;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
 
+
 /// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
 /// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm
 /// in prime-order groups. Construction is detailed in [[XZZPD19]][xzzpd19] and [[ZGKPP18]][zgkpp18]
@@ -97,6 +105,14 @@ pub mod ipa_pc;
 /// [xzzpd19]: https://eprint.iacr.org/2019/317
 /// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
 pub mod multilinear_pc;
+
+/// Multivariate polynomial commitment based on the construction in
+/// [[PST13]][pst] with batching and (optional) hiding property inspired
+/// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
+///
+/// [pst]: https://eprint.iacr.org/2011/587.pdf
+/// [marlin]: https://eprint.iacr.org/2019/104
+pub use marlin::marlin_pst13_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of

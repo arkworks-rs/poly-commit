@@ -370,10 +370,8 @@ where
         Ok(result)
     }
 
-    pub(crate) fn check_degree_is_too_large(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_degree_is_too_large(degree: usize, num_powers: usize) -> Result<(), Error> {
+        let num_coefficients = degree + 1;
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
                 num_coefficients,
@@ -641,5 +639,18 @@ mod tests {
     fn batch_check_test() {
         batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
         batch_check_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
+    }
+
+    #[test]
+    fn test_degree_is_too_large() {
+        let rng = &mut test_rng();
+
+        let max_degree = 123;
+        let pp = KZG_Bls12_381::setup(max_degree, false, rng).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(&pp, max_degree).unwrap();
+
+        let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
+        assert!(p.degree() > max_degree);
+        assert!(KZG_Bls12_381::check_degree_is_too_large(p.degree(), powers.size()).is_err());
     }
 }
