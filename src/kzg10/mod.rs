@@ -371,9 +371,10 @@ where
     }
 
     pub(crate) fn check_degree_is_too_large(
-        num_coefficients: usize,
+        degree: usize,
         num_powers: usize,
     ) -> Result<(), Error> {
+        let num_coefficients = degree + 1;
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
                 num_coefficients,
@@ -653,6 +654,6 @@ mod tests {
 
         let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
         assert!(p.degree() > max_degree);
-        assert!(KZG_Bls12_381::commit(&powers, &p, None, None).is_err());
+        assert!(KZG_Bls12_381::check_degree_is_too_large(p.degree(), powers.size()).is_err());
     }
 }
