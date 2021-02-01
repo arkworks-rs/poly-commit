@@ -642,4 +642,17 @@ mod tests {
         batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
         batch_check_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
     }
+
+    #[test]
+    fn test_degree_is_too_large() {
+        let rng = &mut test_rng();
+
+        let max_degree = 123;
+        let pp = KZG_Bls12_381::setup(max_degree, false, rng).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(&pp, max_degree).unwrap();
+
+        let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
+        assert!(p.degree() > max_degree);
+        assert!(KZG_Bls12_381::commit(&powers, &p, None, None).is_err());
+    }
 }
