@@ -79,8 +79,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
             start += size;
         }
 
-        // end_timer!(variable_mul_timer);
-        // calculate vp
+        // uncomment to measure the time for calculating vp
         // let vp_generation_timer = start_timer!(|| "VP generation");
         let g_mask = {
             let window_size = FixedBaseMSM::get_mul_window_size(num_vars);
@@ -198,7 +197,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
 
         let scalar_size = E::Fr::size_in_bits();
         let window_size = FixedBaseMSM::get_mul_window_size(vk.nv);
-        // let timer = start_timer!(|| "MSM");
+        
         let g_table =
             FixedBaseMSM::get_window_table(scalar_size, window_size, vk.g.into_projective());
         let g_mul: Vec<E::G1Projective> =
