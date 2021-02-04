@@ -97,6 +97,14 @@ pub mod sonic_pc;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
 
+/// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
+/// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm
+/// in prime-order groups. Construction is detailed in [[XZZPD19]][xzzpd19] and [[ZGKPP18]][zgkpp18]
+///
+/// [xzzpd19]: https://eprint.iacr.org/2019/317
+/// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
+pub mod multilinear_pc;
+
 /// Multivariate polynomial commitment based on the construction in
 /// [[PST13]][pst] with batching and (optional) hiding property inspired
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
