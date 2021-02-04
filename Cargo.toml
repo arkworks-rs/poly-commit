@@ -35,7 +35,7 @@ hashbrown = { version = "0.9", optional = true }
 bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
 
 rand_core = { version = "0.5", default-features = false }
-digest = "0.8"
+digest = "0.9"
 rayon = { version = "1", optional = true }
 derivative = { version = "2", features = [ "use_core" ] }
 
@@ -44,7 +44,7 @@ rand = { version = "0.7", default-features = false }
 ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-features = false }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", default-features = false, features = [ "curve" ] }
-blake2 = { version = "0.8", default-features = false }
+blake2 = { version = "0.9", default-features = false }
 
 [profile.release]
 opt-level = 3
