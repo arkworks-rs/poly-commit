@@ -1,5 +1,5 @@
 use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
-use ark_ff::Field;
+use ark_ff::{Field, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Borrow,
@@ -190,6 +190,14 @@ pub struct LabeledCommitment<C: PCCommitment> {
     label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
+}
+
+impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
+    for LabeledCommitment<C>
+{
+    fn to_field_elements(&self) -> Option<Vec<F>> {
+        self.commitment.to_field_elements()
+    }
 }
 
 impl<C: PCCommitment> LabeledCommitment<C> {

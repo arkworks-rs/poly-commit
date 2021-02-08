@@ -3,7 +3,7 @@ use crate::{
     PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes};
+use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
@@ -148,6 +148,28 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     }
 }
 
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+        res.extend_from_slice(&self.vk.to_field_elements().unwrap());
+
+        if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
+            for (d, shift_power) in degree_bounds_and_shift_powers.iter() {
+                let d_elem: <E::Fq as Field>::BasePrimeField = (*d as u64).into();
+
+                res.push(d_elem);
+                res.extend_from_slice(&shift_power.to_field_elements().unwrap());
+            }
+        }
+
+        Some(res)
+    }
+}
+
 /// `PreparedVerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
@@ -237,6 +259,22 @@ impl<E: PairingEngine> ToBytes for Commitment<E> {
             .as_ref()
             .unwrap_or(&kzg10::Commitment::empty())
             .write(&mut writer)
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+        res.extend_from_slice(&self.comm.to_field_elements().unwrap());
+
+        if let Some(shifted_comm) = &self.shifted_comm {
+            res.extend_from_slice(&shifted_comm.to_field_elements().unwrap());
+        }
+
+        Some(res)
     }
 }
 
