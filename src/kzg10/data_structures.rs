@@ -403,15 +403,6 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
     }
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
-where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
-{
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
-        self.0.to_field_elements()
-    }
-}
-
 /// `PreparedCommitment` commits to a polynomial and prepares for mul_bits.
 #[derive(Derivative)]
 #[derivative(

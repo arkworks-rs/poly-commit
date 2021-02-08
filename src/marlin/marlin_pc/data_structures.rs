@@ -296,22 +296,6 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
-where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
-{
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
-        let mut res = Vec::new();
-        res.extend_from_slice(&self.comm.to_field_elements().unwrap());
-
-        if let Some(shifted_comm) = &self.shifted_comm {
-            res.extend_from_slice(&shifted_comm.to_field_elements().unwrap());
-        }
-
-        Some(res)
-    }
-}
-
 /// Prepared commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(

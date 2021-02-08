@@ -226,14 +226,6 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     }
 }
 
-impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
-    for LabeledCommitment<C>
-{
-    fn to_field_elements(&self) -> Option<Vec<F>> {
-        self.commitment.to_field_elements()
-    }
-}
-
 impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
     #[inline]
     fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
