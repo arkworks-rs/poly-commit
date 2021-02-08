@@ -9,8 +9,8 @@ use crate::{
     BTreeMap, BTreeSet, BatchLCProof, LinearCombinationCoeffVar, LinearCombinationVar,
     PrepareGadget, String, ToString, Vec,
 };
-use ark_ec::{PairingEngine, PairingFriendlyCycle};
-use ark_ff::{fields::Field, PrimeField, ToConstraintField};
+use ark_ec::{AffineCurve, PairingEngine, PairingFriendlyCycle};
+use ark_ff::{PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
 use ark_r1cs_std::{
@@ -24,22 +24,15 @@ use ark_r1cs_std::{
     R1CSVar, ToBytesGadget, ToConstraintFieldGadget,
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use ark_std::{
-    borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, ops::MulAssign, vec,
-};
+use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, vec};
 
 /// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
 #[allow(clippy::type_complexity)]
 pub struct VerifierKeyVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// Generator of G1.
     pub g: PG::G1Var,
@@ -49,26 +42,21 @@ pub struct VerifierKeyVar<
     pub beta_h: PG::G2Var,
     /// Used for the shift powers associated with different degree bounds.
     pub degree_bounds_and_shift_powers:
-        Option<Vec<(usize, FpVar<<E::E1 as PairingEngine>::Fr>, PG::G1Var)>>,
+        Option<Vec<(usize, FpVar<<E::E2 as AffineCurve>::BaseField>, PG::G1Var)>>,
 }
 
 impl<E, PG> VerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     /// Find the appropriate shift for the degree bound.
     #[tracing::instrument(target = "r1cs", skip(self, cs))]
     pub fn get_shift_power(
         &self,
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
-        bound: &FpVar<<E::E1 as PairingEngine>::Fr>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
+        bound: &FpVar<<E::E2 as AffineCurve>::BaseField>,
     ) -> Option<PG::G1Var> {
         // Search the bound using PIR
         if self.degree_bounds_and_shift_powers.is_none() {
@@ -103,15 +91,15 @@ where
             }
 
             // Sum of the PIR values are equal to one
-            let mut sum = FpVar::<<E::E1 as PairingEngine>::Fr>::zero();
-            let one = FpVar::<<E::E1 as PairingEngine>::Fr>::one();
+            let mut sum = FpVar::<<E::E2 as AffineCurve>::BaseField>::zero();
+            let one = FpVar::<<E::E2 as AffineCurve>::BaseField>::one();
             for pir_gadget in pir_vector_gadgets.iter() {
-                sum += &FpVar::<<E::E1 as PairingEngine>::Fr>::from(pir_gadget.clone());
+                sum += &FpVar::<<E::E2 as AffineCurve>::BaseField>::from(pir_gadget.clone());
             }
             sum.enforce_equal(&one).unwrap();
 
             // PIR the value
-            let mut found_bound = FpVar::<<E::E1 as PairingEngine>::Fr>::zero();
+            let mut found_bound = FpVar::<<E::E2 as AffineCurve>::BaseField>::zero();
 
             let mut found_shift_power = PG::G1Var::zero();
 
@@ -119,7 +107,7 @@ where
                 .iter()
                 .zip(degree_bounds_and_shift_powers.iter())
             {
-                found_bound = FpVar::<<E::E1 as PairingEngine>::Fr>::conditionally_select(
+                found_bound = FpVar::<<E::E2 as AffineCurve>::BaseField>::conditionally_select(
                     pir_gadget,
                     degree,
                     &found_bound,
@@ -141,13 +129,8 @@ where
 impl<E, PG> Clone for VerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         VerifierKeyVar {
@@ -159,25 +142,21 @@ where
     }
 }
 
-impl<E, PG> AllocVar<VerifierKey<E::E2>, <E::E1 as PairingEngine>::Fr> for VerifierKeyVar<E, PG>
+impl<E, PG> AllocVar<VerifierKey<E::Engine2>, <E::E2 as AffineCurve>::BaseField>
+    for VerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, val))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         val: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<VerifierKey<E::E2>>,
+        T: Borrow<VerifierKey<E::Engine2>>,
     {
         let vk_orig = val()?.borrow().clone();
 
@@ -195,10 +174,10 @@ where
                 .map(|(s, g)| {
                     (
                         *s,
-                        FpVar::<<E::E1 as PairingEngine>::Fr>::new_variable(
+                        FpVar::<<E::E2 as AffineCurve>::BaseField>::new_variable(
                             ark_relations::ns!(cs, "degree bound"),
                             || {
-                                Ok(<<E::E1 as PairingEngine>::Fr as From<u128>>::from(
+                                Ok(<<E::E2 as AffineCurve>::BaseField as From<u128>>::from(
                                     *s as u128,
                                 ))
                             },
@@ -228,19 +207,14 @@ where
     }
 }
 
-impl<E, PG> ToBytesGadget<<E::E1 as PairingEngine>::Fr> for VerifierKeyVar<E, PG>
+impl<E, PG> ToBytesGadget<<E::E2 as AffineCurve>::BaseField> for VerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<E::E1 as PairingEngine>::Fr>>> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<E::E2 as AffineCurve>::BaseField>>> {
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(&self.g.to_bytes()?);
@@ -260,21 +234,16 @@ where
     }
 }
 
-impl<E, PG> ToConstraintFieldGadget<<E::E1 as PairingEngine>::Fr> for VerifierKeyVar<E, PG>
+impl<E, PG> ToConstraintFieldGadget<<E::E2 as AffineCurve>::BaseField> for VerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    PG::G1Var: ToConstraintFieldGadget<<E::E1 as PairingEngine>::Fr>,
-    PG::G2Var: ToConstraintFieldGadget<<E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
+    PG::G1Var: ToConstraintFieldGadget<<E::E2 as AffineCurve>::BaseField>,
+    PG::G2Var: ToConstraintFieldGadget<<E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<E::E1 as PairingEngine>::Fr>>> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<E::E2 as AffineCurve>::BaseField>>> {
         let mut res = Vec::new();
 
         let mut g_gadget = self.g.to_constraint_field()?;
@@ -304,14 +273,9 @@ where
 #[allow(clippy::type_complexity)]
 pub struct PreparedVerifierKeyVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// Generator of G1.
     pub prepared_g: Vec<PG::G1Var>,
@@ -320,8 +284,13 @@ pub struct PreparedVerifierKeyVar<
     /// Generator of G1, times first monomial.
     pub prepared_beta_h: PG::G2PreparedVar,
     /// Used for the shift powers associated with different degree bounds.
-    pub prepared_degree_bounds_and_shift_powers:
-        Option<Vec<(usize, FpVar<<E::E1 as PairingEngine>::Fr>, Vec<PG::G1Var>)>>,
+    pub prepared_degree_bounds_and_shift_powers: Option<
+        Vec<(
+            usize,
+            FpVar<<E::E2 as AffineCurve>::BaseField>,
+            Vec<PG::G1Var>,
+        )>,
+    >,
     /// Indicate whether or not it is a constant allocation (which decides whether or not shift powers are precomputed)
     pub constant_allocation: bool,
     /// If not a constant allocation, the original vk is attached (for computing the shift power series)
@@ -331,19 +300,14 @@ pub struct PreparedVerifierKeyVar<
 impl<E, PG> PreparedVerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(
         &self,
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
-        bound: &FpVar<<E::E1 as PairingEngine>::Fr>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
+        bound: &FpVar<<E::E2 as AffineCurve>::BaseField>,
     ) -> Option<Vec<PG::G1Var>> {
         if self.constant_allocation {
             if self.prepared_degree_bounds_and_shift_powers.is_none() {
@@ -371,7 +335,7 @@ where
             if let Some(shift_power) = shift_power {
                 let mut prepared_shift_gadgets = Vec::<PG::G1Var>::new();
 
-                let supported_bits = <E::E2 as PairingEngine>::Fr::size_in_bits();
+                let supported_bits = <E::Engine2 as PairingEngine>::Fr::size_in_bits();
 
                 let mut cur: PG::G1Var = shift_power;
                 for _ in 0..supported_bits {
@@ -387,21 +351,16 @@ where
     }
 }
 
-impl<E, PG> PrepareGadget<VerifierKeyVar<E, PG>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> PrepareGadget<VerifierKeyVar<E, PG>, <E::E2 as AffineCurve>::BaseField>
     for PreparedVerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &VerifierKeyVar<E, PG>) -> R1CSResult<Self> {
-        let supported_bits = <<E::E2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
+        let supported_bits = <<E::Engine2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
         let mut prepared_g = Vec::<PG::G1Var>::new();
 
         let mut g: PG::G1Var = unprepared.g.clone();
@@ -415,8 +374,11 @@ where
 
         let prepared_degree_bounds_and_shift_powers =
             if unprepared.degree_bounds_and_shift_powers.is_some() {
-                let mut res =
-                    Vec::<(usize, FpVar<<E::E1 as PairingEngine>::Fr>, Vec<PG::G1Var>)>::new();
+                let mut res = Vec::<(
+                    usize,
+                    FpVar<<E::E2 as AffineCurve>::BaseField>,
+                    Vec<PG::G1Var>,
+                )>::new();
 
                 for (d, d_gadget, shift_power) in unprepared
                     .degree_bounds_and_shift_powers
@@ -446,13 +408,8 @@ where
 impl<E, PG> Clone for PreparedVerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         PreparedVerifierKeyVar {
@@ -468,26 +425,21 @@ where
     }
 }
 
-impl<E, PG> AllocVar<PreparedVerifierKey<E::E2>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> AllocVar<PreparedVerifierKey<E::Engine2>, <E::E2 as AffineCurve>::BaseField>
     for PreparedVerifierKeyVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<PreparedVerifierKey<E::E2>>,
+        T: Borrow<PreparedVerifierKey<E::Engine2>>,
     {
         let t = f()?;
         let obj = t.borrow();
@@ -498,8 +450,8 @@ where
         let mut prepared_g = Vec::<PG::G1Var>::new();
         for g in obj.prepared_vk.prepared_g.iter() {
             prepared_g.push(<PG::G1Var as AllocVar<
-                <E::E2 as PairingEngine>::G1Affine,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::G1Affine,
+                <E::E2 as AffineCurve>::BaseField,
             >>::new_variable(
                 ark_relations::ns!(cs, "g"), || Ok(*g), mode
             )?);
@@ -518,8 +470,11 @@ where
 
         let prepared_degree_bounds_and_shift_powers =
             if obj.prepared_degree_bounds_and_shift_powers.is_some() {
-                let mut res =
-                    Vec::<(usize, FpVar<<E::E1 as PairingEngine>::Fr>, Vec<PG::G1Var>)>::new();
+                let mut res = Vec::<(
+                    usize,
+                    FpVar<<E::E2 as AffineCurve>::BaseField>,
+                    Vec<PG::G1Var>,
+                )>::new();
 
                 for (d, shift_power_elems) in obj
                     .prepared_degree_bounds_and_shift_powers
@@ -530,17 +485,17 @@ where
                     let mut gadgets = Vec::<PG::G1Var>::new();
                     for shift_power_elem in shift_power_elems.iter() {
                         gadgets.push(<PG::G1Var as AllocVar<
-                            <E::E2 as PairingEngine>::G1Affine,
-                            <E::E1 as PairingEngine>::Fr,
+                            <E::Engine2 as PairingEngine>::G1Affine,
+                            <E::E2 as AffineCurve>::BaseField,
                         >>::new_variable(
                             cs.clone(), || Ok(shift_power_elem), mode
                         )?);
                     }
 
-                    let d_gadget = FpVar::<<E::E1 as PairingEngine>::Fr>::new_variable(
+                    let d_gadget = FpVar::<<E::E2 as AffineCurve>::BaseField>::new_variable(
                         cs.clone(),
                         || {
-                            Ok(<<E::E1 as PairingEngine>::Fr as From<u128>>::from(
+                            Ok(<<E::E2 as AffineCurve>::BaseField as From<u128>>::from(
                                 *d as u128,
                             ))
                         },
@@ -568,14 +523,9 @@ where
 /// Var for an optionally hiding Marlin-KZG10 commitment.
 pub struct CommitmentVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     comm: PG::G1Var,
     shifted_comm: Option<PG::G1Var>,
@@ -584,13 +534,8 @@ pub struct CommitmentVar<
 impl<E, PG> Clone for CommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         CommitmentVar {
@@ -600,25 +545,21 @@ where
     }
 }
 
-impl<E, PG> AllocVar<Commitment<E::E2>, <E::E1 as PairingEngine>::Fr> for CommitmentVar<E, PG>
+impl<E, PG> AllocVar<Commitment<E::Engine2>, <E::E2 as AffineCurve>::BaseField>
+    for CommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<Commitment<E::E2>>,
+        T: Borrow<Commitment<E::Engine2>>,
     {
         value_gen().and_then(|commitment| {
             let ns = cs.into();
@@ -643,20 +584,16 @@ where
     }
 }
 
-impl<E, PG> ToConstraintFieldGadget<<E::E1 as PairingEngine>::Fr> for CommitmentVar<E, PG>
+impl<E, PG> ToConstraintFieldGadget<<E::E2 as AffineCurve>::BaseField> for CommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    PG::G1Var: ToConstraintFieldGadget<<E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    E::E2: ToConstraintField<<E::E2 as AffineCurve>::BaseField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
+    PG::G1Var: ToConstraintFieldGadget<<E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<E::E1 as PairingEngine>::Fr>>> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<<E::E2 as AffineCurve>::BaseField>>> {
         let mut res = Vec::new();
 
         let mut comm_gadget = self.comm.to_constraint_field()?;
@@ -673,19 +610,14 @@ where
     }
 }
 
-impl<E, PG> ToBytesGadget<<E::E1 as PairingEngine>::Fr> for CommitmentVar<E, PG>
+impl<E, PG> ToBytesGadget<<E::E2 as AffineCurve>::BaseField> for CommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<E::E1 as PairingEngine>::Fr>>> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<<E::E2 as AffineCurve>::BaseField>>> {
         let zero_shifted_comm = PG::G1Var::zero();
 
         let mut bytes = Vec::new();
@@ -701,15 +633,8 @@ where
 /// shifted_comm is not prepared, due to the specific use case.
 pub struct PreparedCommitmentVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-> where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-{
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
+> {
     prepared_comm: Vec<PG::G1Var>,
     shifted_comm: Option<PG::G1Var>,
 }
@@ -717,13 +642,7 @@ pub struct PreparedCommitmentVar<
 impl<E, PG> Clone for PreparedCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         PreparedCommitmentVar {
@@ -733,22 +652,17 @@ where
     }
 }
 
-impl<E, PG> PrepareGadget<CommitmentVar<E, PG>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> PrepareGadget<CommitmentVar<E, PG>, <E::E2 as AffineCurve>::BaseField>
     for PreparedCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &CommitmentVar<E, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
-        let supported_bits = <<E::E2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
+        let supported_bits = <<E::Engine2 as PairingEngine>::Fr as PrimeField>::size_in_bits();
 
         let mut cur: PG::G1Var = unprepared.comm.clone();
         for _ in 0..supported_bits {
@@ -763,26 +677,20 @@ where
     }
 }
 
-impl<E, PG> AllocVar<PreparedCommitment<E::E2>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> AllocVar<PreparedCommitment<E::Engine2>, <E::E2 as AffineCurve>::BaseField>
     for PreparedCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<PreparedCommitment<E::E2>>,
+        T: Borrow<PreparedCommitment<E::Engine2>>,
     {
         let t = f()?;
         let obj = t.borrow();
@@ -794,13 +702,13 @@ where
 
         for comm_elem in obj.prepared_comm.0.iter() {
             prepared_comm.push(<PG::G1Var as AllocVar<
-                <E::E2 as PairingEngine>::G1Projective,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::G1Projective,
+                <E::E2 as AffineCurve>::BaseField,
             >>::new_variable(
                 ark_relations::ns!(cs, "comm_elem"),
                 || {
-                    Ok(<<E::E2 as PairingEngine>::G1Projective as From<
-                        <E::E2 as PairingEngine>::G1Affine,
+                    Ok(<<E::Engine2 as PairingEngine>::G1Projective as From<
+                        <E::Engine2 as PairingEngine>::G1Affine,
                     >>::from(*comm_elem))
                 },
                 mode,
@@ -809,13 +717,13 @@ where
 
         let shifted_comm = if obj.shifted_comm.is_some() {
             Some(<PG::G1Var as AllocVar<
-                <E::E2 as PairingEngine>::G1Projective,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::G1Projective,
+                <E::E2 as AffineCurve>::BaseField,
             >>::new_variable(
                 ark_relations::ns!(cs, "shifted_comm"),
                 || {
-                    Ok(<<E::E2 as PairingEngine>::G1Projective as From<
-                        <E::E2 as PairingEngine>::G1Affine,
+                    Ok(<<E::Engine2 as PairingEngine>::G1Projective as From<
+                        <E::Engine2 as PairingEngine>::G1Affine,
                     >>::from(obj.shifted_comm.unwrap().0))
                 },
                 mode,
@@ -834,33 +742,23 @@ where
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 pub struct LabeledCommitmentVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// A text label for the commitment.
     pub label: String,
     /// The plain commitment.
     pub commitment: CommitmentVar<E, PG>,
     /// Optionally, a bound on the polynomial degree.
-    pub degree_bound: Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+    pub degree_bound: Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
 }
 
 impl<E, PG> Clone for LabeledCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         LabeledCommitmentVar {
@@ -871,26 +769,21 @@ where
     }
 }
 
-impl<E, PG> AllocVar<LabeledCommitment<Commitment<E::E2>>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> AllocVar<LabeledCommitment<Commitment<E::Engine2>>, <E::E2 as AffineCurve>::BaseField>
     for LabeledCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<LabeledCommitment<Commitment<E::E2>>>,
+        T: Borrow<LabeledCommitment<Commitment<E::Engine2>>>,
     {
         value_gen().and_then(|labeled_commitment| {
             let ns = cs.into();
@@ -908,10 +801,10 @@ where
             )?;
 
             let degree_bound = if let Some(degree_bound) = degree_bound {
-                FpVar::<<E::E1 as PairingEngine>::Fr>::new_variable(
+                FpVar::<<E::E2 as AffineCurve>::BaseField>::new_variable(
                     ark_relations::ns!(cs, "degree_bound"),
                     || {
-                        Ok(<<E::E1 as PairingEngine>::Fr as From<u128>>::from(
+                        Ok(<<E::E2 as AffineCurve>::BaseField as From<u128>>::from(
                             degree_bound as u128,
                         ))
                     },
@@ -934,33 +827,23 @@ where
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 pub struct PreparedLabeledCommitmentVar<
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// A text label for the commitment.
     pub label: String,
     /// The plain commitment.
     pub prepared_commitment: PreparedCommitmentVar<E, PG>,
     /// Optionally, a bound on the polynomial degree.
-    pub degree_bound: Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+    pub degree_bound: Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
 }
 
 impl<E, PG> Clone for PreparedLabeledCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         PreparedLabeledCommitmentVar {
@@ -971,17 +854,12 @@ where
     }
 }
 
-impl<E, PG> PrepareGadget<LabeledCommitmentVar<E, PG>, <E::E1 as PairingEngine>::Fr>
+impl<E, PG> PrepareGadget<LabeledCommitmentVar<E, PG>, <E::E2 as AffineCurve>::BaseField>
     for PreparedLabeledCommitmentVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &LabeledCommitmentVar<E, PG>) -> R1CSResult<Self> {
@@ -997,32 +875,25 @@ where
 
 /// Var for a Marlin-KZG10 proof.
 #[allow(clippy::type_complexity)]
-pub struct ProofVar<E: PairingFriendlyCycle, PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>>
-where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+pub struct ProofVar<
+    E: PairingFriendlyCycle,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
+> where
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// The commitment to the witness polynomial.
     pub w: PG::G1Var,
     /// The evaluation of the random hiding polynomial.
-    pub random_v:
-        Option<NonNativeFieldVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>>,
+    pub random_v: Option<
+        NonNativeFieldVar<<E::Engine2 as PairingEngine>::Fr, <E::E2 as AffineCurve>::BaseField>,
+    >,
 }
 
 impl<E, PG> Clone for ProofVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         ProofVar {
@@ -1032,25 +903,20 @@ where
     }
 }
 
-impl<E, PG> AllocVar<Proof<E::E2>, <E::E1 as PairingEngine>::Fr> for ProofVar<E, PG>
+impl<E, PG> AllocVar<Proof<E::Engine2>, <E::E2 as AffineCurve>::BaseField> for ProofVar<E, PG>
 where
     E: PairingFriendlyCycle,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<Proof<E::E2>>,
+        T: Borrow<Proof<E::Engine2>>,
     {
         value_gen().and_then(|proof| {
             let ns = cs.into();
@@ -1077,21 +943,19 @@ where
 #[allow(clippy::type_complexity)]
 pub struct BatchLCProofVar<
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 > where
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
 {
     /// Evaluation proofs.
     pub proofs: Vec<ProofVar<E, PG>>,
     /// Evaluations required to verify the proof.
-    pub evals:
-        Option<Vec<NonNativeFieldVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>>>,
+    pub evals: Option<
+        Vec<
+            NonNativeFieldVar<<E::Engine2 as PairingEngine>::Fr, <E::E2 as AffineCurve>::BaseField>,
+        >,
+    >,
     #[doc(hidden)]
     pub polynomial: PhantomData<P>,
 }
@@ -1099,14 +963,9 @@ pub struct BatchLCProofVar<
 impl<E, P, PG> Clone for BatchLCProofVar<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         BatchLCProofVar {
@@ -1119,29 +978,24 @@ where
 
 impl<E, P, PG>
     AllocVar<
-        BatchLCProof<<E::E2 as PairingEngine>::Fr, P, MarlinKZG10<E::E2, P>>,
-        <E::E1 as PairingEngine>::Fr,
+        BatchLCProof<<E::Engine2 as PairingEngine>::Fr, P, MarlinKZG10<E::Engine2, P>>,
+        <E::E2 as AffineCurve>::BaseField,
     > for BatchLCProofVar<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<<E::E1 as PairingEngine>::Fr>>,
+        cs: impl Into<Namespace<<E::E2 as AffineCurve>::BaseField>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<BatchLCProof<<E::E2 as PairingEngine>::Fr, P, MarlinKZG10<E::E2, P>>>,
+        T: Borrow<BatchLCProof<<E::Engine2 as PairingEngine>::Fr, P, MarlinKZG10<E::Engine2, P>>>,
     {
         value_gen().map(|proof| {
             let ns = cs.into();
@@ -1159,7 +1013,12 @@ where
 
             #[allow(clippy::type_complexity)]
             let evals: Option<
-                Vec<NonNativeFieldVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>>,
+                Vec<
+                    NonNativeFieldVar<
+                        <E::Engine2 as PairingEngine>::Fr,
+                        <E::E2 as AffineCurve>::BaseField,
+                    >,
+                >,
             > = match evals {
                 None => None,
                 Some(evals_inner) => Some(
@@ -1190,14 +1049,8 @@ where
 pub struct MarlinKZG10Gadget<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     _cycle_engine: PhantomData<E>,
     _pairing_gadget: PhantomData<PG>,
@@ -1207,14 +1060,8 @@ where
 impl<E, P, PG> Clone for MarlinKZG10Gadget<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     fn clone(&self) -> Self {
         MarlinKZG10Gadget {
@@ -1228,15 +1075,10 @@ where
 impl<E, P, PG> MarlinKZG10Gadget<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     #[tracing::instrument(
@@ -1244,43 +1086,52 @@ where
         skip(prepared_verification_key, lc_info, query_set, evaluations, proofs)
     )]
     fn prepared_batch_check_evaluations(
-        cs: ConstraintSystemRef<<E::E1 as PairingEngine>::Fr>,
+        cs: ConstraintSystemRef<<E::E2 as AffineCurve>::BaseField>,
         prepared_verification_key: &<Self as PCCheckVar<
-            <E::E2 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
             P,
-            MarlinKZG10<E::E2, P>,
-            <E::E1 as PairingEngine>::Fr,
+            MarlinKZG10<E::Engine2, P>,
+            <E::E2 as AffineCurve>::BaseField,
         >>::PreparedVerifierKeyVar,
         lc_info: &[(
             String,
             Vec<(
                 Option<
-                    NonNativeFieldVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
+                    NonNativeFieldVar<
+                        <E::Engine2 as PairingEngine>::Fr,
+                        <E::E2 as AffineCurve>::BaseField,
+                    >,
                 >,
-                Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+                Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
                 PreparedCommitmentVar<E, PG>,
                 bool,
             )>,
         )],
-        query_set: &QuerySetVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
-        evaluations: &EvaluationsVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
+        query_set: &QuerySetVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
+        evaluations: &EvaluationsVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
         proofs: &[<Self as PCCheckVar<
-            <E::E2 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
             P,
-            MarlinKZG10<E::E2, P>,
-            <E::E1 as PairingEngine>::Fr,
+            MarlinKZG10<E::Engine2, P>,
+            <E::E2 as AffineCurve>::BaseField,
         >>::ProofVar],
         opening_challenges: &[NonNativeFieldVar<
-            <E::E2 as PairingEngine>::Fr,
-            <E::E1 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
         >],
-        opening_challenges_bits: &[Vec<Boolean<<E::E1 as PairingEngine>::Fr>>],
+        opening_challenges_bits: &[Vec<Boolean<<E::E2 as AffineCurve>::BaseField>>],
         batching_rands: &[NonNativeFieldVar<
-            <E::E2 as PairingEngine>::Fr,
-            <E::E1 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
         >],
-        batching_rands_bits: &[Vec<Boolean<<E::E1 as PairingEngine>::Fr>>],
-    ) -> R1CSResult<Boolean<<E::E1 as PairingEngine>::Fr>> {
+        batching_rands_bits: &[Vec<Boolean<<E::E2 as AffineCurve>::BaseField>>],
+    ) -> R1CSResult<Boolean<<E::E2 as AffineCurve>::BaseField>> {
         let mut batching_rands = batching_rands.to_vec();
         let mut batching_rands_bits = batching_rands_bits.to_vec();
 
@@ -1291,11 +1142,11 @@ where
                 Vec<(
                     Option<
                         NonNativeFieldVar<
-                            <E::E2 as PairingEngine>::Fr,
-                            <E::E1 as PairingEngine>::Fr,
+                            <E::Engine2 as PairingEngine>::Fr,
+                            <E::E2 as AffineCurve>::BaseField,
                         >,
                     >,
-                    Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+                    Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
                     PreparedCommitmentVar<E, PG>,
                     bool,
                 )>,
@@ -1325,11 +1176,11 @@ where
                 Vec<(
                     Option<
                         NonNativeFieldVar<
-                            <E::E2 as PairingEngine>::Fr,
-                            <E::E1 as PairingEngine>::Fr,
+                            <E::Engine2 as PairingEngine>::Fr,
+                            <E::E2 as AffineCurve>::BaseField,
                         >,
                     >,
-                    Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+                    Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
                     PreparedCommitmentVar<E, PG>,
                     bool,
                 )>,
@@ -1353,8 +1204,8 @@ where
             // Accumulate the commitments and evaluations corresponding to `query`.
             let mut combined_comm = PG::G1Var::zero();
             let mut combined_eval = NonNativeFieldMulResultVar::<
-                <E::E2 as PairingEngine>::Fr,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::Fr,
+                <E::E2 as AffineCurve>::BaseField,
             >::zero();
 
             let mut opening_challenges_counter = 0;
@@ -1482,12 +1333,12 @@ where
             let mut total_w = PG::G1Var::zero();
 
             let mut g_multiplier = NonNativeFieldMulResultVar::<
-                <E::E2 as PairingEngine>::Fr,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::Fr,
+                <E::E2 as AffineCurve>::BaseField,
             >::zero();
             let mut g_multiplier_reduced = NonNativeFieldVar::<
-                <E::E2 as PairingEngine>::Fr,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::Fr,
+                <E::E2 as AffineCurve>::BaseField,
             >::zero();
             for (i, (((c, z), v), proof)) in combined_comms
                 .iter()
@@ -1573,19 +1424,18 @@ where
 }
 
 impl<E, P, PG>
-    PCCheckVar<<E::E2 as PairingEngine>::Fr, P, MarlinKZG10<E::E2, P>, <E::E1 as PairingEngine>::Fr>
-    for MarlinKZG10Gadget<E, P, PG>
+    PCCheckVar<
+        <E::Engine2 as PairingEngine>::Fr,
+        P,
+        MarlinKZG10<E::Engine2, P>,
+        <E::E2 as AffineCurve>::BaseField,
+    > for MarlinKZG10Gadget<E, P, PG>
 where
     E: PairingFriendlyCycle,
-    P: UVPolynomial<<E::E2 as PairingEngine>::Fr, Point = <E::E2 as PairingEngine>::Fr>,
+    <E::E2 as AffineCurve>::BaseField: PrimeField,
+    P: UVPolynomial<<E::Engine2 as PairingEngine>::Fr, Point = <E::Engine2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::E2, <E::E1 as PairingEngine>::Fr>,
-    <E::E2 as PairingEngine>::G1Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G2Projective: MulAssign<<E::E1 as PairingEngine>::Fq>,
-    <E::E2 as PairingEngine>::G1Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
-    <E::E2 as PairingEngine>::G2Affine:
-        ToConstraintField<<<E::E1 as PairingEngine>::Fr as Field>::BasePrimeField>,
+    PG: PairingVar<E::Engine2, <E::E2 as AffineCurve>::BaseField>,
 {
     type VerifierKeyVar = VerifierKeyVar<E, PG>;
     type PreparedVerifierKeyVar = PreparedVerifierKeyVar<E, PG>;
@@ -1602,17 +1452,23 @@ where
         skip(verification_key, commitments, query_set, evaluations, proofs)
     )]
     fn batch_check_evaluations(
-        _cs: ConstraintSystemRef<<E::E1 as PairingEngine>::Fr>,
+        _cs: ConstraintSystemRef<<E::E2 as AffineCurve>::BaseField>,
         verification_key: &Self::VerifierKeyVar,
         commitments: &[Self::LabeledCommitmentVar],
-        query_set: &QuerySetVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
-        evaluations: &EvaluationsVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
+        query_set: &QuerySetVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
+        evaluations: &EvaluationsVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
         proofs: &[Self::ProofVar],
         rand_data: &PCCheckRandomDataVar<
-            <E::E2 as PairingEngine>::Fr,
-            <E::E1 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
         >,
-    ) -> R1CSResult<Boolean<<E::E1 as PairingEngine>::Fr>> {
+    ) -> R1CSResult<Boolean<<E::E2 as AffineCurve>::BaseField>> {
         let mut batching_rands = rand_data.batching_rands.to_vec();
         let mut batching_rands_bits = rand_data.batching_rands_bits.to_vec();
 
@@ -1657,8 +1513,8 @@ where
             // Accumulate the commitments and evaluations corresponding to `query`.
             let mut combined_comm = PG::G1Var::zero();
             let mut combined_eval = NonNativeFieldMulResultVar::<
-                <E::E2 as PairingEngine>::Fr,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::Fr,
+                <E::E2 as AffineCurve>::BaseField,
             >::zero();
 
             let mut opening_challenges_counter = 0;
@@ -1722,8 +1578,8 @@ where
             let mut total_w = PG::G1Var::zero();
 
             let mut g_multiplier = NonNativeFieldMulResultVar::<
-                <E::E2 as PairingEngine>::Fr,
-                <E::E1 as PairingEngine>::Fr,
+                <E::Engine2 as PairingEngine>::Fr,
+                <E::E2 as AffineCurve>::BaseField,
             >::zero();
             for (((c, z), v), proof) in combined_comms
                 .iter()
@@ -1797,21 +1653,27 @@ where
         )
     )]
     fn prepared_check_combinations(
-        cs: ConstraintSystemRef<<E::E1 as PairingEngine>::Fr>,
+        cs: ConstraintSystemRef<<E::E2 as AffineCurve>::BaseField>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,
         linear_combinations: &[LinearCombinationVar<
-            <E::E2 as PairingEngine>::Fr,
-            <E::E1 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
         >],
         prepared_commitments: &[Self::PreparedLabeledCommitmentVar],
-        query_set: &QuerySetVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
-        evaluations: &EvaluationsVar<<E::E2 as PairingEngine>::Fr, <E::E1 as PairingEngine>::Fr>,
+        query_set: &QuerySetVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
+        evaluations: &EvaluationsVar<
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
+        >,
         proof: &Self::BatchLCProofVar,
         rand_data: &PCCheckRandomDataVar<
-            <E::E2 as PairingEngine>::Fr,
-            <E::E1 as PairingEngine>::Fr,
+            <E::Engine2 as PairingEngine>::Fr,
+            <E::E2 as AffineCurve>::BaseField,
         >,
-    ) -> R1CSResult<Boolean<<E::E1 as PairingEngine>::Fr>> {
+    ) -> R1CSResult<Boolean<<E::E2 as AffineCurve>::BaseField>> {
         let BatchLCProofVar { proofs, .. } = proof;
 
         let label_comm_map = prepared_commitments
@@ -1897,7 +1759,7 @@ where
     fn create_labeled_commitment(
         label: String,
         commitment: Self::CommitmentVar,
-        degree_bound: Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+        degree_bound: Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
     ) -> Self::LabeledCommitmentVar {
         Self::LabeledCommitmentVar {
             label,
@@ -1909,7 +1771,7 @@ where
     fn create_prepared_labeled_commitment(
         label: String,
         prepared_commitment: Self::PreparedCommitmentVar,
-        degree_bound: Option<FpVar<<E::E1 as PairingEngine>::Fr>>,
+        degree_bound: Option<FpVar<<E::E2 as AffineCurve>::BaseField>>,
     ) -> Self::PreparedLabeledCommitmentVar {
         Self::PreparedLabeledCommitmentVar {
             label,
