@@ -66,4 +66,3 @@ std = [ "ark-ff/std", "ark-ec/std", "ark-nonnative-field/std", "ark-poly/std", "
 r1cs = [ "ark-relations", "ark-r1cs-std", "ark-nonnative-field", "hashbrown" ]
 print-trace = [ "bench-utils/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
-density-optimized = [ "r1cs", "ark-nonnative-field/density-optimized" ]
