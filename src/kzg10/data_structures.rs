@@ -303,11 +303,10 @@ where
     E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
 {
     fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
-        // TODO: gamma_g is omitted because our constraint system does not use. This is a little bit problematic
-        // The order should accommodate the one in the constraints.rs, which takes g, h, and beta_h.
         let mut res = Vec::new();
 
         res.extend_from_slice(&self.g.to_field_elements().unwrap());
+        res.extend_from_slice(&self.gamma_g.to_field_elements().unwrap());
         res.extend_from_slice(&self.h.to_field_elements().unwrap());
         res.extend_from_slice(&self.beta_h.to_field_elements().unwrap());
 
@@ -383,6 +382,15 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
 
     fn size_in_bytes(&self) -> usize {
         ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        self.0.to_field_elements()
     }
 }
 
