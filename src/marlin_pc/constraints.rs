@@ -28,7 +28,7 @@ use ark_std::{
     borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, ops::MulAssign, vec,
 };
 
-/// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
+/// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
 #[allow(clippy::type_complexity)]
 pub struct VerifierKeyVar<
     CycleE: CycleEngine,
