@@ -9,7 +9,7 @@ use crate::{
     BTreeMap, BTreeSet, BatchLCProof, LinearCombinationCoeffVar, LinearCombinationVar,
     PrepareGadget, String, ToString, Vec,
 };
-use ark_ec::{CycleEngine, PairingEngine};
+use ark_ec::{PairingEngine, PairingFriendlyCycle};
 use ark_ff::{fields::Field, PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
@@ -31,7 +31,7 @@ use ark_std::{
 /// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
 #[allow(clippy::type_complexity)]
 pub struct VerifierKeyVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -54,7 +54,7 @@ pub struct VerifierKeyVar<
 
 impl<CycleE, PG> VerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -140,7 +140,7 @@ where
 
 impl<CycleE, PG> Clone for VerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -162,7 +162,7 @@ where
 impl<CycleE, PG> AllocVar<VerifierKey<CycleE::E2>, <CycleE::E1 as PairingEngine>::Fr>
     for VerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -231,8 +231,7 @@ where
 
 impl<CycleE, PG> ToBytesGadget<<CycleE::E1 as PairingEngine>::Fr> for VerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
-
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -265,8 +264,7 @@ where
 impl<CycleE, PG> ToConstraintFieldGadget<<CycleE::E1 as PairingEngine>::Fr>
     for VerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
-
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -307,7 +305,7 @@ where
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
 #[allow(clippy::type_complexity)]
 pub struct PreparedVerifierKeyVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -339,7 +337,7 @@ pub struct PreparedVerifierKeyVar<
 
 impl<CycleE, PG> PreparedVerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -399,7 +397,7 @@ where
 impl<CycleE, PG> PrepareGadget<VerifierKeyVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedVerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -457,7 +455,7 @@ where
 
 impl<CycleE, PG> Clone for PreparedVerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -483,7 +481,7 @@ where
 impl<CycleE, PG> AllocVar<PreparedVerifierKey<CycleE::E2>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedVerifierKeyVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -582,7 +580,7 @@ where
 
 /// Var for an optionally hiding Marlin-KZG10 commitment.
 pub struct CommitmentVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -598,8 +596,7 @@ pub struct CommitmentVar<
 
 impl<CycleE, PG> Clone for CommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
-
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -619,8 +616,7 @@ where
 impl<CycleE, PG> AllocVar<Commitment<CycleE::E2>, <CycleE::E1 as PairingEngine>::Fr>
     for CommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
-
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -664,7 +660,7 @@ where
 impl<CycleE, PG> ToConstraintFieldGadget<<CycleE::E1 as PairingEngine>::Fr>
     for CommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -694,7 +690,7 @@ where
 
 impl<CycleE, PG> ToBytesGadget<<CycleE::E1 as PairingEngine>::Fr> for CommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -719,7 +715,7 @@ where
 /// Prepared gadget for an optionally hiding Marlin-KZG10 commitment.
 /// shifted_comm is not prepared, due to the specific use case.
 pub struct PreparedCommitmentVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -735,7 +731,7 @@ pub struct PreparedCommitmentVar<
 
 impl<CycleE, PG> Clone for PreparedCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -755,7 +751,7 @@ where
 impl<CycleE, PG> PrepareGadget<CommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -785,7 +781,7 @@ where
 impl<CycleE, PG> AllocVar<PreparedCommitment<CycleE::E2>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -852,7 +848,7 @@ where
 
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 pub struct LabeledCommitmentVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -872,7 +868,7 @@ pub struct LabeledCommitmentVar<
 
 impl<CycleE, PG> Clone for LabeledCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -894,7 +890,7 @@ impl<CycleE, PG>
     AllocVar<LabeledCommitment<Commitment<CycleE::E2>>, <CycleE::E1 as PairingEngine>::Fr>
     for LabeledCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -953,7 +949,7 @@ where
 
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 pub struct PreparedLabeledCommitmentVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -973,7 +969,7 @@ pub struct PreparedLabeledCommitmentVar<
 
 impl<CycleE, PG> Clone for PreparedLabeledCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -994,7 +990,7 @@ where
 impl<CycleE, PG> PrepareGadget<LabeledCommitmentVar<CycleE, PG>, <CycleE::E1 as PairingEngine>::Fr>
     for PreparedLabeledCommitmentVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1018,7 +1014,7 @@ where
 /// Var for a Marlin-KZG10 proof.
 #[allow(clippy::type_complexity)]
 pub struct ProofVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1038,7 +1034,7 @@ pub struct ProofVar<
 
 impl<CycleE, PG> Clone for ProofVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1058,7 +1054,7 @@ where
 impl<CycleE, PG> AllocVar<Proof<CycleE::E2>, <CycleE::E1 as PairingEngine>::Fr>
     for ProofVar<CycleE, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
     <CycleE::E2 as PairingEngine>::G2Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1100,7 +1096,7 @@ where
 /// An allocated version of `BatchLCProof`.
 #[allow(clippy::type_complexity)]
 pub struct BatchLCProofVar<
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
 > where
@@ -1125,7 +1121,7 @@ pub struct BatchLCProofVar<
 
 impl<CycleE, P, PG> Clone for BatchLCProofVar<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1150,7 +1146,7 @@ impl<CycleE, P, PG>
         <CycleE::E1 as PairingEngine>::Fr,
     > for BatchLCProofVar<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -1221,7 +1217,7 @@ where
 /// Var for the Marlin-KZG10 polynomial commitment verifier.
 pub struct MarlinKZG10Gadget<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1238,7 +1234,7 @@ where
 
 impl<CycleE, P, PG> Clone for MarlinKZG10Gadget<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
     <CycleE::E2 as PairingEngine>::G1Projective: MulAssign<<CycleE::E1 as PairingEngine>::Fq>,
@@ -1259,7 +1255,7 @@ where
 
 impl<CycleE, P, PG> MarlinKZG10Gadget<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
@@ -1621,7 +1617,7 @@ impl<CycleE, P, PG>
         <CycleE::E1 as PairingEngine>::Fr,
     > for MarlinKZG10Gadget<CycleE, P, PG>
 where
-    CycleE: CycleEngine,
+    CycleE: PairingFriendlyCycle,
     P: UVPolynomial<<CycleE::E2 as PairingEngine>::Fr, Point = <CycleE::E2 as PairingEngine>::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<CycleE::E2, <CycleE::E1 as PairingEngine>::Fr>,
