@@ -949,11 +949,6 @@ where
             labels.1.insert(label);
         }
 
-        println!(
-            "before PC combining commitments: constraints: {}",
-            cs.num_constraints()
-        );
-
         // Accumulate commitments and evaluations for each query.
         let mut combined_queries = Vec::new();
         let mut combined_comms = Vec::new();
@@ -1101,11 +1096,6 @@ where
             combined_evals.push(combined_eval_reduced);
         }
 
-        println!(
-            "before PC batch check: constraints: {}",
-            cs.num_constraints()
-        );
-
         // Perform the batch check.
         {
             let mut total_c = PG::G1Var::zero();
@@ -1184,11 +1174,6 @@ where
                 &[prepared_total_w, prepared_total_c],
                 &[prepared_beta_h, prepared_h],
             )?;
-
-            println!(
-                "after PC batch check: constraints: {}",
-                cs.num_constraints()
-            );
 
             let rhs = &PG::GTVar::one();
             lhs.is_eq(&rhs)
