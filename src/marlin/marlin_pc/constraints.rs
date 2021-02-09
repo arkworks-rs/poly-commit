@@ -1464,10 +1464,8 @@ where
                     }
 
                     let coeff = match coeff {
-                        LinearCombinationCoeffVar::One => Some(NonNativeFieldVar::one()),
-                        LinearCombinationCoeffVar::MinusOne => {
-                            Some(NonNativeFieldVar::zero() - NonNativeFieldVar::one())
-                        }
+                        LinearCombinationCoeffVar::One => None,
+                        LinearCombinationCoeffVar::MinusOne => None,
                         LinearCombinationCoeffVar::Var(variable) => Some(variable.clone()),
                     };
 
