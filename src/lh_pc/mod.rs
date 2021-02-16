@@ -6,18 +6,20 @@ use crate::{
     PolynomialCommitment, QuerySet,
 };
 use ark_ec::AffineCurve;
-use ark_ff::{Field, UniformRand, Zero};
+use ark_ff::{UniformRand, Zero};
 use ark_std::vec;
 use core::marker::PhantomData;
 use rand_core::RngCore;
 
-pub mod data_structures;
+
+mod data_structures;
 use ark_poly::UVPolynomial;
 pub use data_structures::*;
 
-pub mod error;
-use error::LHPCError;
+mod error;
+pub use error::LHPCError;
 
+/// A simple polynomial commitment scheme that relies on Pedersen commitments.
 pub struct LinearHashPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
     _field: PhantomData<G>,
     _polynomial: PhantomData<P>,
@@ -67,10 +69,10 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
     fn setup<R: RngCore>(
         max_degree: usize,
         _: Option<usize>,
-        rng: &mut R,
+        _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         let lh_pp =
-            PedersenCommitment::setup(max_degree + 1, rng).map_err(|e| LHPCError::lh_error(e))?;
+            PedersenCommitment::setup(max_degree + 1).map_err(|e| LHPCError::lh_error(e))?;
         Ok(UniversalParameters(lh_pp))
     }
 

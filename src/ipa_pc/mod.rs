@@ -6,7 +6,7 @@ use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, ToConstraintField, UniformRand, Zero};
 use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::{format, vec};
-use core::{convert::TryInto, marker::PhantomData};
+use core::marker::PhantomData;
 use digest::Digest;
 use rand_core::RngCore;
 
@@ -16,6 +16,7 @@ pub use data_structures::*;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+/// R1CS constraints for succinct verification of PC_IPA.
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
@@ -371,6 +372,7 @@ where
         }
     }
 
+    #[allow(unused)]
     fn combine_shifted_rand(
         combined_rand: Option<G::ScalarField>,
         new_rand: Option<G::ScalarField>,
@@ -384,6 +386,7 @@ where
         combined_rand
     }
 
+    #[allow(unused)]
     fn combine_shifted_comm(
         combined_comm: Option<G::Projective>,
         new_comm: Option<G>,
@@ -397,6 +400,7 @@ where
         combined_comm
     }
 
+    #[allow(unused)]
     fn construct_labeled_commitments(
         lc_info: &[(String, Option<usize>)],
         elements: &[G::Projective],
