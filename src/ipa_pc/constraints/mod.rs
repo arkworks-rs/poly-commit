@@ -11,29 +11,32 @@ use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
 use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::constraints::CryptographicSpongeVar;
-use ark_sponge::FieldElementSize;
+use ark_sponge::{FieldElementSize, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
 pub mod data_structures;
 pub use data_structures::*;
 
-pub struct InnerProductArgPCGadget<G, C, S>
+pub struct InnerProductArgPCGadget<G, C, S, SV>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
-    S: CryptographicSpongeVar<ConstraintF<G>>,
+    S: CryptographicSponge<ConstraintF<G>>,
+    SV: CryptographicSpongeVar<ConstraintF<G>, S>,
 {
     pub _affine: PhantomData<G>,
     pub _curve_var: PhantomData<C>,
     pub _sponge: PhantomData<S>,
+    pub _sponge_var: PhantomData<SV>,
 }
 
-impl<G, C, S> InnerProductArgPCGadget<G, C, S>
+impl<G, C, S, SV> InnerProductArgPCGadget<G, C, S, SV>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
-    S: CryptographicSpongeVar<ConstraintF<G>>,
+    S: CryptographicSponge<ConstraintF<G>>,
+    SV: CryptographicSpongeVar<ConstraintF<G>, S>,
 {
     /// The succinct portion of `PC::check`. This algorithm runs in time
     /// O(log d), where d is the degree of the committed polynomials.
@@ -107,7 +110,7 @@ where
 
         if let Some((hiding_comm_var, rand_var)) = &proof_var.hiding_var {
             let mut hiding_challenge_sponge_var =
-                S::new(ns!(cs, "hiding_challenge_sponge_var").cs());
+                SV::new(ns!(cs, "hiding_challenge_sponge_var").cs());
 
             hiding_challenge_sponge_var
                 .absorb(combined_commitment_var.to_constraint_field()?.as_slice())?;
@@ -125,7 +128,7 @@ where
 
         // Challenge for each round
         let mut round_challenge_sponge_var =
-            S::new(ns!(cs, "round_challenge_sponge_var_init").cs());
+            SV::new(ns!(cs, "round_challenge_sponge_var_init").cs());
         round_challenge_sponge_var
             .absorb(combined_commitment_var.to_constraint_field()?.as_slice())?;
         round_challenge_sponge_var.absorb(point_and_combined_eval_fp_vars.as_slice())?;
@@ -146,7 +149,7 @@ where
             + &h_prime_var.scalar_mul_le(combined_eval_bytes_var.to_bits_le()?.iter())?;
 
         for (l_var, r_var) in proof_var.l_var_vec.iter().zip(&proof_var.r_var_vec) {
-            let mut round_challenge_sponge_var = S::new(ns!(cs, "round_challenge_sponge_var").cs());
+            let mut round_challenge_sponge_var = SV::new(ns!(cs, "round_challenge_sponge_var").cs());
 
             let round_challenge_bytes_var = round_challenge_bits_var
                 .chunks(8)
