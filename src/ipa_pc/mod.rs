@@ -38,8 +38,7 @@ where
     G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
-    CF: PrimeField,
-    Vec<CF>: Absorbable<CF>,
+    CF: PrimeField + Absorbable<CF>,
     S: CryptographicSponge<CF>,
 {
     _projective: PhantomData<G>,
@@ -77,8 +76,7 @@ where
     G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
-    CF: PrimeField,
-    Vec<CF>: Absorbable<CF>,
+    CF: PrimeField + Absorbable<CF>,
     S: CryptographicSponge<CF>,
 {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
@@ -462,8 +460,7 @@ where
     G: AffineCurve + ToConstraintField<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
-    CF: PrimeField,
-    Vec<CF>: Absorbable<CF>,
+    CF: PrimeField + Absorbable<CF>,
     S: CryptographicSponge<CF>,
 {
     type UniversalParams = UniversalParams<G>;
