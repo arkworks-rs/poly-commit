@@ -35,7 +35,7 @@ pub mod constraints;
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve + ToConstraintField<CF>,
+    G: AffineCurve + Absorbable<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
     CF: PrimeField + Absorbable<CF>,
@@ -48,7 +48,6 @@ where
     _sponge: PhantomData<S>,
 }
 
-#[inline]
 pub(crate) fn cm_commit<G: AffineCurve>(
     comm_key: &[G],
     scalars: &[G::ScalarField],
@@ -73,7 +72,7 @@ pub(crate) fn cm_commit<G: AffineCurve>(
 
 impl<G, D, P, CF, S> InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve + ToConstraintField<CF>,
+    G: AffineCurve + Absorbable<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
     CF: PrimeField + Absorbable<CF>,
@@ -252,8 +251,8 @@ where
             let mut hiding_challenge_sponge = S::new();
             absorb!(
                 &mut hiding_challenge_sponge,
-                combined_commitment.to_field_elements().unwrap(),
-                hiding_comm.to_field_elements().unwrap(),
+                combined_commitment,
+                hiding_comm,
                 &to_bytes![point, combined_v].unwrap()
             );
 
@@ -273,7 +272,7 @@ where
         let mut round_challenge_sponge = S::new();
         absorb!(
             &mut round_challenge_sponge,
-            combined_commitment.to_field_elements().unwrap(),
+            combined_commitment,
             &to_bytes![point, combined_v].unwrap()
         );
 
@@ -297,8 +296,8 @@ where
             let mut round_challenge_bytes = to_bytes![round_challenge].unwrap();
             round_challenge_bytes.resize_with(16, || 0u8);
             round_challenge_sponge.absorb(&round_challenge_bytes);
-            round_challenge_sponge.absorb(&l.to_field_elements().unwrap());
-            round_challenge_sponge.absorb(&r.to_field_elements().unwrap());
+            round_challenge_sponge.absorb(&l);
+            round_challenge_sponge.absorb(&r);
 
             round_challenge = round_challenge_sponge
                 .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
@@ -457,7 +456,7 @@ where
 
 impl<G, D, P, CF, S> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P, CF, S>
 where
-    G: AffineCurve + ToConstraintField<CF>,
+    G: AffineCurve + Absorbable<CF>,
     D: Digest,
     P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
     CF: PrimeField + Absorbable<CF>,
@@ -739,8 +738,8 @@ where
             let mut sponge = S::new();
             absorb!(
                 &mut sponge,
-                combined_commitment.to_field_elements().unwrap(),
-                hiding_commitment.unwrap().to_field_elements().unwrap(),
+                combined_commitment,
+                hiding_commitment.unwrap(),
                 &to_bytes![point, &combined_v].unwrap()
             );
 
@@ -773,7 +772,7 @@ where
         let mut sponge = S::new();
         absorb!(
             &mut sponge,
-            &combined_commitment.to_field_elements().unwrap(),
+            &combined_commitment,
             &to_bytes![point, combined_v].unwrap()
         );
 
@@ -837,8 +836,8 @@ where
             let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
             round_challenge_bytes.resize_with(16, || 0u8);
             sponge.absorb(&round_challenge_bytes);
-            sponge.absorb(&l.to_field_elements().unwrap());
-            sponge.absorb(&r.to_field_elements().unwrap());
+            sponge.absorb(&l);
+            sponge.absorb(&r);
 
             let prev_round_challenge = round_challenge;
             round_challenge = sponge

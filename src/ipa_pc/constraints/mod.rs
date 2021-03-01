@@ -13,6 +13,8 @@ use ark_sponge::constraints::CryptographicSpongeVar;
 use ark_sponge::{FieldElementSize, CryptographicSponge};
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
+use ark_sponge::constraints::absorbable::AbsorbableGadget;
+use ark_sponge::absorb_gadget;
 
 /// Gadget versions of data structures for PC_IPA
 pub mod data_structures;
@@ -22,7 +24,7 @@ pub use data_structures::*;
 pub struct InnerProductArgPCGadget<G, C, S, SV>
 where
     G: AffineCurve,
-    C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
+    C: CurveVar<G::Projective, ConstraintF<G>> + AbsorbableGadget<ConstraintF<G>>,
     S: CryptographicSponge<ConstraintF<G>>,
     SV: CryptographicSpongeVar<ConstraintF<G>, S>,
 {
@@ -35,7 +37,7 @@ where
 impl<G, C, S, SV> InnerProductArgPCGadget<G, C, S, SV>
 where
     G: AffineCurve,
-    C: CurveVar<G::Projective, ConstraintF<G>> + ToConstraintFieldGadget<ConstraintF<G>>,
+    C: CurveVar<G::Projective, ConstraintF<G>> + AbsorbableGadget<ConstraintF<G>>,
     S: CryptographicSponge<ConstraintF<G>>,
     SV: CryptographicSpongeVar<ConstraintF<G>, S>,
 {
@@ -105,18 +107,11 @@ where
         let mut point_and_combined_eval_bytes = point.to_bytes()?;
         point_and_combined_eval_bytes.extend_from_slice(combined_eval_bytes.as_slice());
 
-        let point_and_combined_eval_fps =
-            point_and_combined_eval_bytes.to_constraint_field()?;
-
         if let Some((hiding_comm, rand)) = &proof.hiding {
             let mut hiding_challenge_sponge =
                 SV::new(ns!(cs, "hiding_challenge_sponge").cs());
 
-            hiding_challenge_sponge
-                .absorb(combined_commitment.to_constraint_field()?.as_slice())?;
-            hiding_challenge_sponge
-                .absorb(hiding_comm.to_constraint_field()?.as_slice())?;
-            hiding_challenge_sponge.absorb(point_and_combined_eval_fps.as_slice())?;
+            absorb_gadget!(&mut hiding_challenge_sponge, combined_commitment, hiding_comm, point_and_combined_eval_bytes);
 
             let hiding_challenge_bits = hiding_challenge_sponge.squeeze_bits(128)?;
             combined_commitment += &(hiding_comm
@@ -129,9 +124,8 @@ where
         // Challenge for each round
         let mut round_challenge_sponge =
             SV::new(ns!(cs, "round_challenge_sponge_init").cs());
-        round_challenge_sponge
-            .absorb(combined_commitment.to_constraint_field()?.as_slice())?;
-        round_challenge_sponge.absorb(point_and_combined_eval_fps.as_slice())?;
+
+        absorb_gadget!(&mut round_challenge_sponge, combined_commitment, point_and_combined_eval_bytes);
 
         // Initialize challenges
         let mut round_challenge_field_elements_and_bits = round_challenge_sponge
@@ -156,10 +150,7 @@ where
                 .map(UInt8::<ConstraintF<G>>::from_bits_le)
                 .collect::<Vec<_>>();
 
-            round_challenge_sponge
-                .absorb(round_challenge_bytes.to_constraint_field()?.as_slice())?;
-            round_challenge_sponge.absorb(l.to_constraint_field()?.as_slice())?;
-            round_challenge_sponge.absorb(r.to_constraint_field()?.as_slice())?;
+            absorb_gadget!(&mut round_challenge_sponge, round_challenge_bytes, l, r);
 
             // Update challenges
             round_challenge_field_elements_and_bits = round_challenge_sponge
@@ -350,7 +341,7 @@ pub mod tests {
 
          */
 
-        let check = InnerProductArgPCGadget::<G, C, PoseidonSpongeVar<CF>>::succinct_check(
+        let check = InnerProductArgPCGadget::<G, C, PoseidonSponge<CF>, PoseidonSpongeVar<CF>>::succinct_check(
             cs.clone(),
             &vk,
             vec![&commitment],
