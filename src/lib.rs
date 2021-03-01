@@ -33,9 +33,23 @@ use ark_std::{
 pub mod data_structures;
 pub use data_structures::*;
 
+/// R1CS constraints for polynomial constraints.
+#[cfg(feature = "r1cs")]
+mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
+
 /// Errors pertaining to query sets.
 pub mod error;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
+
+/// Univariate and multivariate polynomial commitment schemes
+/// which (optionally) enable hiding commitments by following
+/// the approach outlined in [[CHMMVW20, "Marlin"]][marlin].
+///
+/// [marlin]: https://eprint.iacr.org/2019/1047
+pub mod marlin;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
 /// checker.
@@ -62,7 +76,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub mod marlin_pc;
+pub use marlin::marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
 /// modified to obtain batching and to enforce strict
@@ -91,6 +105,22 @@ pub mod ipa_pc;
 /// [bclms]: https://eprint.iacr.org/2020/1618
 pub mod lh_pc;
 
+/// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
+/// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm
+/// in prime-order groups. Construction is detailed in [[XZZPD19]][xzzpd19] and [[ZGKPP18]][zgkpp18]
+///
+/// [xzzpd19]: https://eprint.iacr.org/2019/317
+/// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
+pub mod multilinear_pc;
+
+/// Multivariate polynomial commitment based on the construction in
+/// [[PST13]][pst] with batching and (optional) hiding property inspired
+/// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
+///
+/// [pst]: https://eprint.iacr.org/2011/587.pdf
+/// [marlin]: https://eprint.iacr.org/2019/104
+pub use marlin::marlin_pst13_pc;
+
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
@@ -103,15 +133,6 @@ pub type QuerySet<T> = BTreeSet<(String, (String, T))>;
 /// That is, if `(label, query)` is an element of `Q`, then `evaluation.get((label, query))`
 /// should equal `p[label].evaluate(query)`.
 pub type Evaluations<T, F> = BTreeMap<(String, T), F>;
-
-/// A proof of satisfaction of linear combinations.
-#[derive(Clone)]
-pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
-    /// Evaluation proof.
-    pub proof: PC::BatchProof,
-    /// Evaluations required to verify the proof.
-    pub evals: Option<Vec<F>>,
-}
 
 /// Describes the interface for a polynomial commitment scheme that allows
 /// a sender to commit to multiple polynomials and later provide a succinct proof
@@ -137,7 +158,11 @@ pub trait PolynomialCommitment<F: Field, P: Polynomial<F>>: Sized {
     /// The evaluation proof for a single point.
     type Proof: PCProof + Clone;
     /// The evaluation proof for a query set.
-    type BatchProof: Clone + From<Vec<Self::Proof>> + Into<Vec<Self::Proof>>;
+    type BatchProof: Clone
+        + From<Vec<Self::Proof>>
+        + Into<Vec<Self::Proof>>
+        + CanonicalSerialize
+        + CanonicalDeserialize;
     /// The error type for the scheme.
     type Error: ark_std::error::Error + From<Error>;
 
@@ -666,8 +691,9 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
-    use ark_ff::{test_rng, Field};
+    use ark_ff::Field;
     use ark_poly::Polynomial;
+    use ark_std::test_rng;
     use rand::{distributions::Distribution, Rng};
 
     struct TestInfo<F: Field, P: Polynomial<F>> {

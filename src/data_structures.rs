@@ -1,5 +1,5 @@
-use crate::{Polynomial, Rc, String, Vec};
-use ark_ff::Field;
+use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
+use ark_ff::{Field, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Borrow,
@@ -14,14 +14,18 @@ pub type PolynomialLabel = String;
 
 /// Defines the minimal interface for public params for any polynomial
 /// commitment scheme.
-pub trait PCUniversalParams: Clone + core::fmt::Debug {
+pub trait PCUniversalParams:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the committer key.
     fn max_degree(&self) -> usize;
 }
 
 /// Defines the minimal interface of committer keys for any polynomial
 /// commitment scheme.
-pub trait PCCommitterKey: Clone + core::fmt::Debug {
+pub trait PCCommitterKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -32,7 +36,9 @@ pub trait PCCommitterKey: Clone + core::fmt::Debug {
 
 /// Defines the minimal interface of verifier keys for any polynomial
 /// commitment scheme.
-pub trait PCVerifierKey: Clone + core::fmt::Debug {
+pub trait PCVerifierKey:
+    Clone + core::fmt::Debug + CanonicalSerialize + CanonicalDeserialize
+{
     /// Outputs the maximum degree supported by the universal parameters
     /// `Self` was derived from.
     fn max_degree(&self) -> usize;
@@ -72,7 +78,7 @@ pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
 
 /// Defines the minimal interface of commitment randomness for any polynomial
 /// commitment scheme.
-pub trait PCRandomness: Clone {
+pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 
@@ -94,6 +100,15 @@ pub trait PCRandomness: Clone {
 pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
     /// Size in bytes
     fn size_in_bytes(&self) -> usize;
+}
+
+/// A proof of satisfaction of linear combinations.
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
+    /// Evaluation proof.
+    pub proof: PC::BatchProof,
+    /// Evaluations required to verify the proof.
+    pub evals: Option<Vec<F>>,
 }
 
 /// A polynomial along with information about its degree bound (if any), and the
@@ -175,6 +190,14 @@ pub struct LabeledCommitment<C: PCCommitment> {
     label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
+}
+
+impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
+    for LabeledCommitment<C>
+{
+    fn to_field_elements(&self) -> Option<Vec<F>> {
+        self.commitment.to_field_elements()
+    }
 }
 
 impl<C: PCCommitment> LabeledCommitment<C> {

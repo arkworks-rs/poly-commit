@@ -90,9 +90,8 @@ where
                 .enumerate()
                 .collect();
 
-        let prepared_neg_powers_of_h_time =
-            start_timer!(|| "Generating negative powers of h in G2");
-        let prepared_neg_powers_of_h = if produce_g2_powers {
+        let neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
+        let neg_powers_of_h = if produce_g2_powers {
             let mut neg_powers_of_beta = vec![E::Fr::one()];
             let mut cur = E::Fr::one() / &beta;
             for _ in 0..max_degree {
@@ -110,22 +109,18 @@ where
 
             let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
             let mut affines_map = BTreeMap::new();
-            affines
-                .into_iter()
-                .enumerate()
-                .map(|(i, a)| (i, a.into()))
-                .for_each(|(i, a)| {
-                    affines_map.insert(i, a);
-                });
+            affines.into_iter().enumerate().for_each(|(i, a)| {
+                affines_map.insert(i, a);
+            });
             affines_map
         } else {
             BTreeMap::new()
         };
 
-        end_timer!(prepared_neg_powers_of_h_time);
+        end_timer!(neg_powers_of_h_time);
 
-        let beta_h = h.mul(beta.into()).into_affine();
         let h = h.into_affine();
+        let beta_h = h.mul(beta).into_affine();
         let prepared_h = h.into();
         let prepared_beta_h = beta_h.into();
 
@@ -134,7 +129,7 @@ where
             powers_of_gamma_g,
             h,
             beta_h,
-            prepared_neg_powers_of_h,
+            neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
         };
@@ -149,7 +144,7 @@ where
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<(Commitment<E>, Randomness<E::Fr, P>), Error> {
-        Self::check_degree_is_within_bounds(polynomial.degree(), powers.size())?;
+        Self::check_degree_is_too_large(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
             "Committing to polynomial of degree {} with hiding_bound: {:?}",
@@ -276,7 +271,7 @@ where
         point: P::Point,
         rand: &Randomness<E::Fr, P>,
     ) -> Result<Proof<E>, Error> {
-        Self::check_degree_is_within_bounds(p.degree(), powers.size())?;
+        Self::check_degree_is_too_large(p.degree(), powers.size())?;
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
 
         let witness_time = start_timer!(|| "Computing witness polynomials");
@@ -305,7 +300,7 @@ where
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let mut inner = comm.0.into_projective() - &vk.g.into_projective().mul(value.into());
+        let mut inner = comm.0.into_projective() - &vk.g.mul(value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
@@ -330,8 +325,6 @@ where
     ) -> Result<bool, Error> {
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
-        let g = vk.g.into_projective();
-        let gamma_g = vk.gamma_g.into_projective();
 
         let mut total_c = <E::G1Projective>::zero();
         let mut total_w = <E::G1Projective>::zero();
@@ -352,13 +345,13 @@ where
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
             total_c += &c.mul(randomizer.into());
-            total_w += &w.mul(randomizer.into());
+            total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(g_multiplier.into());
-        total_c -= &gamma_g.mul(gamma_g_multiplier.into());
+        total_c -= &vk.g.mul(g_multiplier);
+        total_c -= &vk.gamma_g.mul(gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
@@ -377,22 +370,8 @@ where
         Ok(result)
     }
 
-    // Functions for checking errors
-    pub(crate) fn check_degree_is_within_bounds(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
-        if num_coefficients < 1 {
-            Err(Error::DegreeIsZero)
-        } else {
-            Self::check_degree_is_too_large(num_coefficients, num_powers)
-        }
-    }
-
-    pub(crate) fn check_degree_is_too_large(
-        num_coefficients: usize,
-        num_powers: usize,
-    ) -> Result<(), Error> {
+    pub(crate) fn check_degree_is_too_large(degree: usize, num_powers: usize) -> Result<(), Error> {
+        let num_coefficients = degree + 1;
         if num_coefficients > num_powers {
             Err(Error::TooManyCoefficients {
                 num_coefficients,
@@ -454,7 +433,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
     p: &P,
 ) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
-    while p.coeffs()[num_leading_zeros].is_zero() && num_leading_zeros < p.coeffs().len() {
+    while num_leading_zeros < p.coeffs().len() && p.coeffs()[num_leading_zeros].is_zero() {
         num_leading_zeros += 1;
     }
     let coeffs = convert_to_bigints(&p.coeffs()[num_leading_zeros..]);
@@ -480,8 +459,8 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_ec::PairingEngine;
-    use ark_ff::test_rng;
     use ark_poly::univariate::DensePolynomial as DensePoly;
+    use ark_std::test_rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
@@ -660,5 +639,18 @@ mod tests {
     fn batch_check_test() {
         batch_check_test_template::<Bls12_377, UniPoly_377>().expect("test failed for bls12-377");
         batch_check_test_template::<Bls12_381, UniPoly_381>().expect("test failed for bls12-381");
+    }
+
+    #[test]
+    fn test_degree_is_too_large() {
+        let rng = &mut test_rng();
+
+        let max_degree = 123;
+        let pp = KZG_Bls12_381::setup(max_degree, false, rng).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(&pp, max_degree).unwrap();
+
+        let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
+        assert!(p.degree() > max_degree);
+        assert!(KZG_Bls12_381::check_degree_is_too_large(p.degree(), powers.size()).is_err());
     }
 }

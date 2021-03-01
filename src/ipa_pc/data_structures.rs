@@ -8,7 +8,7 @@ use ark_std::vec;
 use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParams<G: AffineCurve> {
     /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
@@ -99,8 +99,7 @@ impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierK
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(
-    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize,
-)]
+    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<G: AffineCurve> {
     /// A Pedersen commitment to the polynomial.
     pub comm: G,

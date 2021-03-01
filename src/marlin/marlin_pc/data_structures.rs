@@ -3,7 +3,7 @@ use crate::{
     PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes};
+use ark_ff::{PrimeField, ToBytes, Field};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     io::{Read, Write},
@@ -12,12 +12,14 @@ use ark_std::{
 use rand_core::RngCore;
 
 use crate::kzg10;
+use ark_relations::r1cs::ToConstraintField;
+
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 
 /// `CommitterKey` is used to commit to and create evaluation proofs for a given
 /// polynomial.
-#[derive(Derivative)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -95,7 +97,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 }
 
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
-#[derive(Default, Clone, Debug)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Default, Clone, Debug)]
 pub struct VerifierKey<E: PairingEngine> {
     /// The verification key for the underlying KZG10 scheme.
     pub vk: kzg10::VerifierKey<E>,
@@ -146,6 +148,28 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
         }
         writer.write_all(&self.supported_degree.to_le_bytes())?;
         writer.write_all(&self.max_degree.to_le_bytes())
+    }
+}
+
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+        res.extend_from_slice(&self.vk.to_field_elements().unwrap());
+
+        if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
+            for (d, shift_power) in degree_bounds_and_shift_powers.iter() {
+                let d_elem: <E::Fq as Field>::BasePrimeField = (*d as u64).into();
+
+                res.push(d_elem);
+                res.extend_from_slice(&shift_power.to_field_elements().unwrap());
+            }
+        }
+
+        Some(res)
     }
 }
 
@@ -241,6 +265,22 @@ impl<E: PairingEngine> ToBytes for Commitment<E> {
     }
 }
 
+impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+where
+    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+{
+    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+        let mut res = Vec::new();
+        res.extend_from_slice(&self.comm.to_field_elements().unwrap());
+
+        if let Some(shifted_comm) = &self.shifted_comm {
+            res.extend_from_slice(&shifted_comm.to_field_elements().unwrap());
+        }
+
+        Some(res)
+    }
+}
+
 impl<E: PairingEngine> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
@@ -297,8 +337,12 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     Eq(bound = "")
 )]
 pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
-    pub(crate) rand: kzg10::Randomness<F, P>,
-    pub(crate) shifted_rand: Option<kzg10::Randomness<F, P>>,
+    /// Commitment randomness for a KZG10 commitment.
+    pub rand: kzg10::Randomness<F, P>,
+    /// Commitment randomness for a KZG10 commitment to the shifted polynomial.
+    /// This is `None` if the committed polynomial does not enforce a strict
+    /// degree bound.
+    pub shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
 impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {

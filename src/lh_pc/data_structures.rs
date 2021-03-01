@@ -90,7 +90,7 @@ impl<G: AffineCurve> ToBytes for Commitment<G> {
 }
 
 /// Opening randomness for PC_LH.
-#[derive(Clone)]
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Randomness;
 
 impl PCRandomness for Randomness {
