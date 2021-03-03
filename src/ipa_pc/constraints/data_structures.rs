@@ -247,8 +247,7 @@ where
             mode,
         )?;
 
-        let c =
-            NNFieldVar::<G>::new_variable(ns.clone(), || Ok(proof.borrow().c.clone()), mode)?;
+        let c = NNFieldVar::<G>::new_variable(ns.clone(), || Ok(proof.borrow().c.clone()), mode)?;
 
         assert_eq!(
             proof.borrow().hiding_comm.is_some(),

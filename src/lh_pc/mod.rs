@@ -11,7 +11,6 @@ use ark_std::vec;
 use core::marker::PhantomData;
 use rand_core::RngCore;
 
-
 mod data_structures;
 use ark_poly::UVPolynomial;
 pub use data_structures::*;

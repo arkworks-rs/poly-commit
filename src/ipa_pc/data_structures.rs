@@ -67,7 +67,7 @@ pub struct SuccinctVerifierKey<G: AffineCurve> {
 }
 
 impl<G: AffineCurve> SuccinctVerifierKey<G> {
-    /// Construct `Self` from a full `VerifierKey`. 
+    /// Construct `Self` from a full `VerifierKey`.
     pub fn from_vk(vk: &VerifierKey<G>) -> Self {
         Self {
             h: vk.h,
@@ -99,7 +99,8 @@ impl<G: AffineCurve> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierK
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(
-    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+    Default, Hash, Clone, Copy, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize,
+)]
 pub struct Commitment<G: AffineCurve> {
     /// A Pedersen commitment to the polynomial.
     pub comm: G,

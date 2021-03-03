@@ -3,7 +3,7 @@ use crate::{
     PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes, Field};
+use ark_ff::{Field, PrimeField, ToBytes};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     io::{Read, Write},

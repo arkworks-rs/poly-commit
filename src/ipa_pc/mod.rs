@@ -257,9 +257,7 @@ where
             );
 
             let hiding_challenge: G::ScalarField = hiding_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                    num_bits: 128,
-                }])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
                 .pop()
                 .unwrap();
 
@@ -277,9 +275,7 @@ where
         );
 
         let mut round_challenge: G::ScalarField = round_challenge_sponge
-            .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                num_bits: 128,
-            }])
+            .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
             .pop()
             .unwrap();
 
@@ -300,9 +296,7 @@ where
             round_challenge_sponge.absorb(&r);
 
             round_challenge = round_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                    num_bits: 128,
-                }])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
                 .pop()
                 .unwrap();
 
@@ -742,9 +736,7 @@ where
             );
 
             let hiding_challenge: G::ScalarField = sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                    num_bits: 128,
-                }])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
                 .pop()
                 .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
@@ -776,7 +768,7 @@ where
 
         let mut round_challenge: G::ScalarField = sponge
             .squeeze_nonnative_field_elements_with_sizes(&[
-                ark_sponge::FieldElementSize::Truncated { num_bits: 128 },
+                ark_sponge::FieldElementSize::Truncated(128),
             ])
             .pop()
             .unwrap();
@@ -839,9 +831,7 @@ where
 
             let prev_round_challenge = round_challenge;
             round_challenge = sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                    num_bits: 128,
-                }])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
                 .pop()
                 .unwrap();
 

@@ -22,9 +22,7 @@ impl<G: AffineCurve> PedersenCommitment<G> {
 }
 
 impl<G: AffineCurve> PedersenCommitment<G> {
-    pub fn setup(
-        max_num_elems: usize,
-    ) -> Result<UniversalParams<G>, Error> {
+    pub fn setup(max_num_elems: usize) -> Result<UniversalParams<G>, Error> {
         let generators: Vec<_> = ark_std::cfg_into_iter!(0..(max_num_elems + 1))
             .map(|i| {
                 let i = i as u64;
@@ -46,7 +44,7 @@ impl<G: AffineCurve> PedersenCommitment<G> {
 
         let pp = UniversalParams {
             generators,
-            hiding_generator
+            hiding_generator,
         };
         Ok(pp)
     }

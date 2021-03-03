@@ -15,7 +15,6 @@ impl LHPCError {
         Self::PCError(Box::new(pc_error))
     }
 
-    
     pub(crate) fn lh_error<LHE: 'static + ark_std::error::Error>(lh_error: LHE) -> Self {
         Self::LHError(Box::new(lh_error))
     }

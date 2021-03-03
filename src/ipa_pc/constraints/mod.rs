@@ -9,12 +9,12 @@ use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
 use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
 use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use ark_sponge::absorb_gadget;
+use ark_sponge::constraints::absorbable::AbsorbableGadget;
 use ark_sponge::constraints::CryptographicSpongeVar;
-use ark_sponge::{FieldElementSize, CryptographicSponge};
+use ark_sponge::{CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
-use ark_sponge::constraints::absorbable::AbsorbableGadget;
-use ark_sponge::absorb_gadget;
 
 /// Gadget versions of data structures for PC_IPA
 pub mod data_structures;
@@ -45,15 +45,7 @@ where
     /// O(log d), where d is the degree of the committed polynomials.
     #[tracing::instrument(
         target = "r1cs",
-        skip(
-            cs,
-            svk,
-            commitments,
-            point,
-            values,
-            proof,
-            opening_challenges
-        )
+        skip(cs, svk, commitments, point, values, proof, opening_challenges)
     )]
     pub fn succinct_check<'a>(
         cs: ConstraintSystemRef<ConstraintF<G>>,
@@ -72,9 +64,7 @@ where
         let mut combined_commitment = C::zero();
         let mut combined_eval = NNFieldVar::<G>::zero();
 
-        for (i, (commitment, value)) in
-            commitments.into_iter().zip(values).enumerate()
-        {
+        for (i, (commitment, value)) in commitments.into_iter().zip(values).enumerate() {
             let cur_challenge: NNFieldVar<G> = opening_challenges((2 * i) as u64);
             // TODO: A bit hacky. May want to revert or change later on?
             // TODO: Replace combined_eval operations with mul_without_reduce?
@@ -93,8 +83,8 @@ where
                 let cur_challenge: NNFieldVar<G> = opening_challenges((2 * i + 1) as u64);
                 if !cur_challenge.is_one()?.value()? {
                     combined_eval += &((&cur_challenge).mul((&value).mul(&shift)));
-                    combined_commitment += &shifted_commitment
-                        .scalar_mul_le((cur_challenge.to_bits_le()?).iter())?;
+                    combined_commitment +=
+                        &shifted_commitment.scalar_mul_le((cur_challenge.to_bits_le()?).iter())?;
                 } else {
                     combined_eval += &(&value).mul(&shift);
                     combined_commitment += shifted_commitment;
@@ -108,36 +98,40 @@ where
         point_and_combined_eval_bytes.extend_from_slice(combined_eval_bytes.as_slice());
 
         if let Some((hiding_comm, rand)) = &proof.hiding {
-            let mut hiding_challenge_sponge =
-                SV::new(ns!(cs, "hiding_challenge_sponge").cs());
+            let mut hiding_challenge_sponge = SV::new(ns!(cs, "hiding_challenge_sponge").cs());
 
-            absorb_gadget!(&mut hiding_challenge_sponge, combined_commitment, hiding_comm, point_and_combined_eval_bytes);
+            absorb_gadget!(
+                &mut hiding_challenge_sponge,
+                combined_commitment,
+                hiding_comm,
+                point_and_combined_eval_bytes
+            );
 
             let hiding_challenge_bits = hiding_challenge_sponge.squeeze_bits(128)?;
-            combined_commitment += &(hiding_comm
-                .scalar_mul_le(hiding_challenge_bits.iter())?
+            combined_commitment += &(hiding_comm.scalar_mul_le(hiding_challenge_bits.iter())?
                 - &(svk.s.scalar_mul_le(rand.iter())?));
         }
 
         let mut round_challenges = Vec::with_capacity(log_d);
 
         // Challenge for each round
-        let mut round_challenge_sponge =
-            SV::new(ns!(cs, "round_challenge_sponge_init").cs());
+        let mut round_challenge_sponge = SV::new(ns!(cs, "round_challenge_sponge_init").cs());
 
-        absorb_gadget!(&mut round_challenge_sponge, combined_commitment, point_and_combined_eval_bytes);
+        absorb_gadget!(
+            &mut round_challenge_sponge,
+            combined_commitment,
+            point_and_combined_eval_bytes
+        );
 
         // Initialize challenges
         let mut round_challenge_field_elements_and_bits = round_challenge_sponge
-            .squeeze_nonnative_field_elements_with_sizes::<G::ScalarField>(
-            &[FieldElementSize::Truncated { num_bits: 128 }],
-        )?;
+            .squeeze_nonnative_field_elements_with_sizes::<G::ScalarField>(&[
+                FieldElementSize::Truncated(128),
+            ])?;
         let mut round_challenge;
         let mut round_challenge_bits = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
-        let h_prime = svk
-            .h
-            .scalar_mul_le(round_challenge_bits.iter())?;
+        let h_prime = svk.h.scalar_mul_le(round_challenge_bits.iter())?;
 
         let mut round_commitment = combined_commitment
             + &h_prime.scalar_mul_le(combined_eval_bytes.to_bits_le()?.iter())?;
@@ -154,9 +148,7 @@ where
 
             // Update challenges
             round_challenge_field_elements_and_bits = round_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated {
-                    num_bits: 128,
-                }])?;
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])?;
             round_challenge = round_challenge_field_elements_and_bits.0.pop().unwrap();
             round_challenge_bits = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
@@ -169,8 +161,7 @@ where
                 l_val *= round_challenge.value()?.inverse().unwrap();
                 Ok(l_val)
             })?;
-            let claimed_l =
-                l_times_round_ch_inv.scalar_mul_le(round_challenge_bits.iter())?;
+            let claimed_l = l_times_round_ch_inv.scalar_mul_le(round_challenge_bits.iter())?;
             claimed_l.enforce_equal(&l)?;
             round_commitment += &l_times_round_ch_inv;
             round_commitment += &(r.scalar_mul_le(round_challenge_bits.iter())?);
@@ -253,7 +244,6 @@ pub mod tests {
     };
     use crate::ipa_pc::{InnerProductArgPC, SuccinctVerifierKey};
     use crate::{LabeledPolynomial, PolynomialCommitment, PolynomialLabel};
-    use ark_std::{test_rng, UniformRand};
     use ark_ff::One;
     use ark_poly::polynomial::univariate::DensePolynomial;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
@@ -264,6 +254,7 @@ pub mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_sponge::poseidon::constraints::PoseidonSpongeVar;
     use ark_sponge::poseidon::PoseidonSponge;
+    use ark_std::{test_rng, UniformRand};
     use blake2::Blake2s;
 
     type G = ark_pallas::Affine;
