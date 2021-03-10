@@ -1,4 +1,7 @@
-use crate::{PCCommitterKey, PCVerifierKey, Vec, PCCommitment, PCPreparedVerifierKey, PCUniversalParams, PCPreparedCommitment, PCRandomness, PCProof};
+use crate::{
+    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCProof,
+    PCRandomness, PCUniversalParams, PCVerifierKey, Vec,
+};
 use ark_ec::AffineCurve;
 use ark_ff::{Field, ToBytes, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};

@@ -1,6 +1,6 @@
+use crate::ipa_pc::VerifierKey;
 use crate::ipa_pc::{Commitment, CommitterKey, Proof, SuccinctVerifierKey};
 use crate::LabeledCommitment;
-use crate::ipa_pc::VerifierKey;
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
 use ark_ff::One;
@@ -110,7 +110,11 @@ where
             .map(|elem| C::new_variable(ns.clone(), || Ok(elem.clone()), mode))
             .collect::<Result<Vec<C>, SynthesisError>>()?;
 
-        let svk = SuccinctVerifierKeyVar::new_variable(ns.clone(), || Ok(key.borrow().svk.clone()), mode)?;
+        let svk = SuccinctVerifierKeyVar::new_variable(
+            ns.clone(),
+            || Ok(key.borrow().svk.clone()),
+            mode,
+        )?;
 
         Ok(Self {
             comm_key,

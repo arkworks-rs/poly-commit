@@ -513,7 +513,7 @@ where
         let svk = SuccinctVerifierKey {
             h: pp.h.clone(),
             s: pp.s.clone(),
-            supported_degree: supported_num_coeffs - 1
+            supported_degree: supported_num_coeffs - 1,
         };
 
         let ck = CommitterKey {
@@ -905,8 +905,14 @@ where
             ));
         }
 
-        let check_poly =
-            Self::succinct_check(&vk.svk, commitments, *point, values, proof, opening_challenges);
+        let check_poly = Self::succinct_check(
+            &vk.svk,
+            commitments,
+            *point,
+            values,
+            proof,
+            opening_challenges,
+        );
 
         if check_poly.is_none() {
             return Ok(false);
