@@ -16,10 +16,12 @@ use ark_sponge::{CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
-/// Gadget versions of data structures for PC_IPA
 mod data_structures;
 pub use data_structures::*;
 
+/// The gadget for the [`IpaPC succinct check`][succinct_check] function.
+///
+/// [succinct_check]: crate::ipa_pc::InnerProductArgPC::succinct_check
 pub struct IpaPCSuccinctCheckGadget<G, C, S, SV>
 where
     G: AffineCurve,

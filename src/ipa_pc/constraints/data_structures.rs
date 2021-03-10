@@ -1,5 +1,6 @@
 use crate::ipa_pc::{Commitment, CommitterKey, Proof, SuccinctVerifierKey};
 use crate::LabeledCommitment;
+use crate::ipa_pc::VerifierKey;
 use ark_ec::AffineCurve;
 use ark_ff::vec::Vec;
 use ark_ff::One;
@@ -30,9 +31,10 @@ where
     /// a commitment hiding.
     pub s: C,
 
+    /// The supported degree of the verifier key
     pub supported_degree: usize,
 
-    /// Phantom data
+    #[doc(hidden)]
     pub _affine: PhantomData<G>,
 }
 
@@ -62,7 +64,8 @@ where
     }
 }
 
-pub struct CommitterKeyVar<G, C>
+/// `VerifierKey` is used to check evaluation proofs for a given commitment.
+pub struct VerifierKeyVar<G, C>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
@@ -77,21 +80,22 @@ where
     /// a commitment hiding.
     pub s: C,
 
-    /// Phantom data
+    #[doc(hidden)]
     pub _affine: PhantomData<G>,
 }
 
-impl<G, C> CommitterKeyVar<G, C>
+impl<G, C> VerifierKeyVar<G, C>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
+    /// Returns the maximum supported polynomial degree
     pub fn supported_degree(&self) -> usize {
         self.comm_key.len() - 1
     }
 }
 
-impl<G, C> AllocVar<CommitterKey<G>, ConstraintF<G>> for CommitterKeyVar<G, C>
+impl<G, C> AllocVar<VerifierKey<G>, ConstraintF<G>> for VerifierKeyVar<G, C>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
@@ -123,8 +127,7 @@ where
     }
 }
 
-pub type VerifierKeyVar<G, C> = CommitterKeyVar<G, C>;
-
+/// Commitment to a polynomial that optionally enforces a degree bound.
 #[derive(Derivative)]
 #[derivative(Clone(
     bound = "G: AffineCurve, C: CurveVar<G::Projective, <G::BaseField as Field>::BasePrimeField>"
@@ -142,6 +145,7 @@ where
     /// enforce a strict degree bound.
     pub shifted_comm: Option<(usize, C)>,
 
+    #[doc(hidden)]
     pub _affine: PhantomData<G>,
 }
 
@@ -190,6 +194,7 @@ where
     }
 }
 
+/// `Proof` is an evaluation proof that is output by `InnerProductArg::open`.
 pub struct ProofVar<G, C>
 where
     G: AffineCurve,
@@ -331,13 +336,16 @@ impl<G: AffineCurve> SuccinctCheckPolynomialVar<G> {
     }
 }
 
+/// The gadget for the [`IpaPC cm_commit`][cm_commit] function.
+///
+/// [cm_commit]: crate::ipa_pc::InnerProductArgPC::cm_commit
 pub struct CMCommitGadget<G, C>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>>,
 {
-    pub _affine: PhantomData<G>,
-    pub _curve: PhantomData<C>,
+    _affine: PhantomData<G>,
+    _curve: PhantomData<C>,
 }
 
 impl<G, C> CMCommitGadget<G, C>

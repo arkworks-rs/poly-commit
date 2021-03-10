@@ -51,6 +51,7 @@ impl<G: AffineCurve> PCPreparedVerifierKey<CommitterKey<G>> for CommitterKey<G> 
 /// Commitment to a polynomial in PC_LH. This is equal to a Pedersen commitment.
 #[derive(Clone, Eq, PartialEq, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<G: AffineCurve> {
+    /// The Pedersen commitment output.
     pub elem: G,
 }
 
@@ -131,6 +132,7 @@ impl PCRandomness for Randomness {
 /// An evaluation proof in PC_LH. This is just equal to the polynomial itself.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Proof<F: Field, P: UVPolynomial<F>> {
+    /// The opened polynomial.
     pub polynomial: LabeledPolynomial<F, P>,
 }
 
