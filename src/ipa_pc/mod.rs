@@ -207,7 +207,7 @@ where
     /// The succinct portion of `PC::check`. This algorithm runs in time
     /// O(log d), where d is the degree of the committed polynomials.
     pub fn succinct_check<'a>(
-        vk: &VerifierKey<G>,
+        svk: &SuccinctVerifierKey<G>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<G>>>,
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
@@ -216,7 +216,7 @@ where
     ) -> Option<SuccinctCheckPolynomial<G::ScalarField>> {
         let check_time = start_timer!(|| "Succinct checking");
 
-        let d = vk.supported_degree();
+        let d = svk.supported_degree;
 
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ark_std::log2(d + 1) as usize;
@@ -235,7 +235,7 @@ where
 
             if let Some(degree_bound) = degree_bound {
                 let cur_challenge = opening_challenges((2 * i + 1) as u64);
-                let shift = point.pow([(vk.supported_degree() - degree_bound) as u64]);
+                let shift = point.pow([(svk.supported_degree - degree_bound) as u64]);
                 combined_v += &(cur_challenge * &value * &shift);
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
             }
@@ -261,7 +261,7 @@ where
                 .pop()
                 .unwrap();
 
-            combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
+            combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &svk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
         }
 
@@ -279,7 +279,7 @@ where
             .pop()
             .unwrap();
 
-        let h_prime = vk.h.mul(round_challenge);
+        let h_prime = svk.h.mul(round_challenge);
 
         let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
 
@@ -510,10 +510,15 @@ where
         let trim_time =
             start_timer!(|| format!("Trimming to supported degree of {}", supported_degree));
 
-        let ck = CommitterKey {
-            comm_key: pp.comm_key[0..supported_num_coeffs].to_vec(),
+        let svk = SuccinctVerifierKey {
             h: pp.h.clone(),
             s: pp.s.clone(),
+            supported_degree: supported_num_coeffs - 1
+        };
+
+        let ck = CommitterKey {
+            comm_key: pp.comm_key[0..supported_num_coeffs].to_vec(),
+            svk,
             max_degree: pp.max_degree(),
         };
 
@@ -574,7 +579,7 @@ where
             let comm = Self::cm_commit(
                 &ck.comm_key[..(polynomial.degree() + 1)],
                 polynomial.coeffs(),
-                Some(ck.s),
+                Some(ck.svk.s),
                 Some(randomness.rand),
             )
             .into();
@@ -585,7 +590,7 @@ where
                 Self::cm_commit(
                     &ck.comm_key[(ck.supported_degree() - d)..],
                     &polynomial.coeffs(),
-                    Some(ck.s),
+                    Some(ck.svk.s),
                     randomness.shifted_rand,
                 )
                 .into()
@@ -716,7 +721,7 @@ where
             let hiding_commitment_proj = Self::cm_commit(
                 ck.comm_key.as_slice(),
                 hiding_polynomial.coeffs(),
-                Some(ck.s),
+                Some(ck.svk.s),
                 Some(hiding_rand),
             );
 
@@ -742,7 +747,7 @@ where
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
-                &(hiding_commitment.unwrap().mul(hiding_challenge) - &ck.s.mul(combined_rand));
+                &(hiding_commitment.unwrap().mul(hiding_challenge) - &ck.svk.s.mul(combined_rand));
 
             end_timer!(hiding_time);
         }
@@ -773,7 +778,7 @@ where
             .pop()
             .unwrap();
 
-        let h_prime = ck.h.mul(round_challenge).into_affine();
+        let h_prime = ck.svk.h.mul(round_challenge).into_affine();
 
         // Pads the coefficients with zeroes to get the number of coeff to be d+1
         let mut coeffs = combined_polynomial.coeffs().to_vec();
@@ -901,7 +906,7 @@ where
         }
 
         let check_poly =
-            Self::succinct_check(vk, commitments, *point, values, proof, opening_challenges);
+            Self::succinct_check(&vk.svk, commitments, *point, values, proof, opening_challenges);
 
         if check_poly.is_none() {
             return Ok(false);
@@ -972,7 +977,7 @@ where
             }
 
             let check_poly = Self::succinct_check(
-                vk,
+                &vk.svk,
                 comms.into_iter(),
                 *point,
                 vals.into_iter(),

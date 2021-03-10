@@ -3,9 +3,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError
 use ark_std::io::{Read, Write};
 use ark_std::vec::Vec;
 
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
-
 /// The universal parameters for [`PedersenCommitment`][crate::pedersen_pc::PedersenCommitment].
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParams<G: AffineCurve> {

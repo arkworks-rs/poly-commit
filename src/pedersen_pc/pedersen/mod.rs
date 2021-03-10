@@ -10,7 +10,7 @@ use digest::Digest;
 use rayon::prelude::*;
 
 mod data_structures;
-pub(crate) use data_structures::*;
+pub use data_structures::*;
 
 /// The protocol name for the commitment scheme.
 pub(crate) const PROTOCOL_NAME: &[u8] = b"Pedersen-Commitment";

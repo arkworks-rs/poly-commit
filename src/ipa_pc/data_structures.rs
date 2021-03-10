@@ -25,6 +25,20 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
     }
 }
 
+/// A succinct subportion of the verifier key. This is used in succinct checking.
+#[derive(Default, Hash, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[allow(missing_docs)]
+pub struct SuccinctVerifierKey<G: AffineCurve> {
+    /// A random group generator.
+    pub h: G,
+
+    /// A random group generator that is to be used to make a commitment hiding.
+    pub s: G,
+
+    /// Supported polynomial degree of the key.
+    pub supported_degree: usize,
+}
+
 /// `CommitterKey` is used to commit to, and create evaluation proofs for, a given
 /// polynomial.
 #[derive(Default, Hash, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
@@ -32,12 +46,8 @@ pub struct CommitterKey<G: AffineCurve> {
     /// The key used to commit to polynomials.
     pub comm_key: Vec<G>,
 
-    /// A random group generator.
-    pub h: G,
-
-    /// A random group generator that is to be used to make
-    /// a commitment hiding.
-    pub s: G,
+    /// The verifier key for succinct check.
+    pub svk: SuccinctVerifierKey<G>,
 
     /// The maximum degree supported by the parameters
     /// this key was derived from.
@@ -55,26 +65,6 @@ impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
 
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 pub type VerifierKey<G> = CommitterKey<G>;
-
-/// A succinct subportion of the verifier key. This is used in succinct checking.
-#[derive(Default, Hash, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
-#[allow(missing_docs)]
-pub struct SuccinctVerifierKey<G: AffineCurve> {
-    pub h: G,
-    pub s: G,
-    pub supported_degree: usize,
-}
-
-impl<G: AffineCurve> SuccinctVerifierKey<G> {
-    /// Construct `Self` from a full `VerifierKey`.
-    pub fn from_vk(vk: &VerifierKey<G>) -> Self {
-        Self {
-            h: vk.h,
-            s: vk.s,
-            supported_degree: vk.comm_key.len() - 1,
-        }
-    }
-}
 
 impl<G: AffineCurve> PCVerifierKey for VerifierKey<G> {
     fn max_degree(&self) -> usize {

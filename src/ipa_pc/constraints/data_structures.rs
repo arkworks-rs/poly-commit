@@ -27,8 +27,7 @@ where
     /// A random group generator.
     pub h: C,
 
-    /// A random group generator that is to be used to make
-    /// a commitment hiding.
+    /// A random group generator that is to be used to make a commitment hiding.
     pub s: C,
 
     /// The supported degree of the verifier key
@@ -73,12 +72,8 @@ where
     /// The key used to commit to polynomials.
     pub comm_key: Vec<C>,
 
-    /// A random group generator.
-    pub h: C,
-
-    /// A random group generator that is to be used to make
-    /// a commitment hiding.
-    pub s: C,
+    /// The verifier key for succinct check.
+    pub svk: SuccinctVerifierKeyVar<G, C>,
 
     #[doc(hidden)]
     pub _affine: PhantomData<G>,
@@ -115,13 +110,11 @@ where
             .map(|elem| C::new_variable(ns.clone(), || Ok(elem.clone()), mode))
             .collect::<Result<Vec<C>, SynthesisError>>()?;
 
-        let h = C::new_variable(ns.clone(), || Ok(key.borrow().h.clone()), mode)?;
-        let s = C::new_variable(ns.clone(), || Ok(key.borrow().s.clone()), mode)?;
+        let svk = SuccinctVerifierKeyVar::new_variable(ns.clone(), || Ok(key.borrow().svk.clone()), mode)?;
 
         Ok(Self {
             comm_key,
-            h,
-            s,
+            svk,
             _affine: PhantomData,
         })
     }

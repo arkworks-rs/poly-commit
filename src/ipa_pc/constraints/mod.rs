@@ -67,28 +67,30 @@ where
 
         for (i, (commitment, value)) in commitments.into_iter().zip(values).enumerate() {
             let cur_challenge: NNFieldVar<G> = opening_challenges((2 * i) as u64);
-            // TODO: A bit hacky. May want to revert or change later on?
-            // TODO: Replace combined_eval operations with mul_without_reduce?
-            if !cur_challenge.is_one()?.value()? {
+
+            let cur_challenge_is_one = cur_challenge.is_one()?.value();
+            if cur_challenge_is_one.is_ok() && cur_challenge_is_one.unwrap() {
+                combined_eval += value;
+                combined_commitment += &commitment.comm;
+            } else {
                 combined_eval += &((&cur_challenge).mul(value));
                 combined_commitment += &commitment
                     .comm
                     .scalar_mul_le((cur_challenge.to_bits_le()?).iter())?;
-            } else {
-                combined_eval += value;
-                combined_commitment += &commitment.comm;
             }
 
             if let Some((degree_bound, shifted_commitment)) = &commitment.shifted_comm {
                 let shift = point.pow_by_constant(&[(d - degree_bound) as u64])?;
                 let cur_challenge: NNFieldVar<G> = opening_challenges((2 * i + 1) as u64);
-                if !cur_challenge.is_one()?.value()? {
+
+                let cur_challenge_is_one = cur_challenge.is_one()?.value();
+                if cur_challenge_is_one.is_ok() && cur_challenge_is_one.unwrap() {
+                    combined_eval += &(&value).mul(&shift);
+                    combined_commitment += shifted_commitment;
+                } else {
                     combined_eval += &((&cur_challenge).mul((&value).mul(&shift)));
                     combined_commitment +=
                         &shifted_commitment.scalar_mul_le((cur_challenge.to_bits_le()?).iter())?;
-                } else {
-                    combined_eval += &(&value).mul(&shift);
-                    combined_commitment += shifted_commitment;
                 }
             }
         }
@@ -255,9 +257,8 @@ pub mod tests {
         .unwrap());
 
         let cs = ConstraintSystem::<CF>::new_ref();
-        let svk = SuccinctVerifierKey::from_vk(&vk);
         let vk: SuccinctVerifierKeyVar<G, C> =
-            SuccinctVerifierKeyVar::<G, C>::new_constant(cs.clone(), svk).unwrap();
+            SuccinctVerifierKeyVar::<G, C>::new_constant(cs.clone(), vk.svk).unwrap();
 
         let commitment =
             CommitmentVar::<G, C>::new_constant(cs.clone(), commitment[0].clone()).unwrap();

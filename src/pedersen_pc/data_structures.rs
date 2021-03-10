@@ -6,7 +6,7 @@ use crate::{
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::PrimeField;
-use ark_ff::{to_bytes, Field, ToBytes, Zero};
+use ark_ff::{to_bytes, Field, ToBytes};
 use ark_poly::UVPolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
@@ -83,7 +83,7 @@ impl<G: AffineCurve> Default for Commitment<G> {
 
 impl<G: AffineCurve> ToBytes for Commitment<G> {
     fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
-        self.write(writer)
+        self.elem.write(writer)
     }
 }
 

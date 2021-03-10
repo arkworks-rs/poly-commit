@@ -8,11 +8,7 @@ use ark_ff::{UniformRand, Zero};
 use ark_poly::UVPolynomial;
 use ark_std::vec;
 use core::marker::PhantomData;
-use digest::Digest;
 use rand_core::RngCore;
-
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
 
 mod data_structures;
 pub use data_structures::*;
