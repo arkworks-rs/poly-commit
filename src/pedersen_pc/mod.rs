@@ -294,97 +294,13 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         Ok(accumulated_commitment == expected_commitment)
     }
 
-    /*
-    fn open_combinations<'a>(
-        ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<G::ScalarField>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<'a, G::ScalarField>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<G::ScalarField>,
-        opening_challenge: G::ScalarField,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<G::ScalarField, Self>, Self::Error>
-    where
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let label_map = polynomials
-            .into_iter()
-            .zip(commitments)
-            .map(|(p, c)| (p.label(), (p, c)))
-            .collect::<BTreeMap<_, _>>();
-
-        let mut lc_polynomials = Vec::new();
-        let mut lc_commitments = Vec::new();
-        let mut lc_info = Vec::new();
-
-        for lc in lc_s {
-            let lc_label = lc.label().clone();
-            let mut poly = Polynomial::zero();
-            let mut scalar_commitment_pairs = Vec::new();
-
-            let num_polys = lc.len();
-            for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
-                let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_comm) =
-                    label_map.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                if num_polys == 1 && cur_poly.degree_bound().is_some() {
-                    assert!(
-                        coeff.is_one(),
-                        "Coefficient must be one for degree-bounded equations"
-                    );
-                    degree_bound = cur_poly.degree_bound();
-                } else if cur_poly.degree_bound().is_some() {
-                    eprintln!("Degree bound when number of equations is non-zero");
-                    return Err(Self::Error::EquationHasDegreeBounds(lc_label));
-                }
-
-                poly += (*coeff, cur_poly.polynomial());
-                scalar_commitment_pairs.push((*coeff, cur_comm.commitment()));
-            }
-
-            let lc_poly =
-                LabeledPolynomial::new_owned(lc_label.clone(), poly, degree_bound, hiding_bound);
-            lc_polynomials.push(lc_poly);
-            lc_randomness.push(randomness);
-            lc_commitments.push(Self::combine_commitments(coeffs_and_comms));
-            lc_info.push((lc_label, degree_bound));
-        }
-
-        let comms = Self::normalize_commitments(lc_commitments);
-        let lc_commitments = lc_info
-            .into_iter()
-            .zip(comms)
-            .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
-            .collect::<Vec<_>>();
-
-        let proof = Self::batch_open(
-            ck,
-            lc_polynomials.iter(),
-            lc_commitments.iter(),
-            &query_set,
-            opening_challenge,
-            lc_randomness.iter(),
-            rng,
-        )?;
-
-        Ok(BatchLCProof { proof, evals: None })
-    }
-
-     */
 }
 
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-
     use super::PedersenPC;
-    use crate::pedersen::PedersenCommitment;
-
+    use crate::pedersen_pc::PedersenCommitment;
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;

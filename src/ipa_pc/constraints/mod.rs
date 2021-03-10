@@ -17,11 +17,10 @@ use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 
 /// Gadget versions of data structures for PC_IPA
-pub mod data_structures;
+mod data_structures;
 pub use data_structures::*;
 
-/// Wraps some common gadgets for PC_IPA.
-pub struct InnerProductArgPCGadget<G, C, S, SV>
+pub struct IpaPCSuccinctCheckGadget<G, C, S, SV>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>> + AbsorbableGadget<ConstraintF<G>>,
@@ -34,7 +33,7 @@ where
     _sponge_var: PhantomData<SV>,
 }
 
-impl<G, C, S, SV> InnerProductArgPCGadget<G, C, S, SV>
+impl<G, C, S, SV> IpaPCSuccinctCheckGadget<G, C, S, SV>
 where
     G: AffineCurve,
     C: CurveVar<G::Projective, ConstraintF<G>> + AbsorbableGadget<ConstraintF<G>>,
@@ -183,64 +182,12 @@ where
         Ok((result, check_poly))
     }
 
-    /*
-    pub fn check<'a>(
-        cs: ConstraintSystemRef<ConstraintF<G>>,
-        vk: &VerifierKeyVar<G, C>,
-        commitments: impl IntoIterator<Item = &'a CommitmentVar<G, C>>,
-        point: &NNFieldVar<G>,
-        values: impl IntoIterator<Item = &'a NNFieldVar<G>>,
-        proof: &ProofVar<G, C>,
-        opening_challenges: &dyn Fn(u64) -> NNFieldVar<G>,
-    ) -> Result<Boolean<ConstraintF<G>>, SynthesisError> {
-        let mut check_result = Boolean::TRUE;
-
-        let d = vk.supported_degree();
-
-        // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
-        let log_d = ark_std::log2(d + 1) as usize;
-
-        if proof.l_vec.len() != proof.r_vec.len()
-            || proof.l_vec.len() != log_d
-        {
-            return Ok(Boolean::FALSE);
-        }
-
-        let (succinct_check_result, check_poly) = Self::succinct_check(
-            ns!(cs, "succinct_check").cs(),
-            vk,
-            commitments,
-            point,
-            values,
-            proof,
-            opening_challenges,
-        )?;
-
-        check_result = check_result.and(&succinct_check_result)?;
-
-        let check_poly_coeffs = check_poly.compute_coeffs();
-        let final_key = CMCommitGadget::<G, C>::commit(
-            vk.comm_key.as_slice(),
-            check_poly_coeffs
-                .iter()
-                .map(|c| c.to_bits_le())
-                .collect::<Result<Vec<_>, SynthesisError>>()?
-                .as_slice(),
-            None,
-        )?;
-
-        check_result =
-            check_result.and(&(final_key.is_eq(&proof.final_comm_key)?))?;
-        Ok(check_result)
-    }
-
-     */
 }
 
 #[cfg(test)]
 pub mod tests {
     use crate::ipa_pc::constraints::{
-        CommitmentVar, InnerProductArgPCGadget, NNFieldVar, ProofVar, SuccinctVerifierKeyVar,
+        CommitmentVar, IpaPCSuccinctCheckGadget, NNFieldVar, ProofVar, SuccinctVerifierKeyVar,
     };
     use crate::ipa_pc::{InnerProductArgPC, SuccinctVerifierKey};
     use crate::{LabeledPolynomial, PolynomialCommitment, PolynomialLabel};
@@ -317,22 +264,7 @@ pub mod tests {
         let value = NNFieldVar::<G>::new_constant(cs.clone(), value).unwrap();
         let proof = ProofVar::<G, C>::new_constant(cs.clone(), proof).unwrap();
 
-        /*
-        let check = InnerProductArgPCGadget::<G, C>::succinct_check(
-            cs.clone(),
-            &vk,
-            vec![&commitment],
-            &point,
-            vec![&value],
-            &proof,
-            &|_| NNFieldVar::<G>::one(),
-        )
-        .unwrap();
-        check.0.enforce_equal(&Boolean::TRUE);
-
-         */
-
-        let check = InnerProductArgPCGadget::<G, C, PoseidonSponge<CF>, PoseidonSpongeVar<CF>>::succinct_check(
+        let check = IpaPCSuccinctCheckGadget::<G, C, PoseidonSponge<CF>, PoseidonSpongeVar<CF>>::succinct_check(
             cs.clone(),
             &vk,
             vec![&commitment],
