@@ -269,12 +269,11 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
                     label: label.to_string(),
                 })?;
 
-                let v_i =
-                    values
-                        .get(&(label.clone(), *point))
-                        .ok_or(Error::MissingEvaluation {
-                            label: label.to_string(),
-                        })?;
+                let v_i = values
+                    .get(&(label.clone(), *point))
+                    .ok_or(Error::MissingEvaluation {
+                        label: label.to_string(),
+                    })?;
 
                 accumulated_value += &(cur_challenge * v_i);
                 scalar_commitment_pairs.push((cur_challenge, commitment.commitment().clone()));
@@ -300,13 +299,13 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 mod tests {
     #![allow(non_camel_case_types)]
     use super::PedersenPC;
+    use crate::tests::test_template;
+    use crate::tests::TestInfo;
+    use crate::Error;
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
-    use crate::tests::TestInfo;
-    use crate::tests::test_template;
-    use crate::Error;
 
     type PC_PED = PedersenPC<EdwardsAffine, DensePolynomial<Fr>>;
 
