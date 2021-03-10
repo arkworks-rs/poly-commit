@@ -5,7 +5,7 @@ use ark_r1cs_std::bits::boolean::Boolean;
 use ark_r1cs_std::bits::uint8::UInt8;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::groups::CurveVar;
-use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
+use ark_r1cs_std::R1CSVar;
 use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
 use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
@@ -181,7 +181,6 @@ where
         //println!("Succinct_check {:}", cs.num_constraints() - start);
         Ok((result, check_poly))
     }
-
 }
 
 #[cfg(test)]

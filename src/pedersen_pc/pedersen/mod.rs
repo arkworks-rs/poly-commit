@@ -1,4 +1,3 @@
-use crate::Error;
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, PrimeField};
@@ -11,7 +10,7 @@ use digest::Digest;
 use rayon::prelude::*;
 
 mod data_structures;
-pub use data_structures::*;
+pub(crate) use data_structures::*;
 
 pub struct PedersenCommitment<G: AffineCurve> {
     _group: PhantomData<G>,

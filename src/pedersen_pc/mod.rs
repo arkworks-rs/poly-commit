@@ -3,12 +3,10 @@ use crate::{
     Error, Evaluations, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams,
     PolynomialCommitment, QuerySet,
 };
-use ark_ec::msm::VariableBaseMSM;
-use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_ff::{to_bytes, PrimeField, UniformRand, Zero};
+use ark_ec::AffineCurve;
+use ark_ff::{UniformRand, Zero};
 use ark_poly::UVPolynomial;
 use ark_std::vec;
-use blake2::Blake2s;
 use core::marker::PhantomData;
 use digest::Digest;
 use rand_core::RngCore;
@@ -293,14 +291,12 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 
         Ok(accumulated_commitment == expected_commitment)
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
     use super::PedersenPC;
-    use crate::pedersen_pc::PedersenCommitment;
     use ark_ed_on_bls12_381::EdwardsAffine;
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;

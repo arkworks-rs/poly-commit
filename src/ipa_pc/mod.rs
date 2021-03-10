@@ -1,9 +1,9 @@
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
+use crate::{Error, Evaluations, QuerySet, UVPolynomial};
+use crate::{LabeledCommitment, LabeledPolynomial};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
-use ark_ff::{to_bytes, Field, One, PrimeField, ToConstraintField, UniformRand, Zero};
+use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
 use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::{format, vec};
 use core::marker::PhantomData;
@@ -1217,7 +1217,6 @@ mod tests {
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use blake2::Blake2s;
-    use sha2::Sha512;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P, CF, S> = InnerProductArgPC<E, D, P, CF, S>;
