@@ -10,7 +10,7 @@ use ark_r1cs_std::{ToBitsGadget, ToBytesGadget};
 use ark_relations::ns;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 use ark_sponge::absorb_gadget;
-use ark_sponge::constraints::absorbable::AbsorbableGadget;
+use ark_sponge::constraints::AbsorbableGadget;
 use ark_sponge::constraints::CryptographicSpongeVar;
 use ark_sponge::{CryptographicSponge, FieldElementSize};
 use ark_std::marker::PhantomData;
@@ -20,7 +20,7 @@ use ark_std::ops::Mul;
 pub mod data_structures;
 pub use data_structures::*;
 
-/// Wraps some common gadgets for PC+IPA.
+/// Wraps some common gadgets for PC_IPA.
 pub struct InnerProductArgPCGadget<G, C, S, SV>
 where
     G: AffineCurve,

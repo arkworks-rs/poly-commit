@@ -17,6 +17,7 @@ extern crate bench_utils;
 
 use ark_ff::Field;
 pub use ark_poly::{Polynomial, UVPolynomial};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rand_core::RngCore;
 
 use ark_std::{
@@ -41,7 +42,6 @@ pub use constraints::*;
 
 /// Errors pertaining to query sets.
 pub mod error;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
 
 /// Univariate and multivariate polynomial commitment schemes
@@ -89,9 +89,6 @@ pub use marlin::marlin_pc;
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod sonic_pc;
-
-/// The Pedersen commitment scheme.
-pub mod pedersen;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.

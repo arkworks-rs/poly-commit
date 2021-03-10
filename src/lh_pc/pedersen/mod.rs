@@ -10,7 +10,7 @@ use digest::Digest;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-pub mod data_structures;
+mod data_structures;
 pub use data_structures::*;
 
 pub struct PedersenCommitment<G: AffineCurve> {
@@ -18,11 +18,9 @@ pub struct PedersenCommitment<G: AffineCurve> {
 }
 
 impl<G: AffineCurve> PedersenCommitment<G> {
-    pub const PROTOCOL_NAME: &'static [u8] = b"pedersen-linear-hash";
-}
+    pub const PROTOCOL_NAME: &'static [u8] = b"Pedersen-Commitment";
 
-impl<G: AffineCurve> PedersenCommitment<G> {
-    pub fn setup(max_num_elems: usize) -> Result<UniversalParams<G>, Error> {
+    pub fn setup(max_num_elems: usize) -> UniversalParams<G> {
         let generators: Vec<_> = ark_std::cfg_into_iter!(0..(max_num_elems + 1))
             .map(|i| {
                 let i = i as u64;
@@ -46,26 +44,29 @@ impl<G: AffineCurve> PedersenCommitment<G> {
             generators,
             hiding_generator,
         };
-        Ok(pp)
+
+        pp
     }
 
-    pub fn trim(
-        pp: &UniversalParams<G>,
-        supported_num_elems: usize,
-    ) -> Result<CommitterKey<G>, Error> {
+    pub fn trim(pp: &UniversalParams<G>, supported_num_elems: usize) -> CommitterKey<G> {
+        assert!(supported_num_elems <= pp.generators.len());
+
         let ck = CommitterKey {
             generators: pp.generators[0..supported_num_elems].to_vec(),
             hiding_generator: pp.hiding_generator,
+            max_elems: pp.generators.len(),
         };
 
-        Ok(ck)
+        ck
     }
 
     pub fn commit(
         ck: &CommitterKey<G>,
         elems: &[G::ScalarField],
         randomizer: Option<G::ScalarField>,
-    ) -> Result<Commitment<G>, Error> {
+    ) -> G {
+        assert!(elems.len() <= ck.supported_elems_len());
+
         let scalars_bigint = ark_std::cfg_iter!(elems)
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
@@ -75,10 +76,6 @@ impl<G: AffineCurve> PedersenCommitment<G> {
             comm += &ck.hiding_generator.mul(randomizer);
         }
 
-        let conversion = G::Projective::batch_normalization_into_affine(&[comm])
-            .pop()
-            .unwrap();
-
-        Ok(Commitment(conversion))
+        comm.into()
     }
 }
