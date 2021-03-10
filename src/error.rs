@@ -40,7 +40,7 @@ pub enum Error {
     },
 
     /// The scheme does not support hiding bounds.
-    HidingUnsupported,
+    HidingBoundsUnsupported,
 
     /// The hiding bound was not `None`, but the hiding bound was zero.
     HidingBoundIsZero,
@@ -58,6 +58,9 @@ pub enum Error {
 
     /// The provided `enforced_degree_bounds` was `Some<&[]>`.
     EmptyDegreeBounds,
+
+    /// The scheme does not support degree bounds.
+    DegreeBoundsUnsupported,
 
     /// The provided equation contained multiple polynomials, of which least one
     /// had a strict degree bound.
@@ -128,7 +131,7 @@ impl core::fmt::Display for Error {
                  the maximum number of powers in `Powers` ({:?})",
                 num_coefficients, num_powers
             ),
-            Error::HidingUnsupported => {
+            Error::HidingBoundsUnsupported => {
                 write!(f, "the scheme does not support hiding")
             },
             Error::HidingBoundIsZero => write!(
@@ -149,6 +152,9 @@ impl core::fmt::Display for Error {
             Error::EmptyDegreeBounds => {
                 write!(f, "provided `enforced_degree_bounds` was `Some<&[]>`")
             }
+            Error::DegreeBoundsUnsupported => {
+                write!(f, "the scheme does not support degree bounds")
+            },
             Error::EquationHasDegreeBounds(e) => write!(
                 f,
                 "the eqaution \"{}\" contained degree-bounded polynomials",

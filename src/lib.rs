@@ -693,17 +693,18 @@ pub mod tests {
     use ark_std::test_rng;
     use rand::{distributions::Distribution, Rng};
 
-    struct TestInfo<F: Field, P: Polynomial<F>> {
-        num_iters: usize,
-        max_degree: Option<usize>,
-        supported_degree: Option<usize>,
-        num_vars: Option<usize>,
-        num_polynomials: usize,
-        enforce_degree_bounds: bool,
-        max_num_queries: usize,
-        num_equations: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
+    pub(crate) struct TestInfo<F: Field, P: Polynomial<F>> {
+        pub(crate) num_iters: usize,
+        pub(crate) max_degree: Option<usize>,
+        pub(crate) supported_degree: Option<usize>,
+        pub(crate) num_vars: Option<usize>,
+        pub(crate) num_polynomials: usize,
+        pub(crate) enforce_degree_bounds: bool,
+        pub(crate) make_hiding: bool,
+        pub(crate) max_num_queries: usize,
+        pub(crate) num_equations: Option<usize>,
+        pub(crate) rand_poly: fn(usize, Option<usize>, &mut rand::prelude::StdRng) -> P,
+        pub(crate) rand_point: fn(Option<usize>, &mut rand::prelude::StdRng) -> P::Point,
     }
 
     pub fn bad_degree_bound_test<F, P, PC>(
@@ -795,7 +796,7 @@ pub mod tests {
         Ok(())
     }
 
-    fn test_template<F, P, PC>(info: TestInfo<F, P>) -> Result<(), PC::Error>
+    pub(crate) fn test_template<F, P, PC>(info: TestInfo<F, P>) -> Result<(), PC::Error>
     where
         F: Field,
         P: Polynomial<F>,
@@ -808,6 +809,7 @@ pub mod tests {
             num_vars,
             num_polynomials,
             enforce_degree_bounds,
+            make_hiding,
             max_num_queries,
             num_equations: _,
             rand_poly,
@@ -855,7 +857,9 @@ pub mod tests {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set >= degree {
+                let hiding_bound = if !make_hiding {
+                    None
+                } else if num_points_in_query_set >= degree {
                     Some(degree)
                 } else {
                     Some(num_points_in_query_set)
@@ -928,6 +932,7 @@ pub mod tests {
                     println!("Degree: {:?}", poly.degree());
                 }
             }
+
             assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
         Ok(())
@@ -946,6 +951,7 @@ pub mod tests {
             num_vars,
             num_polynomials,
             enforce_degree_bounds,
+            make_hiding,
             max_num_queries,
             num_equations,
             rand_poly,
@@ -997,11 +1003,14 @@ pub mod tests {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set >= degree {
+                let hiding_bound = if !make_hiding {
+                    None
+                } else if num_points_in_query_set >= degree {
                     Some(degree)
                 } else {
                     Some(num_points_in_query_set)
                 };
+
                 println!("Hiding bound: {:?}", hiding_bound);
 
                 polynomials.push(LabeledPolynomial::new(
@@ -1128,6 +1137,7 @@ pub mod tests {
             num_vars,
             num_polynomials: 1,
             enforce_degree_bounds: false,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: None,
             rand_poly,
@@ -1152,6 +1162,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 1,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: None,
             rand_poly,
@@ -1176,6 +1187,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 1,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: None,
             rand_poly,
@@ -1200,6 +1212,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 1,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 2,
             num_equations: None,
             rand_poly,
@@ -1224,6 +1237,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 1,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 2,
             num_equations: None,
             rand_poly,
@@ -1248,6 +1262,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 2,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: None,
             rand_poly,
@@ -1273,6 +1288,7 @@ pub mod tests {
             num_vars,
             num_polynomials: 10,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 5,
             num_equations: None,
             rand_poly,
@@ -1298,6 +1314,7 @@ pub mod tests {
             num_vars,
             num_polynomials: 10,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 5,
             num_equations: Some(10),
             rand_poly,
@@ -1323,6 +1340,7 @@ pub mod tests {
             num_vars,
             num_polynomials: 1,
             enforce_degree_bounds: false,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: Some(1),
             rand_poly,
@@ -1348,6 +1366,7 @@ pub mod tests {
             num_vars,
             num_polynomials: 2,
             enforce_degree_bounds: false,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: Some(2),
             rand_poly,
@@ -1372,6 +1391,7 @@ pub mod tests {
             num_vars: None,
             num_polynomials: 2,
             enforce_degree_bounds: true,
+            make_hiding: true,
             max_num_queries: 1,
             num_equations: Some(2),
             rand_poly,

@@ -1,3 +1,4 @@
+use crate::pedersen_pc::{CommitterKey, UniversalParams};
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, PrimeField};
@@ -5,7 +6,6 @@ use ark_std::vec::Vec;
 use blake2::Blake2s;
 use core::marker::PhantomData;
 use digest::Digest;
-use crate::pedersen_pc::{CommitterKey, UniversalParams};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;

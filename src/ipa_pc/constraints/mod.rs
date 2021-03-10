@@ -192,7 +192,7 @@ pub mod tests {
     use crate::ipa_pc::constraints::{
         CommitmentVar, IpaPCSuccinctCheckGadget, NNFieldVar, ProofVar, SuccinctVerifierKeyVar,
     };
-    use crate::ipa_pc::{InnerProductArgPC, SuccinctVerifierKey};
+    use crate::ipa_pc::InnerProductArgPC;
     use crate::{LabeledPolynomial, PolynomialCommitment, PolynomialLabel};
     use ark_ff::One;
     use ark_poly::polynomial::univariate::DensePolynomial;

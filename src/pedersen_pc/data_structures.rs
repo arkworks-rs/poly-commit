@@ -36,6 +36,13 @@ impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
     }
 }
 
+impl<G: AffineCurve> CommitterKey<G> {
+    /// Returns the number of elements that the key can commit.
+    pub fn supported_num_elems(&self) -> usize {
+        self.generators.len()
+    }
+}
+
 impl<G: AffineCurve> PCCommitterKey for CommitterKey<G> {
     fn max_degree(&self) -> usize {
         self.max_elems - 1

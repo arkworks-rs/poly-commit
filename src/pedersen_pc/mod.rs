@@ -42,8 +42,12 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PedersenPC<G, P> {
         p: &LabeledPolynomial<G::ScalarField, P>,
     ) -> Result<(), Error> {
         Self::check_degrees(supported_degree, p.polynomial())?;
+        if p.hiding_bound().is_some() {
+            return Err(Error::HidingBoundsUnsupported);
+        }
+
         if p.degree_bound().is_some() {
-            return Err(Error::HidingUnsupported);
+            return Err(Error::DegreeBoundsUnsupported);
         }
 
         Ok(())
@@ -226,9 +230,11 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
-        for (label, point) in query_set.iter() {
-            let labels = query_to_labels_map.entry(point).or_insert(BTreeSet::new());
-            labels.insert(label);
+        for (label, (point_label, point)) in query_set.iter() {
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
         }
 
         assert_eq!(proof.len(), query_to_labels_map.len());
@@ -240,9 +246,9 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
         let mut accumulated_value = G::ScalarField::zero();
         let mut scalar_commitment_pairs = Vec::new();
 
-        for ((query, labels), p) in query_to_labels_map.into_iter().zip(proof) {
+        for ((_query, (point, labels)), p) in query_to_labels_map.into_iter().zip(proof) {
             let query_challenge: G::ScalarField = u128::rand(rng).into();
-            expected_value += &(p.polynomial.evaluate(&query.1) * &query_challenge);
+            expected_value += &(p.polynomial.evaluate(&point) * &query_challenge);
 
             let mut coeffs = p.polynomial.coeffs().to_vec();
             while coeffs.len() < supported_degree + 1 {
@@ -265,7 +271,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 
                 let v_i =
                     values
-                        .get(&(label.clone(), query.1))
+                        .get(&(label.clone(), *point))
                         .ok_or(Error::MissingEvaluation {
                             label: label.to_string(),
                         })?;
@@ -298,6 +304,9 @@ mod tests {
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+    use crate::tests::TestInfo;
+    use crate::tests::test_template;
+    use crate::Error;
 
     type PC_PED = PedersenPC<EdwardsAffine, DensePolynomial<Fr>>;
 
@@ -314,93 +323,21 @@ mod tests {
     }
 
     #[test]
-    fn single_poly_test() {
-        use crate::tests::*;
-        single_poly_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
+    fn full_end_to_end_test() -> Result<(), Error> {
+        let info = TestInfo {
+            num_iters: 100,
+            max_degree: None,
+            supported_degree: None,
+            num_vars: None,
+            num_polynomials: 10,
+            enforce_degree_bounds: false,
+            make_hiding: false,
+            max_num_queries: 5,
+            num_equations: None,
+            rand_poly,
+            rand_point,
+        };
 
-    #[test]
-    fn quadratic_poly_degree_bound_multiple_queries_test() {
-        use crate::tests::*;
-        quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_PED>(
-            rand_poly::<Fr>,
-            rand_point::<Fr>,
-        )
-        .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn linear_poly_degree_bound_test() {
-        use crate::tests::*;
-        linear_poly_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn single_poly_degree_bound_test() {
-        use crate::tests::*;
-        single_poly_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn single_poly_degree_bound_multiple_queries_test() {
-        use crate::tests::*;
-        single_poly_degree_bound_multiple_queries_test::<_, _, PC_PED>(
-            rand_poly::<Fr>,
-            rand_point::<Fr>,
-        )
-        .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn two_polys_degree_bound_single_query_test() {
-        use crate::tests::*;
-        two_polys_degree_bound_single_query_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn full_end_to_end_test() {
-        use crate::tests::*;
-        full_end_to_end_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn single_equation_test() {
-        use crate::tests::*;
-        single_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn two_equation_test() {
-        use crate::tests::*;
-        two_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn two_equation_degree_bound_test() {
-        use crate::tests::*;
-        two_equation_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    fn full_end_to_end_equation_test() {
-        use crate::tests::*;
-        full_end_to_end_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
-    }
-
-    #[test]
-    #[should_panic]
-    fn bad_degree_bound_test() {
-        use crate::tests::*;
-        bad_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen_bak commitment");
+        test_template::<Fr, DensePolynomial<Fr>, PC_PED>(info)
     }
 }
