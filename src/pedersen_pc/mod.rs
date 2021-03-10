@@ -23,12 +23,12 @@ mod pedersen;
 pub use pedersen::*;
 
 /// A simple polynomial commitment scheme that relies on Pedersen commitments.
-pub struct LinearHashPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
+pub struct PedersenPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
     _field: PhantomData<G>,
     _polynomial: PhantomData<P>,
 }
 
-impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> LinearHashPC<G, P> {
+impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PedersenPC<G, P> {
     fn check_degrees(supported_degree: usize, p: &P) -> Result<(), Error> {
         if p.degree() < 1 {
             return Err(Error::DegreeIsZero);
@@ -48,7 +48,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> LinearHashPC<G, P> {
     ) -> Result<(), Error> {
         Self::check_degrees(supported_degree, p.polynomial())?;
         if p.degree_bound().is_some() {
-            // TODO: add err
+            return Err(Error::HidingUnsupported);
         }
 
         Ok(())
@@ -56,7 +56,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> LinearHashPC<G, P> {
 }
 
 impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::ScalarField, P>
-    for LinearHashPC<G, P>
+    for PedersenPC<G, P>
 {
     type UniversalParams = UniversalParams<G>;
 
@@ -382,7 +382,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 mod tests {
     #![allow(non_camel_case_types)]
 
-    use super::LinearHashPC;
+    use super::PedersenPC;
     use crate::pedersen::PedersenCommitment;
 
     use ark_ed_on_bls12_381::EdwardsAffine;
@@ -390,7 +390,7 @@ mod tests {
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 
-    type PC_PED = LinearHashPC<EdwardsAffine, DensePolynomial<Fr>>;
+    type PC_PED = PedersenPC<EdwardsAffine, DensePolynomial<Fr>>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,

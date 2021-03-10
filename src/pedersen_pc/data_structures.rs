@@ -1,4 +1,4 @@
-use crate::lh_pc::pedersen::{CommitterKey, UniversalParams};
+use crate::pedersen_pc::pedersen::{CommitterKey, UniversalParams};
 use crate::{
     LabeledPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
     PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,

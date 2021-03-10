@@ -100,7 +100,7 @@ pub mod ipa_pc;
 /// A simple polynomial commitment scheme from [[BCLMS20]][bclms].
 ///
 /// [bclms]: https://eprint.iacr.org/2020/1618
-pub mod lh_pc;
+pub mod pedersen_pc;
 
 /// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
 /// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm

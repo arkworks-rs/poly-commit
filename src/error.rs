@@ -39,6 +39,9 @@ pub enum Error {
         num_powers: usize,
     },
 
+    /// The scheme does not support hiding bounds.
+    HidingUnsupported,
+
     /// The hiding bound was not `None`, but the hiding bound was zero.
     HidingBoundIsZero,
 
@@ -125,6 +128,9 @@ impl core::fmt::Display for Error {
                  the maximum number of powers in `Powers` ({:?})",
                 num_coefficients, num_powers
             ),
+            Error::HidingUnsupported => {
+                write!(f, "the scheme does not support hiding")
+            },
             Error::HidingBoundIsZero => write!(
                 f,
                 "this scheme does not support non-`None` hiding bounds that are 0"
