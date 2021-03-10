@@ -5,12 +5,10 @@ use ark_std::vec::Vec;
 use blake2::Blake2s;
 use core::marker::PhantomData;
 use digest::Digest;
+use crate::pedersen_pc::{CommitterKey, UniversalParams};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-
-mod data_structures;
-pub use data_structures::*;
 
 /// The protocol name for the commitment scheme.
 pub(crate) const PROTOCOL_NAME: &[u8] = b"Pedersen-Commitment";
@@ -74,7 +72,7 @@ impl<G: AffineCurve> PedersenCommitment<G> {
         elems: &[G::ScalarField],
         randomizer: Option<G::ScalarField>,
     ) -> G {
-        assert!(elems.len() <= ck.supported_elems_len());
+        assert!(elems.len() <= ck.generators.len());
 
         let scalars_bigint = ark_std::cfg_iter!(elems)
             .map(|s| s.into_repr())

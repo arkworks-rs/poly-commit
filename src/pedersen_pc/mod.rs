@@ -16,7 +16,8 @@ pub use data_structures::*;
 mod pedersen;
 pub use pedersen::*;
 
-/// A simple polynomial commitment scheme that relies on Pedersen commitments.
+/// A simple polynomial commitment scheme that based on Pedersen commitments.
+/// Hiding bounds are not supported.
 pub struct PedersenPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
     _field: PhantomData<G>,
     _polynomial: PhantomData<P>,
@@ -316,7 +317,7 @@ mod tests {
     fn single_poly_test() {
         use crate::tests::*;
         single_poly_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
@@ -326,21 +327,21 @@ mod tests {
             rand_poly::<Fr>,
             rand_point::<Fr>,
         )
-        .expect("test failed for pedersen commitment");
+        .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn linear_poly_degree_bound_test() {
         use crate::tests::*;
         linear_poly_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn single_poly_degree_bound_test() {
         use crate::tests::*;
         single_poly_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
@@ -350,49 +351,49 @@ mod tests {
             rand_poly::<Fr>,
             rand_point::<Fr>,
         )
-        .expect("test failed for pedersen commitment");
+        .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn two_polys_degree_bound_single_query_test() {
         use crate::tests::*;
         two_polys_degree_bound_single_query_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn full_end_to_end_test() {
         use crate::tests::*;
         full_end_to_end_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn single_equation_test() {
         use crate::tests::*;
         single_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn two_equation_test() {
         use crate::tests::*;
         two_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn two_equation_degree_bound_test() {
         use crate::tests::*;
         two_equation_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
         full_end_to_end_equation_test::<_, _, PC_PED>(None, rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 
     #[test]
@@ -400,6 +401,6 @@ mod tests {
     fn bad_degree_bound_test() {
         use crate::tests::*;
         bad_degree_bound_test::<_, _, PC_PED>(rand_poly::<Fr>, rand_point::<Fr>)
-            .expect("test failed for pedersen commitment");
+            .expect("test failed for pedersen_bak commitment");
     }
 }

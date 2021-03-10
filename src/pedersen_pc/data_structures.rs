@@ -1,4 +1,3 @@
-use crate::pedersen_pc::pedersen::{CommitterKey, UniversalParams};
 use crate::{
     LabeledPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
     PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,
@@ -15,6 +14,21 @@ use rand_core::RngCore;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+
+/// The universal parameters for [`PedersenCommitment`][crate::pedersen_pc::PedersenPC].
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+pub struct UniversalParams<G: AffineCurve> {
+    pub(crate) generators: Vec<G>,
+    pub(crate) hiding_generator: G,
+}
+
+/// The committer key for [`PedersenCommitment`][crate::pedersen_pc::PedersenPC].
+#[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
+pub struct CommitterKey<G: AffineCurve> {
+    pub(crate) generators: Vec<G>,
+    pub(crate) hiding_generator: G,
+    pub(crate) max_elems: usize,
+}
 
 impl<G: AffineCurve> PCUniversalParams for UniversalParams<G> {
     fn max_degree(&self) -> usize {
