@@ -3,7 +3,7 @@ use crate::{
     PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{Field, PrimeField, ToBytes};
+use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     io::{Read, Write},
@@ -12,7 +12,6 @@ use ark_std::{
 use rand_core::RngCore;
 
 use crate::kzg10;
-use ark_relations::r1cs::ToConstraintField;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;

@@ -10,6 +10,7 @@ use ark_poly::UVPolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use ark_std::iter::Sum;
+use ark_std::vec::Vec;
 use rand_core::RngCore;
 
 #[cfg(feature = "parallel")]
