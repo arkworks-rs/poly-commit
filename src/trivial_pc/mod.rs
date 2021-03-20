@@ -18,12 +18,12 @@ pub use pedersen::*;
 
 /// A simple polynomial commitment scheme that based on Pedersen commitments.
 /// Hiding bounds are not supported.
-pub struct PedersenPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
+pub struct TrivialPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
     _field: PhantomData<G>,
     _polynomial: PhantomData<P>,
 }
 
-impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PedersenPC<G, P> {
+impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> TrivialPC<G, P> {
     fn check_degrees(supported_degree: usize, p: &P) -> Result<(), Error> {
         if p.degree() < 1 {
             return Err(Error::DegreeIsZero);
@@ -55,7 +55,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PedersenPC<G, P> {
 }
 
 impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::ScalarField, P>
-    for PedersenPC<G, P>
+    for TrivialPC<G, P>
 {
     type UniversalParams = UniversalParams<G>;
 
@@ -298,7 +298,7 @@ impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> PolynomialCommitment<G::Sc
 #[cfg(test)]
 mod tests {
     #![allow(non_camel_case_types)]
-    use super::PedersenPC;
+    use super::TrivialPC;
     use crate::tests::test_template;
     use crate::tests::TestInfo;
     use crate::Error;
@@ -307,7 +307,7 @@ mod tests {
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
 
-    type PC_PED = PedersenPC<EdwardsAffine, DensePolynomial<Fr>>;
+    type PC_PED = TrivialPC<EdwardsAffine, DensePolynomial<Fr>>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,

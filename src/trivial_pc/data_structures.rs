@@ -16,14 +16,14 @@ use rand_core::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-/// The universal parameters for [`PedersenCommitment`][crate::pedersen_pc::PedersenPC].
+/// The universal parameters for [`PedersenCommitment`][crate::trivial_pc::PedersenPC].
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct UniversalParams<G: AffineCurve> {
     pub(crate) generators: Vec<G>,
     pub(crate) hiding_generator: G,
 }
 
-/// The committer key for [`PedersenCommitment`][crate::pedersen_pc::PedersenPC].
+/// The committer key for [`PedersenCommitment`][crate::trivial_pc::PedersenPC].
 #[derive(Clone, Debug, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CommitterKey<G: AffineCurve> {
     pub(crate) generators: Vec<G>,

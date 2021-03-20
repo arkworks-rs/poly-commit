@@ -1,4 +1,4 @@
-use crate::pedersen_pc::{CommitterKey, UniversalParams};
+use crate::trivial_pc::{CommitterKey, UniversalParams};
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, PrimeField};
