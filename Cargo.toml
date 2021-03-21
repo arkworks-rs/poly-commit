@@ -27,7 +27,6 @@ ark-ec = { git = "https://github.com/arkworks-rs/algebra", default-features = fa
 ark-poly = { git = "https://github.com/arkworks-rs/algebra", default-features = false }
 ark-sponge = { git = "https://github.com/arkworks-rs/sponge", branch = "experimental", default-features = false }
 ark-std = { git = "https://github.com/arkworks-rs/utils", default-features = false }
-bench-utils = { git = "https://github.com/arkworks-rs/utils", default-features = false  }
 
 rand_core = { version = "0.5", default-features = false }
 digest = "0.9.0"
@@ -66,7 +65,7 @@ debug = true
 [features]
 default = [ "std", "parallel", "r1cs" ]
 std = [ "ark-ff/std", "ark-ec/std", "ark-nonnative-field/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-sponge/std" ]
-print-trace = [ "bench-utils/print-trace" ]
+print-trace = [ "ark-std/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
 r1cs = [ "ark-crypto-primitives/r1cs", "ark-nonnative-field", "ark-relations", "ark-r1cs-std", "ark-sponge/r1cs", "hashbrown" ]
 
