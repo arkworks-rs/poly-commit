@@ -13,7 +13,7 @@
 #[macro_use]
 extern crate derivative;
 #[macro_use]
-extern crate bench_utils;
+extern crate ark_std;
 
 use ark_ff::Field;
 pub use ark_poly::{Polynomial, UVPolynomial};
