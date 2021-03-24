@@ -12,8 +12,8 @@ use ark_ec::{
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, MVPolynomial};
+use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;

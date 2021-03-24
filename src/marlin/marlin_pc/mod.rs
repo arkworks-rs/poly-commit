@@ -6,8 +6,8 @@ use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
 use ark_poly::UVPolynomial;
+use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;

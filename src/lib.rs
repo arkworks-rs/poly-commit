@@ -17,7 +17,7 @@ extern crate ark_std;
 
 use ark_ff::Field;
 pub use ark_poly::{Polynomial, UVPolynomial};
-use rand_core::RngCore;
+use ark_std::rand::RngCore;
 
 use ark_std::{
     collections::{BTreeMap, BTreeSet},

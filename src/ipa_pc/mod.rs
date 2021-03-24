@@ -5,8 +5,8 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitmen
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
