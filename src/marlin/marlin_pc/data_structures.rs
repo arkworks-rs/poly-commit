@@ -7,7 +7,7 @@ use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
-use rand_core::RngCore;
+use ark_std::rand::RngCore;
 
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.

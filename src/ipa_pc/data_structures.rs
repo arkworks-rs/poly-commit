@@ -3,11 +3,11 @@ use crate::{PCCommitterKey, PCVerifierKey, Vec};
 use ark_ec::AffineCurve;
 use ark_ff::{Field, ToBytes, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::rand::RngCore;
 use ark_std::{
     io::{Read, Write},
     vec,
 };
-use rand_core::RngCore;
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]

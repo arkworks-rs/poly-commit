@@ -1,13 +1,13 @@
 use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
 use ark_ff::{Field, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::rand::RngCore;
 use ark_std::{
     borrow::Borrow,
     io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
-use rand_core::RngCore;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
