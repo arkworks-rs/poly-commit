@@ -268,9 +268,9 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_ec::PairingEngine;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+    use ark_std::rand::RngCore;
     use ark_std::vec::Vec;
     use ark_std::{test_rng, UniformRand};
-    use rand_core::RngCore;
     type E = Bls12_381;
     type Fr = <E as PairingEngine>::Fr;
 
