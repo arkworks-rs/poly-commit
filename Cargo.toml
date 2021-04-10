@@ -25,7 +25,7 @@ ark-serialize = { version = "^0.2.0", default-features = false, features = [ "de
 ark-ff = { version = "^0.2.0", default-features = false }
 ark-ec = { version = "^0.2.0", default-features = false }
 ark-poly = { version = "^0.2.0", default-features = false }
-ark-sponge = { git = "https://github.com/arkworks-rs/sponge", branch = "experimental", default-features = false }
+ark-sponge = { git = "https://github.com/arkworks-rs/sponge", branch = "accumulation-experimental", default-features = false }
 ark-std = { version = "^0.2.0", default-features = false }
 
 rand_core = { version = "0.5", default-features = false }
