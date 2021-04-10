@@ -88,7 +88,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
     }
 
     fn supported_degree(&self) -> usize {
-        self.powers.len()
+        self.powers.len() - 1
     }
 }
 
