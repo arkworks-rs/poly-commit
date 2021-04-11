@@ -9,7 +9,7 @@ use crate::{
     BTreeMap, BTreeSet, BatchLCProof, LinearCombinationCoeffVar, LinearCombinationVar,
     PrepareGadget, String, ToString, Vec,
 };
-use ark_ec::{AffineCurve, CurveCycle, PairingEngine, PairingFriendlyCycle};
+use ark_ec::{AffineCurve, CurveCycle, PairingEngine};
 use ark_ff::{PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
@@ -17,16 +17,10 @@ use ark_r1cs_std::{fields::fp::FpVar, prelude::*, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, vec};
 
-type E2Fr<E> = <<E as CurveCycle>::E2 as AffineCurve>::ScalarField;
-type E2Fq<E> = <<E as CurveCycle>::E2 as AffineCurve>::BaseField;
-
 /// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct VerifierKeyVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>>
-where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct VerifierKeyVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// Generator of G1.
     pub g: PG::G1Var,
     /// Generator of G2.
@@ -34,21 +28,20 @@ where
     /// Generator of G1, times first monomial.
     pub beta_h: PG::G2Var,
     /// Used for the shift powers associated with different degree bounds.
-    pub degree_bounds_and_shift_powers: Option<Vec<(usize, FpVar<E2Fq<E>>, PG::G1Var)>>,
+    pub degree_bounds_and_shift_powers: Option<Vec<(usize, FpVar<E::Fq>, PG::G1Var)>>,
 }
 
 impl<E, PG> VerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     /// Find the appropriate shift for the degree bound.
     #[tracing::instrument(target = "r1cs", skip(self, cs))]
     pub fn get_shift_power(
         &self,
-        cs: impl Into<Namespace<E2Fq<E>>>,
-        bound: &FpVar<E2Fq<E>>,
+        cs: impl Into<Namespace<E::Fq>>,
+        bound: &FpVar<E::Fq>,
     ) -> Option<PG::G1Var> {
         // Search the bound using PIR
         if self.degree_bounds_and_shift_powers.is_none() {
@@ -83,15 +76,15 @@ where
             }
 
             // Sum of the PIR values are equal to one
-            let mut sum = FpVar::<E2Fq<E>>::zero();
-            let one = FpVar::<E2Fq<E>>::one();
+            let mut sum = FpVar::<E::Fq>::zero();
+            let one = FpVar::<E::Fq>::one();
             for pir_gadget in pir_vector_gadgets.iter() {
-                sum += &FpVar::<E2Fq<E>>::from(pir_gadget.clone());
+                sum += &FpVar::<E::Fq>::from(pir_gadget.clone());
             }
             sum.enforce_equal(&one).unwrap();
 
             // PIR the value
-            let mut found_bound = FpVar::<E2Fq<E>>::zero();
+            let mut found_bound = FpVar::<E::Fq>::zero();
 
             let mut found_shift_power = PG::G1Var::zero();
 
@@ -100,8 +93,7 @@ where
                 .zip(degree_bounds_and_shift_powers.iter())
             {
                 found_bound =
-                    FpVar::<E2Fq<E>>::conditionally_select(pir_gadget, degree, &found_bound)
-                        .unwrap();
+                    FpVar::<E::Fq>::conditionally_select(pir_gadget, degree, &found_bound).unwrap();
 
                 found_shift_power =
                     PG::G1Var::conditionally_select(pir_gadget, shift_power, &found_shift_power)
@@ -115,20 +107,19 @@ where
     }
 }
 
-impl<E, PG> AllocVar<VerifierKey<E::Engine2>, E2Fq<E>> for VerifierKeyVar<E, PG>
+impl<E, PG> AllocVar<VerifierKey<E>, E::Fq> for VerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, val))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         val: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<VerifierKey<E::Engine2>>,
+        T: Borrow<VerifierKey<E>>,
     {
         let vk_orig = val()?.borrow().clone();
 
@@ -146,9 +137,9 @@ where
                 .map(|(s, g)| {
                     (
                         *s,
-                        FpVar::<E2Fq<E>>::new_variable(
+                        FpVar::<E::Fq>::new_variable(
                             ark_relations::ns!(cs, "degree bound"),
-                            || Ok(<E2Fq<E> as From<u128>>::from(*s as u128)),
+                            || Ok(<E::Fq as From<u128>>::from(*s as u128)),
                             mode,
                         )
                         .unwrap(),
@@ -175,14 +166,13 @@ where
     }
 }
 
-impl<E, PG> ToBytesGadget<E2Fq<E>> for VerifierKeyVar<E, PG>
+impl<E, PG> ToBytesGadget<E::Fq> for VerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<E2Fq<E>>>> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<E::Fq>>> {
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(&self.g.to_bytes()?);
@@ -202,16 +192,15 @@ where
     }
 }
 
-impl<E, PG> ToConstraintFieldGadget<E2Fq<E>> for VerifierKeyVar<E, PG>
+impl<E, PG> ToConstraintFieldGadget<E::Fq> for VerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
-    PG::G1Var: ToConstraintFieldGadget<E2Fq<E>>,
-    PG::G2Var: ToConstraintFieldGadget<E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
+    PG::G1Var: ToConstraintFieldGadget<E::Fq>,
+    PG::G2Var: ToConstraintFieldGadget<E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<E2Fq<E>>>> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<E::Fq>>> {
         let mut res = Vec::new();
 
         let mut g_gadget = self.g.to_constraint_field()?;
@@ -240,11 +229,8 @@ where
 /// Var for the verification key of the Marlin-KZG10 polynomial commitment scheme.
 #[allow(clippy::type_complexity)]
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct PreparedVerifierKeyVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>>
-where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct PreparedVerifierKeyVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// Generator of G1.
     pub prepared_g: Vec<PG::G1Var>,
     /// Generator of G2.
@@ -252,8 +238,7 @@ where
     /// Generator of G1, times first monomial.
     pub prepared_beta_h: PG::G2PreparedVar,
     /// Used for the shift powers associated with different degree bounds.
-    pub prepared_degree_bounds_and_shift_powers:
-        Option<Vec<(usize, FpVar<E2Fq<E>>, Vec<PG::G1Var>)>>,
+    pub prepared_degree_bounds_and_shift_powers: Option<Vec<(usize, FpVar<E::Fq>, Vec<PG::G1Var>)>>,
     /// Indicate whether or not it is a constant allocation (which decides whether or not shift powers are precomputed)
     pub constant_allocation: bool,
     /// If not a constant allocation, the original vk is attached (for computing the shift power series)
@@ -262,15 +247,14 @@ where
 
 impl<E, PG> PreparedVerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(
         &self,
-        cs: impl Into<Namespace<E2Fq<E>>>,
-        bound: &FpVar<E2Fq<E>>,
+        cs: impl Into<Namespace<E::Fq>>,
+        bound: &FpVar<E::Fq>,
     ) -> Option<Vec<PG::G1Var>> {
         if self.constant_allocation {
             if self.prepared_degree_bounds_and_shift_powers.is_none() {
@@ -298,7 +282,7 @@ where
             if let Some(shift_power) = shift_power {
                 let mut prepared_shift_gadgets = Vec::<PG::G1Var>::new();
 
-                let supported_bits = E2Fr::<E>::size_in_bits();
+                let supported_bits = E::Fr::size_in_bits();
 
                 let mut cur: PG::G1Var = shift_power;
                 for _ in 0..supported_bits {
@@ -314,15 +298,14 @@ where
     }
 }
 
-impl<E, PG> PrepareGadget<VerifierKeyVar<E, PG>, E2Fq<E>> for PreparedVerifierKeyVar<E, PG>
+impl<E, PG> PrepareGadget<VerifierKeyVar<E, PG>, E::Fq> for PreparedVerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &VerifierKeyVar<E, PG>) -> R1CSResult<Self> {
-        let supported_bits = <E2Fr<E> as PrimeField>::size_in_bits();
+        let supported_bits = <E::Fr as PrimeField>::size_in_bits();
         let mut prepared_g = Vec::<PG::G1Var>::new();
 
         let mut g: PG::G1Var = unprepared.g.clone();
@@ -336,7 +319,7 @@ where
 
         let prepared_degree_bounds_and_shift_powers =
             if unprepared.degree_bounds_and_shift_powers.is_some() {
-                let mut res = Vec::<(usize, FpVar<E2Fq<E>>, Vec<PG::G1Var>)>::new();
+                let mut res = Vec::<(usize, FpVar<E::Fq>, Vec<PG::G1Var>)>::new();
 
                 for (d, d_gadget, shift_power) in unprepared
                     .degree_bounds_and_shift_powers
@@ -363,20 +346,19 @@ where
     }
 }
 
-impl<E, PG> AllocVar<PreparedVerifierKey<E::Engine2>, E2Fq<E>> for PreparedVerifierKeyVar<E, PG>
+impl<E, PG> AllocVar<PreparedVerifierKey<E>, E::Fq> for PreparedVerifierKeyVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<PreparedVerifierKey<E::Engine2>>,
+        T: Borrow<PreparedVerifierKey<E>>,
     {
         let t = f()?;
         let obj = t.borrow();
@@ -387,8 +369,8 @@ where
         let mut prepared_g = Vec::<PG::G1Var>::new();
         for g in obj.prepared_vk.prepared_g.iter() {
             prepared_g.push(<PG::G1Var as AllocVar<
-                <E::Engine2 as PairingEngine>::G1Affine,
-                E2Fq<E>,
+                <E as PairingEngine>::G1Affine,
+                E::Fq,
             >>::new_variable(
                 ark_relations::ns!(cs, "g"), || Ok(*g), mode
             )?);
@@ -407,7 +389,7 @@ where
 
         let prepared_degree_bounds_and_shift_powers =
             if obj.prepared_degree_bounds_and_shift_powers.is_some() {
-                let mut res = Vec::<(usize, FpVar<E2Fq<E>>, Vec<PG::G1Var>)>::new();
+                let mut res = Vec::<(usize, FpVar<E::Fq>, Vec<PG::G1Var>)>::new();
 
                 for (d, shift_power_elems) in obj
                     .prepared_degree_bounds_and_shift_powers
@@ -418,16 +400,16 @@ where
                     let mut gadgets = Vec::<PG::G1Var>::new();
                     for shift_power_elem in shift_power_elems.iter() {
                         gadgets.push(<PG::G1Var as AllocVar<
-                            <E::Engine2 as PairingEngine>::G1Affine,
-                            E2Fq<E>,
+                            <E as PairingEngine>::G1Affine,
+                            E::Fq,
                         >>::new_variable(
                             cs.clone(), || Ok(shift_power_elem), mode
                         )?);
                     }
 
-                    let d_gadget = FpVar::<E2Fq<E>>::new_variable(
+                    let d_gadget = FpVar::<E::Fq>::new_variable(
                         cs.clone(),
-                        || Ok(<E2Fq<E> as From<u128>>::from(*d as u128)),
+                        || Ok(<E::Fq as From<u128>>::from(*d as u128)),
                         mode,
                     )?;
 
@@ -451,29 +433,25 @@ where
 
 /// Var for an optionally hiding Marlin-KZG10 commitment.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct CommitmentVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>>
-where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct CommitmentVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     comm: PG::G1Var,
     shifted_comm: Option<PG::G1Var>,
 }
 
-impl<E, PG> AllocVar<Commitment<E::Engine2>, E2Fq<E>> for CommitmentVar<E, PG>
+impl<E, PG> AllocVar<Commitment<E>, E::Fq> for CommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<Commitment<E::Engine2>>,
+        T: Borrow<Commitment<E>>,
     {
         value_gen().and_then(|commitment| {
             let ns = cs.into();
@@ -498,16 +476,15 @@ where
     }
 }
 
-impl<E, PG> ToConstraintFieldGadget<E2Fq<E>> for CommitmentVar<E, PG>
+impl<E, PG> ToConstraintFieldGadget<E::Fq> for CommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    E::E2: ToConstraintField<E2Fq<E>>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
-    PG::G1Var: ToConstraintFieldGadget<E2Fq<E>>,
+    E: PairingEngine,
+    E::G1Affine: ToConstraintField<E::Fq>,
+    PG: PairingVar<E, E::Fq>,
+    PG::G1Var: ToConstraintFieldGadget<E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<E2Fq<E>>>> {
+    fn to_constraint_field(&self) -> R1CSResult<Vec<FpVar<E::Fq>>> {
         let mut res = Vec::new();
 
         let mut comm_gadget = self.comm.to_constraint_field()?;
@@ -524,14 +501,13 @@ where
     }
 }
 
-impl<E, PG> ToBytesGadget<E2Fq<E>> for CommitmentVar<E, PG>
+impl<E, PG> ToBytesGadget<E::Fq> for CommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(self))]
-    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<E2Fq<E>>>> {
+    fn to_bytes(&self) -> R1CSResult<Vec<UInt8<E::Fq>>> {
         let zero_shifted_comm = PG::G1Var::zero();
 
         let mut bytes = Vec::new();
@@ -546,22 +522,21 @@ where
 /// Prepared gadget for an optionally hiding Marlin-KZG10 commitment.
 /// shifted_comm is not prepared, due to the specific use case.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct PreparedCommitmentVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>> {
+#[derivative(Clone(bound = ""))]
+pub struct PreparedCommitmentVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     prepared_comm: Vec<PG::G1Var>,
     shifted_comm: Option<PG::G1Var>,
 }
 
-impl<E, PG> PrepareGadget<CommitmentVar<E, PG>, E2Fq<E>> for PreparedCommitmentVar<E, PG>
+impl<E, PG> PrepareGadget<CommitmentVar<E, PG>, E::Fq> for PreparedCommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &CommitmentVar<E, PG>) -> R1CSResult<Self> {
         let mut prepared_comm = Vec::<PG::G1Var>::new();
-        let supported_bits = <E2Fr<E> as PrimeField>::size_in_bits();
+        let supported_bits = <E::Fr as PrimeField>::size_in_bits();
 
         let mut cur: PG::G1Var = unprepared.comm.clone();
         for _ in 0..supported_bits {
@@ -576,19 +551,19 @@ where
     }
 }
 
-impl<E, PG> AllocVar<PreparedCommitment<E::Engine2>, E2Fq<E>> for PreparedCommitmentVar<E, PG>
+impl<E, PG> AllocVar<PreparedCommitment<E>, E::Fq> for PreparedCommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, f))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         f: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<PreparedCommitment<E::Engine2>>,
+        T: Borrow<PreparedCommitment<E>>,
     {
         let t = f()?;
         let obj = t.borrow();
@@ -600,13 +575,13 @@ where
 
         for comm_elem in obj.prepared_comm.0.iter() {
             prepared_comm.push(<PG::G1Var as AllocVar<
-                <E::Engine2 as PairingEngine>::G1Projective,
-                E2Fq<E>,
+                <E as PairingEngine>::G1Projective,
+                E::Fq,
             >>::new_variable(
                 ark_relations::ns!(cs, "comm_elem"),
                 || {
-                    Ok(<<E::Engine2 as PairingEngine>::G1Projective as From<
-                        <E::Engine2 as PairingEngine>::G1Affine,
+                    Ok(<<E as PairingEngine>::G1Projective as From<
+                        <E as PairingEngine>::G1Affine,
                     >>::from(*comm_elem))
                 },
                 mode,
@@ -615,13 +590,13 @@ where
 
         let shifted_comm = if obj.shifted_comm.is_some() {
             Some(<PG::G1Var as AllocVar<
-                <E::Engine2 as PairingEngine>::G1Projective,
-                E2Fq<E>,
+                <E as PairingEngine>::G1Projective,
+                E::Fq,
             >>::new_variable(
                 ark_relations::ns!(cs, "shifted_comm"),
                 || {
-                    Ok(<<E::Engine2 as PairingEngine>::G1Projective as From<
-                        <E::Engine2 as PairingEngine>::G1Affine,
+                    Ok(<<E as PairingEngine>::G1Projective as From<
+                        <E as PairingEngine>::G1Affine,
                     >>::from(obj.shifted_comm.unwrap().0))
                 },
                 mode,
@@ -639,34 +614,29 @@ where
 
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct LabeledCommitmentVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>>
-where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct LabeledCommitmentVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// A text label for the commitment.
     pub label: String,
     /// The plain commitment.
     pub commitment: CommitmentVar<E, PG>,
     /// Optionally, a bound on the polynomial degree.
-    pub degree_bound: Option<FpVar<E2Fq<E>>>,
+    pub degree_bound: Option<FpVar<E::Fq>>,
 }
 
-impl<E, PG> AllocVar<LabeledCommitment<Commitment<E::Engine2>>, E2Fq<E>>
-    for LabeledCommitmentVar<E, PG>
+impl<E, PG> AllocVar<LabeledCommitment<Commitment<E>>, E::Fq> for LabeledCommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<LabeledCommitment<Commitment<E::Engine2>>>,
+        T: Borrow<LabeledCommitment<Commitment<E>>>,
     {
         value_gen().and_then(|labeled_commitment| {
             let ns = cs.into();
@@ -684,9 +654,9 @@ where
             )?;
 
             let degree_bound = if let Some(degree_bound) = degree_bound {
-                FpVar::<E2Fq<E>>::new_variable(
+                FpVar::<E::Fq>::new_variable(
                     ark_relations::ns!(cs, "degree_bound"),
-                    || Ok(<E2Fq<E> as From<u128>>::from(degree_bound as u128)),
+                    || Ok(<E::Fq as From<u128>>::from(degree_bound as u128)),
                     mode,
                 )
                 .ok()
@@ -705,27 +675,21 @@ where
 
 /// Var for a Marlin-KZG10 commitment, with a string label and degree bound.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct PreparedLabeledCommitmentVar<
-    E: PairingFriendlyCycle,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
-> where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct PreparedLabeledCommitmentVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// A text label for the commitment.
     pub label: String,
     /// The plain commitment.
     pub prepared_commitment: PreparedCommitmentVar<E, PG>,
     /// Optionally, a bound on the polynomial degree.
-    pub degree_bound: Option<FpVar<E2Fq<E>>>,
+    pub degree_bound: Option<FpVar<E::Fq>>,
 }
 
-impl<E, PG> PrepareGadget<LabeledCommitmentVar<E, PG>, E2Fq<E>>
+impl<E, PG> PrepareGadget<LabeledCommitmentVar<E, PG>, E::Fq>
     for PreparedLabeledCommitmentVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(unprepared))]
     fn prepare(unprepared: &LabeledCommitmentVar<E, PG>) -> R1CSResult<Self> {
@@ -742,31 +706,27 @@ where
 /// Var for a Marlin-KZG10 proof.
 #[allow(clippy::type_complexity)]
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct ProofVar<E: PairingFriendlyCycle, PG: PairingVar<E::Engine2, E2Fq<E>>>
-where
-    E2Fq<E>: PrimeField,
-{
+#[derivative(Clone(bound = ""))]
+pub struct ProofVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// The commitment to the witness polynomial.
     pub w: PG::G1Var,
     /// The evaluation of the random hiding polynomial.
-    pub random_v: Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
+    pub random_v: Option<NonNativeFieldVar<E::Fr, E::Fq>>,
 }
 
-impl<E, PG> AllocVar<Proof<E::Engine2>, E2Fq<E>> for ProofVar<E, PG>
+impl<E, PG> AllocVar<Proof<E>, E::Fq> for ProofVar<E, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<Proof<E::Engine2>>,
+        T: Borrow<Proof<E>>,
     {
         value_gen().and_then(|proof| {
             let ns = cs.into();
@@ -792,39 +752,36 @@ where
 /// An allocated version of `BatchLCProof`.
 #[allow(clippy::type_complexity)]
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
+#[derivative(Clone(bound = ""))]
 pub struct BatchLCProofVar<
-    E: PairingFriendlyCycle,
-    P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
-> where
-    E2Fq<E>: PrimeField,
-{
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    PG: PairingVar<E, E::Fq>,
+> {
     /// Evaluation proofs.
     pub proofs: Vec<ProofVar<E, PG>>,
     /// Evaluations required to verify the proof.
-    pub evals: Option<Vec<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>>,
+    pub evals: Option<Vec<NonNativeFieldVar<E::Fr, E::Fq>>>,
     #[doc(hidden)]
     pub polynomial: PhantomData<P>,
 }
 
-impl<E, P, PG> AllocVar<BatchLCProof<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>>, E2Fq<E>>
+impl<E, P, PG> AllocVar<BatchLCProof<E::Fr, P, MarlinKZG10<E, P>>, E::Fq>
     for BatchLCProofVar<E, P, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    PG: PairingVar<E, E::Fq>,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
-        cs: impl Into<Namespace<E2Fq<E>>>,
+        cs: impl Into<Namespace<E::Fq>>,
         value_gen: impl FnOnce() -> Result<T, SynthesisError>,
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<BatchLCProof<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>>>,
+        T: Borrow<BatchLCProof<E::Fr, P, MarlinKZG10<E, P>>>,
     {
         value_gen().map(|proof| {
             let ns = cs.into();
@@ -841,7 +798,7 @@ where
                 .collect();
 
             #[allow(clippy::type_complexity)]
-            let evals: Option<Vec<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>> = match evals {
+            let evals: Option<Vec<NonNativeFieldVar<E::Fr, E::Fq>>> = match evals {
                 None => None,
                 Some(evals_inner) => Some(
                     evals_inner
@@ -869,12 +826,12 @@ where
 
 /// Var for the Marlin-KZG10 polynomial commitment verifier.
 #[derive(Derivative)]
-#[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
+#[derivative(Clone(bound = ""))]
 pub struct MarlinKZG10Gadget<E, P, PG>
 where
-    E: PairingFriendlyCycle,
-    P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    PG: PairingVar<E, E::Fq>,
 {
     _cycle_engine: PhantomData<E>,
     _pairing_gadget: PhantomData<PG>,
@@ -883,11 +840,10 @@ where
 
 impl<E, P, PG> MarlinKZG10Gadget<E, P, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    PG: PairingVar<E, E::Fq>,
 {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     #[tracing::instrument(
@@ -895,35 +851,30 @@ where
         skip(prepared_verification_key, lc_info, query_set, evaluations, proofs)
     )]
     fn prepared_batch_check_evaluations(
-        cs: ConstraintSystemRef<E2Fq<E>>,
+        cs: ConstraintSystemRef<E::Fq>,
         prepared_verification_key: &<Self as PCCheckVar<
-            E2Fr<E>,
+            E::Fr,
             P,
-            MarlinKZG10<E::Engine2, P>,
-            E2Fq<E>,
+            MarlinKZG10<E, P>,
+            E::Fq,
         >>::PreparedVerifierKeyVar,
         lc_info: &[(
             String,
             Vec<(
-                Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
-                Option<FpVar<E2Fq<E>>>,
+                Option<NonNativeFieldVar<E::Fr, E::Fq>>,
+                Option<FpVar<E::Fq>>,
                 PreparedCommitmentVar<E, PG>,
                 bool,
             )>,
         )],
-        query_set: &QuerySetVar<E2Fr<E>, E2Fq<E>>,
-        evaluations: &EvaluationsVar<E2Fr<E>, E2Fq<E>>,
-        proofs: &[<Self as PCCheckVar<
-            E2Fr<E>,
-            P,
-            MarlinKZG10<E::Engine2, P>,
-            E2Fq<E>,
-        >>::ProofVar],
-        opening_challenges: &[NonNativeFieldVar<E2Fr<E>, E2Fq<E>>],
-        opening_challenges_bits: &[Vec<Boolean<E2Fq<E>>>],
-        batching_rands: &[NonNativeFieldVar<E2Fr<E>, E2Fq<E>>],
-        batching_rands_bits: &[Vec<Boolean<E2Fq<E>>>],
-    ) -> R1CSResult<Boolean<E2Fq<E>>> {
+        query_set: &QuerySetVar<E::Fr, E::Fq>,
+        evaluations: &EvaluationsVar<E::Fr, E::Fq>,
+        proofs: &[<Self as PCCheckVar<E::Fr, P, MarlinKZG10<E, P>, E::Fq>>::ProofVar],
+        opening_challenges: &[NonNativeFieldVar<E::Fr, E::Fq>],
+        opening_challenges_bits: &[Vec<Boolean<E::Fq>>],
+        batching_rands: &[NonNativeFieldVar<E::Fr, E::Fq>],
+        batching_rands_bits: &[Vec<Boolean<E::Fq>>],
+    ) -> R1CSResult<Boolean<E::Fq>> {
         let mut batching_rands = batching_rands.to_vec();
         let mut batching_rands_bits = batching_rands_bits.to_vec();
 
@@ -932,8 +883,8 @@ where
             (
                 String,
                 Vec<(
-                    Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
-                    Option<FpVar<E2Fq<E>>>,
+                    Option<NonNativeFieldVar<E::Fr, E::Fq>>,
+                    Option<FpVar<E::Fq>>,
                     PreparedCommitmentVar<E, PG>,
                     bool,
                 )>,
@@ -956,8 +907,8 @@ where
         for (_, (point, labels)) in query_to_labels_map.into_iter() {
             let mut comms_to_combine = Vec::<
                 Vec<(
-                    Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
-                    Option<FpVar<E2Fq<E>>>,
+                    Option<NonNativeFieldVar<E::Fr, E::Fq>>,
+                    Option<FpVar<E::Fq>>,
                     PreparedCommitmentVar<E, PG>,
                     bool,
                 )>,
@@ -980,7 +931,7 @@ where
 
             // Accumulate the commitments and evaluations corresponding to `query`.
             let mut combined_comm = PG::G1Var::zero();
-            let mut combined_eval = NonNativeFieldMulResultVar::<E2Fr<E>, E2Fq<E>>::zero();
+            let mut combined_eval = NonNativeFieldMulResultVar::<E::Fr, E::Fq>::zero();
 
             let mut opening_challenges_counter = 0;
 
@@ -1101,8 +1052,8 @@ where
             let mut total_c = PG::G1Var::zero();
             let mut total_w = PG::G1Var::zero();
 
-            let mut g_multiplier = NonNativeFieldMulResultVar::<E2Fr<E>, E2Fq<E>>::zero();
-            let mut g_multiplier_reduced = NonNativeFieldVar::<E2Fr<E>, E2Fq<E>>::zero();
+            let mut g_multiplier = NonNativeFieldMulResultVar::<E::Fr, E::Fq>::zero();
+            let mut g_multiplier_reduced = NonNativeFieldVar::<E::Fr, E::Fq>::zero();
             for (i, (((c, z), v), proof)) in combined_comms
                 .iter()
                 .zip(combined_queries)
@@ -1181,14 +1132,12 @@ where
     }
 }
 
-impl<E, P, PG> PCCheckVar<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>, E2Fq<E>>
-    for MarlinKZG10Gadget<E, P, PG>
+impl<E, P, PG> PCCheckVar<E::Fr, P, MarlinKZG10<E, P>, E::Fq> for MarlinKZG10Gadget<E, P, PG>
 where
-    E: PairingFriendlyCycle,
-    E2Fq<E>: PrimeField,
-    P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
+    E: PairingEngine,
+    P: UVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
-    PG: PairingVar<E::Engine2, E2Fq<E>>,
+    PG: PairingVar<E, E::Fq>,
 {
     type VerifierKeyVar = VerifierKeyVar<E, PG>;
     type PreparedVerifierKeyVar = PreparedVerifierKeyVar<E, PG>;
@@ -1205,14 +1154,14 @@ where
         skip(verification_key, commitments, query_set, evaluations, proofs)
     )]
     fn batch_check_evaluations(
-        _cs: ConstraintSystemRef<E2Fq<E>>,
+        _cs: ConstraintSystemRef<E::Fq>,
         verification_key: &Self::VerifierKeyVar,
         commitments: &[Self::LabeledCommitmentVar],
-        query_set: &QuerySetVar<E2Fr<E>, E2Fq<E>>,
-        evaluations: &EvaluationsVar<E2Fr<E>, E2Fq<E>>,
+        query_set: &QuerySetVar<E::Fr, E::Fq>,
+        evaluations: &EvaluationsVar<E::Fr, E::Fq>,
         proofs: &[Self::ProofVar],
-        rand_data: &PCCheckRandomDataVar<E2Fr<E>, E2Fq<E>>,
-    ) -> R1CSResult<Boolean<E2Fq<E>>> {
+        rand_data: &PCCheckRandomDataVar<E::Fr, E::Fq>,
+    ) -> R1CSResult<Boolean<E::Fq>> {
         let mut batching_rands = rand_data.batching_rands.to_vec();
         let mut batching_rands_bits = rand_data.batching_rands_bits.to_vec();
 
@@ -1256,7 +1205,7 @@ where
 
             // Accumulate the commitments and evaluations corresponding to `query`.
             let mut combined_comm = PG::G1Var::zero();
-            let mut combined_eval = NonNativeFieldMulResultVar::<E2Fr<E>, E2Fq<E>>::zero();
+            let mut combined_eval = NonNativeFieldMulResultVar::<E::Fr, E::Fq>::zero();
 
             let mut opening_challenges_counter = 0;
 
@@ -1318,7 +1267,7 @@ where
             let mut total_c = PG::G1Var::zero();
             let mut total_w = PG::G1Var::zero();
 
-            let mut g_multiplier = NonNativeFieldMulResultVar::<E2Fr<E>, E2Fq<E>>::zero();
+            let mut g_multiplier = NonNativeFieldMulResultVar::<E::Fr, E::Fq>::zero();
             for (((c, z), v), proof) in combined_comms
                 .iter()
                 .zip(combined_queries)
@@ -1391,15 +1340,15 @@ where
         )
     )]
     fn prepared_check_combinations(
-        cs: ConstraintSystemRef<E2Fq<E>>,
+        cs: ConstraintSystemRef<E::Fq>,
         prepared_verification_key: &Self::PreparedVerifierKeyVar,
-        linear_combinations: &[LinearCombinationVar<E2Fr<E>, E2Fq<E>>],
+        linear_combinations: &[LinearCombinationVar<E::Fr, E::Fq>],
         prepared_commitments: &[Self::PreparedLabeledCommitmentVar],
-        query_set: &QuerySetVar<E2Fr<E>, E2Fq<E>>,
-        evaluations: &EvaluationsVar<E2Fr<E>, E2Fq<E>>,
+        query_set: &QuerySetVar<E::Fr, E::Fq>,
+        evaluations: &EvaluationsVar<E::Fr, E::Fq>,
         proof: &Self::BatchLCProofVar,
-        rand_data: &PCCheckRandomDataVar<E2Fr<E>, E2Fq<E>>,
-    ) -> R1CSResult<Boolean<E2Fq<E>>> {
+        rand_data: &PCCheckRandomDataVar<E::Fr, E::Fq>,
+    ) -> R1CSResult<Boolean<E::Fq>> {
         let BatchLCProofVar { proofs, .. } = proof;
 
         let label_comm_map = prepared_commitments
@@ -1483,7 +1432,7 @@ where
     fn create_labeled_commitment(
         label: String,
         commitment: Self::CommitmentVar,
-        degree_bound: Option<FpVar<E2Fq<E>>>,
+        degree_bound: Option<FpVar<E::Fq>>,
     ) -> Self::LabeledCommitmentVar {
         Self::LabeledCommitmentVar {
             label,
@@ -1495,7 +1444,7 @@ where
     fn create_prepared_labeled_commitment(
         label: String,
         prepared_commitment: Self::PreparedCommitmentVar,
-        degree_bound: Option<FpVar<E2Fq<E>>>,
+        degree_bound: Option<FpVar<E::Fq>>,
     ) -> Self::PreparedLabeledCommitmentVar {
         Self::PreparedLabeledCommitmentVar {
             label,
