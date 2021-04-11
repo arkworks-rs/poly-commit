@@ -12,6 +12,12 @@ use ark_std::{marker::PhantomData, ops::Div, vec};
 mod data_structures;
 pub use data_structures::*;
 
+/// R1CS constraints for the commitment scheme.
+#[cfg(feature = "r1cs")]
+mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
+
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
 /// and (optional) hiding property taken from [[CHMMVW20, “Marlin”]][marlin].
 ///

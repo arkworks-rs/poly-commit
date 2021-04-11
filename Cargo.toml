@@ -42,7 +42,6 @@ hashbrown = { version = "0.9", optional = true }
 tracing = { version = "0.1", default-features = false, features = [ "attributes" ], optional = true }
 
 [dev-dependencies]
-#rand = { version = "0.7", default-features = false }
 ark-ed-on-bls12-381 = { version = "^0.2.0", default-features = false }
 ark-bls12-381 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.2.0", default-features = false, features = [ "curve" ] }

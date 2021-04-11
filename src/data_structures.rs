@@ -103,7 +103,8 @@ pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeser
 }
 
 /// A proof of satisfaction of linear combinations.
-#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = "F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>"))]
 pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
