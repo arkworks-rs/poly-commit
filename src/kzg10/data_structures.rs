@@ -1,7 +1,8 @@
 use crate::*;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes, ToConstraintField, Zero};
+use ark_ff::{to_bytes, PrimeField, ToBytes, ToConstraintField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_sponge::{collect_sponge_bytes, collect_sponge_field_elements, Absorbable};
 use ark_std::{
     borrow::Cow,
     io::{Read, Write},
@@ -297,6 +298,20 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     }
 }
 
+impl<E: PairingEngine> Absorbable<E::Fq> for VerifierKey<E>
+where
+    E::G1Affine: Absorbable<E::Fq>,
+    E::G2Affine: Absorbable<E::Fq>,
+{
+    fn to_sponge_bytes(&self) -> Vec<u8> {
+        collect_sponge_bytes!(E::Fq, self.g, self.gamma_g, self.h, self.beta_h)
+    }
+
+    fn to_sponge_field_elements(&self) -> Vec<<E as PairingEngine>::Fq> {
+        collect_sponge_field_elements!(self.g, self.gamma_g, self.h, self.beta_h)
+    }
+}
+
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -367,6 +382,19 @@ impl<E: PairingEngine> ToBytes for Commitment<E> {
     #[inline]
     fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
         self.0.write(writer)
+    }
+}
+
+impl<E: PairingEngine> Absorbable<E::Fq> for Commitment<E>
+where
+    E::G1Affine: Absorbable<E::Fq>,
+{
+    fn to_sponge_bytes(&self) -> Vec<u8> {
+        self.0.to_sponge_bytes()
+    }
+
+    fn to_sponge_field_elements(&self) -> Vec<E::Fq> {
+        self.0.to_sponge_field_elements()
     }
 }
 
@@ -534,6 +562,30 @@ pub struct Proof<E: PairingEngine> {
     /// This is the evaluation of the random polynomial at the point for which
     /// the evaluation proof was produced.
     pub random_v: Option<E::Fr>,
+}
+
+impl<E: PairingEngine> Absorbable<E::Fq> for Proof<E>
+where
+    E::G1Affine: Absorbable<E::Fq>,
+{
+    fn to_sponge_bytes(&self) -> Vec<u8> {
+        collect_sponge_bytes!(
+            E::Fq,
+            self.w,
+            self.random_v
+                .as_ref()
+                .map(|random_v| to_bytes!(random_v).unwrap())
+        )
+    }
+
+    fn to_sponge_field_elements(&self) -> Vec<E::Fq> {
+        collect_sponge_field_elements!(
+            self.w,
+            self.random_v
+                .as_ref()
+                .map(|random_v| to_bytes!(random_v).unwrap())
+        )
+    }
 }
 
 impl<E: PairingEngine> PCProof for Proof<E> {

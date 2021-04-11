@@ -5,6 +5,7 @@ use crate::{
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_sponge::{collect_sponge_bytes, collect_sponge_field_elements, Absorbable};
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
 use ark_std::rand::RngCore;
@@ -148,6 +149,69 @@ impl<E: PairingEngine> ToBytes for VerifierKey<E> {
     }
 }
 
+impl<E: PairingEngine> Absorbable<E::Fq> for VerifierKey<E>
+where
+    E::G1Affine: Absorbable<E::Fq>,
+    E::G2Affine: Absorbable<E::Fq>,
+{
+    fn to_sponge_bytes(&self) -> Vec<u8> {
+        let (length, degree_bounds, shift_powers) = if let Some(degree_bounds_and_shift_powers) =
+            self.degree_bounds_and_shift_powers.as_ref()
+        {
+            let length = degree_bounds_and_shift_powers.len();
+            let degree_bounds = degree_bounds_and_shift_powers
+                .iter()
+                .map(|d| &d.0)
+                .collect::<Vec<_>>();
+            let shift_powers = degree_bounds_and_shift_powers
+                .iter()
+                .map(|d| &d.1)
+                .collect::<Vec<_>>();
+            (Some(length), Some(degree_bounds), Some(shift_powers))
+        } else {
+            (None, None, None)
+        };
+
+        collect_sponge_bytes!(
+            E::Fq,
+            self.vk,
+            length,
+            degree_bounds,
+            shift_powers,
+            self.max_degree,
+            self.supported_degree
+        )
+    }
+
+    fn to_sponge_field_elements(&self) -> Vec<<E as PairingEngine>::Fq> {
+        let (length, degree_bounds, shift_powers) = if let Some(degree_bounds_and_shift_powers) =
+            self.degree_bounds_and_shift_powers.as_ref()
+        {
+            let length = degree_bounds_and_shift_powers.len();
+            let degree_bounds = degree_bounds_and_shift_powers
+                .iter()
+                .map(|d| &d.0)
+                .collect::<Vec<_>>();
+            let shift_powers = degree_bounds_and_shift_powers
+                .iter()
+                .map(|d| &d.1)
+                .collect::<Vec<_>>();
+            (Some(length), Some(degree_bounds), Some(shift_powers))
+        } else {
+            (None, None, None)
+        };
+
+        collect_sponge_field_elements!(
+            self.vk,
+            length,
+            degree_bounds,
+            shift_powers,
+            self.max_degree,
+            self.supported_degree
+        )
+    }
+}
+
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -259,6 +323,19 @@ impl<E: PairingEngine> ToBytes for Commitment<E> {
             .as_ref()
             .unwrap_or(&kzg10::Commitment::empty())
             .write(&mut writer)
+    }
+}
+
+impl<E: PairingEngine> Absorbable<E::Fq> for Commitment<E>
+where
+    E::G1Affine: Absorbable<E::Fq>,
+{
+    fn to_sponge_bytes(&self) -> Vec<u8> {
+        collect_sponge_bytes!(E::Fq, self.comm, self.shifted_comm)
+    }
+
+    fn to_sponge_field_elements(&self) -> Vec<<E as PairingEngine>::Fq> {
+        collect_sponge_field_elements!(self.comm, self.shifted_comm)
     }
 }
 
