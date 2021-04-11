@@ -12,8 +12,8 @@ use ark_ec::{
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, MVPolynomial};
+use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
@@ -722,6 +722,7 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         MVPolynomial,
     };
+    use ark_std::rand::rngs::StdRng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
@@ -733,15 +734,12 @@ mod tests {
     fn rand_poly<E: PairingEngine>(
         degree: usize,
         num_vars: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
+        rng: &mut StdRng,
     ) -> SparsePoly<E::Fr, SparseTerm> {
         SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: PairingEngine>(
-        num_vars: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> Vec<E::Fr> {
+    fn rand_point<E: PairingEngine>(num_vars: Option<usize>, rng: &mut StdRng) -> Vec<E::Fr> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {

@@ -8,12 +8,12 @@ use ark_ff::{UniformRand, Zero};
 use ark_poly::UVPolynomial;
 use ark_std::vec;
 use core::marker::PhantomData;
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
 
 mod pedersen;
+use ark_std::rand::RngCore;
 pub use pedersen::*;
 
 /// A simple polynomial commitment scheme that based on Pedersen commitments.
@@ -306,6 +306,7 @@ mod tests {
     use ark_ed_on_bls12_381::Fr;
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+    use ark_std::rand;
 
     type PC_PED = TrivialPC<EdwardsAffine, DensePolynomial<Fr>>;
 

@@ -5,9 +5,11 @@ use crate::{
 use ark_ec::AffineCurve;
 use ark_ff::{Field, ToBytes, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use ark_std::io::{Read, Write};
-use ark_std::vec;
-use rand_core::RngCore;
+use ark_std::rand::RngCore;
+use ark_std::{
+    io::{Read, Write},
+    vec,
+};
 
 /// `UniversalParams` are the universal parameters for the inner product arg scheme.
 #[derive(Default, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
