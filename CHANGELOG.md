@@ -1,4 +1,5 @@
 ## Pending
+- MarlinPC's `supported_degree` fix.
 
 ### Breaking changes
 
