@@ -874,6 +874,18 @@ where
     }
 }
 
+/// Helper struct for information about one member of a linear combination.
+pub struct LCItem<E, PG>
+where
+    E: PairingFriendlyCycle,
+    PG: PairingVar<E::Engine2, E2Fq<E>>,
+{
+    coeff: Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
+    degree_bound: Option<FpVar<E2Fq<E>>>,
+    comm: PreparedCommitmentVar<E, PG>,
+    negate: bool,
+}
+
 /// Gadget for the `MarlinKZG10` polynomial commitment verifier.
 #[derive(Derivative)]
 #[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
@@ -911,12 +923,7 @@ where
         >>::PreparedVerifierKeyVar,
         lc_info: &[(
             String,
-            Vec<(
-                Option<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>,
-                Option<FpVar<E2Fq<E>>>,
-                PreparedCommitmentVar<E, PG>,
-                bool,
-            )>,
+            Vec<LCInfo>,
         )],
         query_set: &QuerySetVar<E2Fr<E>, E2Fq<E>>,
         evaluations: &EvaluationsVar<E2Fr<E>, E2Fq<E>>,
@@ -997,7 +1004,8 @@ where
                 let challenge_bits = opening_challenges_bits[opening_challenges_counter].clone();
                 opening_challenges_counter += 1;
 
-                for (coeff, degree_bound, comm, negate) in commitment_lcs.iter() {
+                for lc_info in commitment_lcs.iter() {
+                    let LCInfo { coeff, degree_bound, comm, negate } = lc_info;
                     let PreparedCommitmentVar { shifted_comm, .. } = comm;
 
                     if coeff.is_none() {
