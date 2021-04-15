@@ -15,6 +15,8 @@ use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_sponge::collect_sponge_field_elements_gadget;
+use ark_sponge::constraints::AbsorbableGadget;
 use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, vec};
 
 /// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
@@ -516,6 +518,19 @@ where
         let shifted_comm = self.shifted_comm.clone().unwrap_or(zero_shifted_comm);
         bytes.extend_from_slice(&shifted_comm.to_bytes()?);
         Ok(bytes)
+    }
+}
+
+impl<E, PG> AbsorbableGadget<E::Fq> for CommitmentVar<E, PG>
+where
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
+    PG::G1Var: AbsorbableGadget<E::Fq>,
+{
+    fn to_sponge_field_elements(
+        &self,
+    ) -> Result<Vec<FpVar<<E as PairingEngine>::Fq>>, SynthesisError> {
+        collect_sponge_field_elements_gadget!(self.comm, self.shifted_comm)
     }
 }
 
