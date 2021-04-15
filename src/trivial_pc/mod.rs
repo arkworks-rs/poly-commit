@@ -25,9 +25,7 @@ pub struct TrivialPC<G: AffineCurve, P: UVPolynomial<G::ScalarField>> {
 
 impl<G: AffineCurve, P: UVPolynomial<G::ScalarField>> TrivialPC<G, P> {
     fn check_degrees(supported_degree: usize, p: &P) -> Result<(), Error> {
-        if p.degree() < 1 {
-            return Err(Error::DegreeIsZero);
-        } else if p.degree() > supported_degree {
+        if p.degree() > supported_degree {
             return Err(Error::TooManyCoefficients {
                 num_coefficients: p.degree() + 1,
                 num_powers: supported_degree + 1,
