@@ -636,12 +636,12 @@ where
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
 
         let mut opening_challenge_counter = 0;
-        let mut cur_challenge = opening_challenges(opening_challenge_counter);
-        opening_challenge_counter += 1;
 
-        for (labeled_polynomial, (labeled_commitment, randomness)) in
-            polys_iter.zip(comms_iter.zip(rands_iter))
+        for (i, (labeled_polynomial, (labeled_commitment, randomness))) in
+            polys_iter.zip(comms_iter.zip(rands_iter)).enumerate()
         {
+            let mut cur_challenge = opening_challenges((2 * i) as u64);
+
             let label = labeled_polynomial.label();
             assert_eq!(labeled_polynomial.label(), labeled_commitment.label());
             Self::check_degrees_and_bounds(ck.supported_degree(), labeled_polynomial)?;
@@ -659,9 +659,6 @@ where
                 combined_rand += &(cur_challenge * &randomness.rand);
             }
 
-            cur_challenge = opening_challenges(opening_challenge_counter);
-            opening_challenge_counter += 1;
-
             let has_degree_bound = degree_bound.is_some();
 
             assert_eq!(
@@ -677,7 +674,9 @@ where
                 "labeled_comm degree bound mismatch for {}",
                 label
             );
+
             if let Some(degree_bound) = degree_bound {
+                let cur_challenge = opening_challenges((2 * i + 1) as u64);
                 let shifted_polynomial = Self::shift_polynomial(ck, polynomial, degree_bound);
                 combined_polynomial += (cur_challenge, &shifted_polynomial);
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
@@ -692,9 +691,6 @@ where
                     combined_rand += &(cur_challenge * &shifted_rand.unwrap());
                 }
             }
-
-            cur_challenge = opening_challenges(opening_challenge_counter);
-            opening_challenge_counter += 1;
         }
 
         end_timer!(combine_time);
