@@ -764,6 +764,22 @@ where
     }
 }
 
+impl<E, PG> AbsorbableGadget<E::Fq> for ProofVar<E, PG>
+where
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
+    PG::G1Var: AbsorbableGadget<E::Fq>,
+{
+    fn to_sponge_field_elements(
+        &self,
+    ) -> Result<Vec<FpVar<<E as PairingEngine>::Fq>>, SynthesisError> {
+        collect_sponge_field_elements_gadget!(
+            self.w,
+            self.random_v.as_ref().map(|rand_v| rand_v.to_bytes()).transpose()?
+        )
+    }
+}
+
 /// An allocated version of `BatchLCProof`.
 #[allow(clippy::type_complexity)]
 #[derive(Derivative)]
