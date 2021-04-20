@@ -437,8 +437,13 @@ where
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""))]
 pub struct CommitmentVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
-    comm: PG::G1Var,
-    shifted_comm: Option<PG::G1Var>,
+    /// A KZG10 commitment to the polynomial.
+    pub comm: PG::G1Var,
+
+    /// A KZG10 commitment to the shifted polynomial.
+    /// This is `none` if the committed polynomial does not
+    /// enforce a strict degree bound.
+    pub shifted_comm: Option<PG::G1Var>,
 }
 
 impl<E, PG> AllocVar<Commitment<E>, E::Fq> for CommitmentVar<E, PG>
