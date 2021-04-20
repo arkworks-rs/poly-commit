@@ -6,7 +6,7 @@ use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
 use ark_sponge::{absorb, Absorbable, CryptographicSponge, FieldElementSize};
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
+use ark_std::{format, marker::PhantomData, vec};
 
 mod data_structures;
 pub use data_structures::*;
@@ -635,12 +635,10 @@ where
 
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
 
-        let mut opening_challenge_counter = 0;
-
         for (i, (labeled_polynomial, (labeled_commitment, randomness))) in
             polys_iter.zip(comms_iter.zip(rands_iter)).enumerate()
         {
-            let mut cur_challenge = opening_challenges((2 * i) as u64);
+            let cur_challenge = opening_challenges((2 * i) as u64);
 
             let label = labeled_polynomial.label();
             assert_eq!(labeled_polynomial.label(), labeled_commitment.label());

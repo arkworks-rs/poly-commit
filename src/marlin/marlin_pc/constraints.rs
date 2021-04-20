@@ -9,7 +9,7 @@ use crate::{
     BTreeMap, BTreeSet, BatchLCProof, LinearCombinationCoeffVar, LinearCombinationVar,
     PrepareGadget, String, ToString, Vec,
 };
-use ark_ec::{AffineCurve, CurveCycle, PairingEngine};
+use ark_ec::PairingEngine;
 use ark_ff::{PrimeField, ToConstraintField};
 use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
@@ -780,7 +780,10 @@ where
     ) -> Result<Vec<FpVar<<E as PairingEngine>::Fq>>, SynthesisError> {
         collect_sponge_field_elements_gadget!(
             self.w,
-            self.random_v.as_ref().map(|rand_v| rand_v.to_bytes()).transpose()?
+            self.random_v
+                .as_ref()
+                .map(|rand_v| rand_v.to_bytes())
+                .transpose()?
         )
     }
 }
