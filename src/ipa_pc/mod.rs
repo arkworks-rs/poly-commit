@@ -19,6 +19,9 @@ use rayon::prelude::*;
 #[cfg(feature = "r1cs")]
 pub mod constraints;
 
+/// Size of squeezed challenges in terms of number of bits.
+pub(crate) const CHALLENGE_SIZE: usize = 128;
+
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
 /// The construction is described in detail in [[BCMS20]][pcdas].
@@ -256,7 +259,9 @@ where
             );
 
             let hiding_challenge: G::ScalarField = hiding_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                    CHALLENGE_SIZE,
+                )])
                 .pop()
                 .unwrap();
 
@@ -274,7 +279,9 @@ where
         );
 
         let mut round_challenge: G::ScalarField = round_challenge_sponge
-            .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
+            .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                CHALLENGE_SIZE,
+            )])
             .pop()
             .unwrap();
 
@@ -289,13 +296,15 @@ where
             let mut round_challenge_sponge = S::new();
 
             let mut round_challenge_bytes = to_bytes![round_challenge].unwrap();
-            round_challenge_bytes.resize_with(16, || 0u8);
+            round_challenge_bytes.resize_with((CHALLENGE_SIZE + 7) / 8, || 0u8);
             round_challenge_sponge.absorb(&round_challenge_bytes);
             round_challenge_sponge.absorb(&l);
             round_challenge_sponge.absorb(&r);
 
             round_challenge = round_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                    CHALLENGE_SIZE,
+                )])
                 .pop()
                 .unwrap();
 
@@ -734,7 +743,9 @@ where
             );
 
             let hiding_challenge: G::ScalarField = sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                    CHALLENGE_SIZE,
+                )])
                 .pop()
                 .unwrap();
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
@@ -766,7 +777,7 @@ where
 
         let mut round_challenge: G::ScalarField = sponge
             .squeeze_nonnative_field_elements_with_sizes(&[
-                ark_sponge::FieldElementSize::Truncated(128),
+                ark_sponge::FieldElementSize::Truncated(CHALLENGE_SIZE),
             ])
             .pop()
             .unwrap();
@@ -822,14 +833,16 @@ where
             let mut sponge = S::new();
 
             let mut round_challenge_bytes = ark_ff::to_bytes![round_challenge].unwrap();
-            round_challenge_bytes.resize_with(16, || 0u8);
+            round_challenge_bytes.resize_with((CHALLENGE_SIZE + 7) / 8, || 0u8);
             sponge.absorb(&round_challenge_bytes);
             sponge.absorb(&l);
             sponge.absorb(&r);
 
             let prev_round_challenge = round_challenge;
             round_challenge = sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                    CHALLENGE_SIZE,
+                )])
                 .pop()
                 .unwrap();
 

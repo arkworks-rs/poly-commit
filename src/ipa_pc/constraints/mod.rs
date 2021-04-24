@@ -1,3 +1,4 @@
+use crate::ipa_pc::CHALLENGE_SIZE;
 use crate::Vec;
 use ark_ec::AffineCurve;
 use ark_ff::Field;
@@ -110,7 +111,7 @@ where
                 point_and_combined_eval_bytes
             );
 
-            let hiding_challenge_bits = hiding_challenge_sponge.squeeze_bits(128)?;
+            let hiding_challenge_bits = hiding_challenge_sponge.squeeze_bits(CHALLENGE_SIZE)?;
             combined_commitment += &(hiding_comm.scalar_mul_le(hiding_challenge_bits.iter())?
                 - &(svk.s.scalar_mul_le(rand.iter())?));
         }
@@ -129,7 +130,7 @@ where
         // Initialize challenges
         let mut round_challenge_field_elements_and_bits = round_challenge_sponge
             .squeeze_nonnative_field_elements_with_sizes::<G::ScalarField>(&[
-                FieldElementSize::Truncated(128),
+                FieldElementSize::Truncated(CHALLENGE_SIZE),
             ])?;
         let mut round_challenge;
         let mut round_challenge_bits = round_challenge_field_elements_and_bits.1.pop().unwrap();
@@ -144,14 +145,24 @@ where
 
             let round_challenge_bytes = round_challenge_bits
                 .chunks(8)
-                .map(UInt8::<ConstraintF<G>>::from_bits_le)
+                .map(|bits| {
+                    if bits.len() == 8 {
+                        UInt8::<ConstraintF<G>>::from_bits_le(bits)
+                    } else {
+                        let mut bits_tmp = bits.to_vec();
+                        bits_tmp.resize_with(8, || Boolean::FALSE);
+                        UInt8::<ConstraintF<G>>::from_bits_le(bits_tmp.as_slice())
+                    }
+                })
                 .collect::<Vec<_>>();
 
             absorb_gadget!(&mut round_challenge_sponge, round_challenge_bytes, l, r);
 
             // Update challenges
             round_challenge_field_elements_and_bits = round_challenge_sponge
-                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(128)])?;
+                .squeeze_nonnative_field_elements_with_sizes(&[FieldElementSize::Truncated(
+                    CHALLENGE_SIZE,
+                )])?;
             round_challenge = round_challenge_field_elements_and_bits.0.pop().unwrap();
             round_challenge_bits = round_challenge_field_elements_and_bits.1.pop().unwrap();
 
