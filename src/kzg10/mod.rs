@@ -9,7 +9,9 @@ use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
 use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
 use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::UVPolynomial;
+use ark_poly::polynomial::univariate::DensePolynomial;
+use ark_poly::EvaluationDomain;
+use ark_poly::{Polynomial, UVPolynomial};
 use ark_std::{format, marker::PhantomData, ops::Div, vec};
 
 use ark_std::rand::RngCore;
@@ -18,6 +20,8 @@ use rayon::prelude::*;
 
 mod data_structures;
 pub use data_structures::*;
+mod fastpoly;
+pub use fastpoly::*;
 
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
@@ -41,6 +45,8 @@ where
         produce_g2_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
+        let produce_h_powers = true;
+
         if max_degree < 1 {
             return Err(Error::DegreeIsZero);
         }
@@ -119,16 +125,37 @@ where
 
         end_timer!(neg_powers_of_h_time);
 
+        let powers_of_h_time = start_timer!(|| "Generating powers of h in G2");
+        let powers_of_h = if produce_h_powers {
+            let h_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, h);
+
+            let powers_of_h = FixedBaseMSM::multi_scalar_mul::<E::G2Projective>(
+                scalar_bits,
+                window_size,
+                &h_table,
+                &powers_of_beta,
+            );
+
+            E::G2Projective::batch_normalization_into_affine(&powers_of_h)
+        } else {
+            let h = h.into_affine();
+            let beta_h = h.mul(beta).into_affine();
+            vec![h, beta_h]
+        };
+        end_timer!(powers_of_h_time);
+
         let h = h.into_affine();
         let beta_h = h.mul(beta).into_affine();
+
         let prepared_h = h.into();
-        let prepared_beta_h = beta_h.into();
+        let prepared_beta_h = powers_of_h[1].into();
 
         let pp = UniversalParams {
             powers_of_g,
             powers_of_gamma_g,
             h,
             beta_h,
+            powers_of_h,
             neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
@@ -191,6 +218,30 @@ where
         Ok((Commitment(commitment.into()), randomness))
     }
 
+    /// Outputs a commitment to `polynomial` in G2
+    pub fn G2_commit(
+        powers: &UniversalParams<E>,
+        polynomial: &DensePolynomial<E::Fr>,
+    ) -> Result<E::G2Projective, Error> {
+        Self::check_degree_is_too_large(polynomial.degree(), powers.powers_of_h.len())?;
+
+        let commit_time = start_timer!(|| format!(
+            "Committing to polynomial of degree {} in G2",
+            polynomial.degree(),
+        ));
+
+        let (num_leading_zeros, plain_coeffs) =
+            skip_leading_zeros_and_convert_to_bigints(polynomial);
+
+        let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly in G2");
+        let commitment = VariableBaseMSM::multi_scalar_mul(
+            &powers.powers_of_h[num_leading_zeros..],
+            &plain_coeffs,
+        );
+        end_timer!(msm_time);
+        end_timer!(commit_time);
+        Ok(commitment)
+    }
     /// Compute witness polynomial.
     ///
     /// The witness polynomial w(x) the quotient of the division (p(x) - p(z)) / (x - z)
@@ -265,7 +316,7 @@ where
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    pub(crate) fn open<'a>(
+    pub fn open<'a>(
         powers: &Powers<E>,
         p: &P,
         point: P::Point,
@@ -288,6 +339,32 @@ where
 
         end_timer!(open_time);
         proof
+    }
+
+    /// Open a polynomial at an entire evaluation domain simultaneously
+    pub fn open_amortized<'a>(
+        pp: &UniversalParams<E>,
+        p: &DensePolynomial<E::Fr>,
+        domain: &ark_poly::domain::Radix2EvaluationDomain<E::Fr>,
+    ) -> Result<AmortizedProof<E>, Error> {
+        Self::check_degree_is_too_large(p.degree(), pp.powers_of_g.len())?;
+        let open_time =
+            start_timer!(|| format!("Amortized opening polynomial of degree {}", p.degree()));
+
+        let m = p.coeffs().len() - 1;
+        let powers_of_g = pp.powers_of_g[0..m].to_vec();
+
+        let toeplitz_time = start_timer!(|| "Computing Toeplitz product");
+        let (mut h, scale) = toeplitz_mul::<E>(p, &powers_of_g, domain.size())?;
+
+        end_timer!(toeplitz_time);
+
+        domain.fft_in_place(&mut h);
+
+        let proofs = AmortizedProof { w: h, scale };
+
+        end_timer!(open_time);
+        Ok(proofs)
     }
 
     /// Verifies that `value` is the evaluation at `point` of the polynomial
@@ -426,6 +503,60 @@ where
         } else {
             Ok(())
         }
+    }
+
+    /// Verifies that `value` is the evaluation at `point` of the polynomial
+    /// committed inside `comm`.
+    pub fn check_amortized(
+        pp: &UniversalParams<E>,
+        ck: &Powers<E>,
+        comm: &Commitment<E>,
+        proof: &Proof<E>,
+        evals: &[E::Fr],         // Evaluations at the SubproductDomain
+        s: &SubproductDomain<E>, // SubproductDomain of the evaluation domain
+    ) -> Result<bool, Error> {
+        let evaluation_interpolation_time = start_timer!(|| "Constructing evaluation polynomial");
+
+        let evaluation_polynomial = s.fast_interpolate(evals);
+        end_timer!(evaluation_interpolation_time);
+        let evaluation_commit_time =
+            start_timer!(|| "Constructing commitment to evaluation polynomial in G1");
+
+        let evaluation_polynomial_commitment =
+            KZG10::<E, DensePolynomial<E::Fr>>::commit(&ck, &evaluation_polynomial, None, None)?;
+
+        end_timer!(evaluation_commit_time);
+
+        let s_commitment_time =
+            start_timer!(|| "Constructing commitment to SubproductDomain in G2");
+        let s_commitment = Self::G2_commit(pp, &s.t.m)?;
+        end_timer!(s_commitment_time);
+        Self::check_amortized_with_commitments(
+            pp,
+            comm,
+            proof,
+            &s_commitment,
+            &evaluation_polynomial_commitment.0,
+        )
+    }
+
+    /// Check amortized proof with precomputed commitments
+    pub fn check_amortized_with_commitments(
+        ck: &UniversalParams<E>,
+        comm: &Commitment<E>,
+        proof: &Proof<E>,
+        s_commitment: &E::G2Projective, // G2 Commitment to the SubproductDomain
+        evaluation_polynomial_commitment: &Commitment<E>,
+    ) -> Result<bool, Error> {
+        let check_time = start_timer!(|| "Checking evaluation");
+        let inner = comm.0.into_projective() - evaluation_polynomial_commitment.0.into_projective();
+
+        let lhs = E::pairing(inner, ck.powers_of_h[0]);
+
+        let rhs = E::pairing(proof.w, *s_commitment);
+
+        end_timer!(check_time, || format!("Result: {}", lhs == rhs));
+        Ok(lhs == rhs)
     }
 }
 
@@ -652,5 +783,130 @@ mod tests {
         let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
         assert!(p.degree() > max_degree);
         assert!(KZG_Bls12_381::check_degree_is_too_large(p.degree(), powers.size()).is_err());
+    }
+    #[test]
+    fn test_toeplitz() {
+        type G1Projective = <Bls12_381 as PairingEngine>::G1Projective;
+        type G1Affine = <Bls12_381 as PairingEngine>::G1Affine;
+
+        let rng = &mut test_rng();
+        for total_weight in 15..30 {
+            let degree = 2 * total_weight / 3;
+
+            let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
+            let (ck, vk) = KZG_Bls12_381::trim(&pp, degree).unwrap();
+
+            for _ in 0..4 {
+                let polynomial = DensePolynomial::<Fr>::rand(degree, rng);
+
+                let coeffs = polynomial.coeffs();
+                let m = polynomial.coeffs.len() - 1;
+
+                let domain = ark_poly::Radix2EvaluationDomain::<Fr>::new(total_weight).unwrap();
+                let p = ck.powers_of_g[0..m].to_vec();
+                let (h, scale): (Vec<G1Projective>, Fr) =
+                    toeplitz_mul::<Bls12_381>(&polynomial, &p, domain.size()).unwrap();
+
+                let h = h
+                    .iter()
+                    .map(
+                        |p: &G1Projective| (*p).into_affine(), /*. mul(scale).into_affine()*/
+                    )
+                    .collect::<Vec<G1Affine>>();
+
+                for i in 1..=m {
+                    let mut total = G1Projective::zero();
+                    for j in 0..=m - i {
+                        total = total + (p[j].mul(coeffs[i + j]));
+                    }
+                    assert_eq!(G1Affine::from(total), h[i - 1]);
+                }
+            }
+        }
+    }
+    #[test]
+    fn test_check_amortized() {
+        let rng = &mut test_rng();
+        let n = 10;
+        let eval_domain_size = 1 << n;
+
+        let degree = 1 << (n - 1);
+
+        let pp = KZG_Bls12_381::setup(eval_domain_size, false, rng).unwrap();
+        let (ck, vk) = KZG_Bls12_381::trim(&pp, degree).unwrap();
+
+        let p = DensePoly::<Fr>::rand(degree, rng);
+
+        let (comm, rand) = KZG_Bls12_381::commit(&ck, &p, None, None).unwrap();
+
+        let domain = ark_poly::Radix2EvaluationDomain::<Fr>::new(eval_domain_size).unwrap();
+        let openings = KZG_Bls12_381::open_amortized(&pp, &p, &domain).unwrap();
+
+        let evals = p.evaluate_over_domain_by_ref(domain).evals;
+
+        assert!(KZG_Bls12_381::check(
+            &vk,
+            &comm,
+            Fr::one(),
+            evals[0],
+            &Proof {
+                w: openings.w[0].into_affine(),
+                /*.mul::<Fr>(openings.scale) // If the ifft does not multiply by domain_size_inv
+                .into_affine()*/
+                random_v: None,
+            }
+        )
+        .unwrap());
+
+        let mut whole_domain = Vec::with_capacity(domain.size());
+        let mut t = Fr::one();
+        for _ in 0..domain.size() {
+            whole_domain.push(t);
+            t *= domain.group_gen;
+        }
+
+        let subproduct_domains = [
+            SubproductDomain::new(whole_domain[0..100].to_vec()),
+            SubproductDomain::new(whole_domain[100..400].to_vec()),
+            SubproductDomain::new(whole_domain[400..].to_vec()),
+        ];
+
+        let combined = [
+            openings.combine_at_evals(&(0..100), &evals[0..100], &subproduct_domains[0]),
+            openings.combine_at_evals(&(100..400), &evals[100..400], &subproduct_domains[1]),
+            openings.combine_at_evals(
+                &(400..eval_domain_size),
+                &evals[400..],
+                &subproduct_domains[2],
+            ),
+        ];
+
+        assert!(KZG_Bls12_381::check_amortized(
+            &pp,
+            &ck,
+            &comm,
+            &combined[0],
+            &evals[0..100],
+            &subproduct_domains[0]
+        )
+        .unwrap());
+        assert!(KZG_Bls12_381::check_amortized(
+            &pp,
+            &ck,
+            &comm,
+            &combined[1],
+            &evals[100..400],
+            &subproduct_domains[1]
+        )
+        .unwrap());
+        assert!(KZG_Bls12_381::check_amortized(
+            &pp,
+            &ck,
+            &comm,
+            &combined[2],
+            &evals[400..],
+            &subproduct_domains[2]
+        )
+        .unwrap());
     }
 }
