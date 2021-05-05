@@ -7,12 +7,6 @@ use ark_poly::polynomial::univariate::DensePolynomial as Poly;
 
 /// Computes the inverse of f mod x^l
 pub fn inverse_mod_xl<F: FftField>(f: &Poly<F>, l: usize) -> Option<Poly<F>> {
-    //use std::ops::Mul;
-    //let r =
-    //    std::mem::size_of::<u64>() * 8 - (l as u64).leading_zeros() as usize; // ceil(log_2(l))
-
-    //assert_eq!((l as f64).log2().ceil() as usize, r);
-    //let r = (l as f64).log2().ceil() as usize; //TODO: rounding problems??
     let r = ark_std::log2(l);
     let mut g = Poly::<F> {
         coeffs: vec![f.coeffs[0].inverse().unwrap()], //todo unwrap
