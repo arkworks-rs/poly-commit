@@ -72,22 +72,22 @@ impl<F: FftField> SubproductDomain<F> {
         SubproductDomain { u, t, prime }
     }
     /// evaluate a polynomial over the domain
-    pub fn fast_evaluate(&self, f: &Poly<F>) -> Vec<F> {
+    pub fn evaluate(&self, f: &Poly<F>) -> Vec<F> {
         let mut evals = vec![F::zero(); self.u.len()];
-        self.t.fast_evaluate(f, &self.u, &mut evals);
+        self.t.evaluate(f, &self.u, &mut evals);
         evals
     }
     /// interpolate a polynomial over the domain
-    pub fn fast_interpolate(&self, v: &[F]) -> Poly<F> {
-        self.t.fast_interpolate(&self.u, v)
+    pub fn interpolate(&self, v: &[F]) -> Poly<F> {
+        self.t.interpolate(&self.u, v)
     }
     /// compute the inverse of the lagrange coefficients fast
-    pub fn fast_inverse_lagrange_coefficients(&self) -> Vec<F> {
-        self.t.fast_inverse_lagrange_coefficients(&self.u)
+    pub fn inverse_lagrange_coefficients(&self) -> Vec<F> {
+        self.t.inverse_lagrange_coefficients(&self.u)
     }
     /// compute a linear coefficient of lagrange factors times c_i
-    pub fn fast_linear_combine(&self, c: &[F]) -> Poly<F> {
-        self.t.fast_linear_combine(&self.u, &c)
+    pub fn linear_combine(&self, c: &[F]) -> Poly<F> {
+        self.t.linear_combine(&self.u, &c)
     }
 }
 
@@ -127,7 +127,7 @@ impl<F: FftField> SubproductTree<F> {
         }
     }
     /// Fast evaluate f over this subproduct tree
-    pub fn fast_evaluate(&self, f: &Poly<F>, u: &[F], t: &mut [F]) {
+    pub fn evaluate(&self, f: &Poly<F>, u: &[F], t: &mut [F]) {
         //todo: assert degree < u.len()
         if u.len() == 1 {
             t[0] = f.coeffs[0];
@@ -144,32 +144,32 @@ impl<F: FftField> SubproductTree<F> {
         let (u_0, u_1) = u.split_at(n);
         let (t_0, t_1) = t.split_at_mut(n);
 
-        left.fast_evaluate(&r_0, u_0, t_0);
-        right.fast_evaluate(&r_1, u_1, t_1);
+        left.evaluate(&r_0, u_0, t_0);
+        right.evaluate(&r_1, u_1, t_1);
     }
     /// Fast interpolate over this subproduct tree
-    pub fn fast_interpolate(&self, u: &[F], v: &[F]) -> Poly<F> {
-        let mut lagrange_coeff = self.fast_inverse_lagrange_coefficients(u);
+    pub fn interpolate(&self, u: &[F], v: &[F]) -> Poly<F> {
+        let mut lagrange_coeff = self.inverse_lagrange_coefficients(u);
 
         for (s_i, v_i) in lagrange_coeff.iter_mut().zip(v.iter()) {
             *s_i = s_i.inverse().unwrap() * *v_i;
         }
 
-        self.fast_linear_combine(u, &lagrange_coeff)
+        self.linear_combine(u, &lagrange_coeff)
     }
     /// Fast compute lagrange coefficients over this subproduct tree
-    pub fn fast_inverse_lagrange_coefficients(&self, u: &[F]) -> Vec<F> {
+    pub fn inverse_lagrange_coefficients(&self, u: &[F]) -> Vec<F> {
         //assert u.len() == degree of s.m
         if u.len() == 1 {
             return vec![F::one()];
         }
         let mut evals = vec![F::zero(); u.len()];
         let m_prime = derivative::<F>(&self.m);
-        self.fast_evaluate(&m_prime, u, &mut evals);
+        self.evaluate(&m_prime, u, &mut evals);
         evals
     }
     /// Fast linear combine over this subproduct tree
-    pub fn fast_linear_combine(&self, u: &[F], c: &[F]) -> Poly<F> {
+    pub fn linear_combine(&self, u: &[F], c: &[F]) -> Poly<F> {
         if u.len() == 1 {
             return Poly::<F> { coeffs: vec![c[0]] };
         }
@@ -179,8 +179,8 @@ impl<F: FftField> SubproductTree<F> {
 
         let left = self.left.as_ref().unwrap();
         let right = self.right.as_ref().unwrap();
-        let r_0 = left.fast_linear_combine(u_0, c_0);
-        let r_1 = right.fast_linear_combine(u_1, c_1);
+        let r_0 = left.linear_combine(u_0, c_0);
+        let r_1 = right.linear_combine(u_1, c_1);
 
         &(&right.m * &r_0) + &(&left.m * &r_1)
     }
@@ -313,7 +313,7 @@ mod tests {
             }
 
             let s = SubproductDomain::<Fr>::new(points);
-            let p = s.fast_interpolate(&evals);
+            let p = s.interpolate(&evals);
 
             for (x, y) in s.u.iter().zip(evals.iter()) {
                 assert_eq!(p.evaluate(x), *y)
@@ -332,7 +332,7 @@ mod tests {
                 c.push(Fr::rand(rng));
             }
             let s = SubproductDomain::<Fr>::new(u);
-            let f = s.fast_linear_combine(&c);
+            let f = s.linear_combine(&c);
 
             let r = Fr::rand(rng);
             let m = s.t.m.evaluate(&r);
@@ -353,7 +353,7 @@ mod tests {
                 u.push(Fr::rand(rng));
             }
             let s = SubproductDomain::<Fr>::new(u);
-            let f = s.fast_inverse_lagrange_coefficients();
+            let f = s.inverse_lagrange_coefficients();
 
             for (i, j) in s.u.iter().zip(f.iter()) {
                 assert_eq!(s.prime.evaluate(i), *j);

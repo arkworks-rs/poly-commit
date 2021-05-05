@@ -20,8 +20,8 @@ use rayon::prelude::*;
 
 mod data_structures;
 pub use data_structures::*;
-mod fastpoly;
-pub use fastpoly::*;
+mod subproductdomain;
+pub use subproductdomain::*;
 
 /// `KZG10` is an implementation of the polynomial commitment scheme of
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
@@ -516,7 +516,7 @@ where
     ) -> Result<bool, Error> {
         let evaluation_interpolation_time = start_timer!(|| "Constructing evaluation polynomial");
 
-        let evaluation_polynomial = s.fast_interpolate(evals);
+        let evaluation_polynomial = s.interpolate(evals);
         end_timer!(evaluation_interpolation_time);
         let evaluation_commit_time =
             start_timer!(|| "Constructing commitment to evaluation polynomial in G1");

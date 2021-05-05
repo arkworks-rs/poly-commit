@@ -579,9 +579,9 @@ impl<E: PairingEngine> AmortizedProof<E> {
         &self,
         start: usize, // Domain is omega^{start}, ..., omega^{end-1}
         end: usize,
-        s: &super::fastpoly::SubproductDomain<E::Fr>, // SubproductDomain of the domain
+        s: &super::subproductdomain::SubproductDomain<E::Fr>, // SubproductDomain of the domain
     ) -> Proof<E> {
-        let lagrange_coeff = s.fast_inverse_lagrange_coefficients();
+        let lagrange_coeff = s.inverse_lagrange_coefficients();
         let mut total = E::G1Projective::zero();
         for (c_i, point) in lagrange_coeff.iter().zip(self.w[start..end].iter()) {
             total += point.into_affine().mul::<E::Fr>(c_i.inverse().unwrap());
