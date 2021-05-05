@@ -219,7 +219,7 @@ where
     }
 
     /// Outputs a commitment to `polynomial` in G2
-    pub fn G2_commit(
+    pub fn commit_g2(
         powers: &UniversalParams<E>,
         polynomial: &DensePolynomial<E::Fr>,
     ) -> Result<E::G2Projective, Error> {
