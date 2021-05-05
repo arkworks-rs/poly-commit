@@ -345,7 +345,7 @@ where
         pp: &UniversalParams<E>,
         p: &DensePolynomial<E::Fr>,
         domain: &ark_poly::domain::Radix2EvaluationDomain<E::Fr>,
-    ) -> Result<AmortizedProof<E>, Error> {
+    ) -> Result<DomainProof<E>, Error> {
         Self::check_degree_is_too_large(p.degree(), pp.powers_of_g.len())?;
         let open_time =
             start_timer!(|| format!("Amortized opening polynomial of degree {}", p.degree()));
@@ -360,7 +360,7 @@ where
 
         domain.fft_in_place(&mut h);
 
-        let proofs = AmortizedProof { w: h, scale };
+        let proofs = DomainProof { w: h, scale };
 
         end_timer!(open_time);
         Ok(proofs)
@@ -510,8 +510,8 @@ where
         pp: &UniversalParams<E>,
         ck: &Powers<E>,
         comm: &Commitment<E>,
-        proof: &Proof<E>,
-        evals: &[E::Fr],             // Evaluations at the SubproductDomain
+        proof: &Proof<E>, // A multi-reveal KZG proof over the SubproductDomain s
+        evals: &[E::Fr],  // Evaluations at the SubproductDomain
         s: &SubproductDomain<E::Fr>, // SubproductDomain of the evaluation domain
     ) -> Result<bool, Error> {
         let evaluation_interpolation_time = start_timer!(|| "Constructing evaluation polynomial");
@@ -539,7 +539,7 @@ where
         )
     }
 
-    /// Check amortized proof with precomputed commitments
+    /// Check combined domain proof with precomputed commitments
     pub fn check_at_domain_with_commitments(
         ck: &UniversalParams<E>,
         comm: &Commitment<E>,

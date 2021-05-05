@@ -564,7 +564,7 @@ impl<E: PairingEngine> ToBytes for Proof<E> {
 }
 
 /// Opening proofs of a commitment on a large domain
-pub struct AmortizedProof<E: PairingEngine> {
+pub struct DomainProof<E: PairingEngine> {
     /// This is a vector of commitments to the witness polynomials
     /// over a domain 1, omega, omega^2, ..., omega^{n-1}
     /// where omega is a primitive n'th root of unity
@@ -573,8 +573,9 @@ pub struct AmortizedProof<E: PairingEngine> {
     pub scale: E::Fr,
 }
 
-impl<E: PairingEngine> AmortizedProof<E> {
+impl<E: PairingEngine> DomainProof<E> {
     /// Combine opening proofs onto a subset of the domain
+    /// represented by the SubproductDomain s
     pub fn combine_at_domain(
         &self,
         start: usize, // Domain is omega^{start}, ..., omega^{end-1}
