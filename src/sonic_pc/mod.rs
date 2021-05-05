@@ -151,7 +151,7 @@ where
         _: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        kzg10::KZG10::<E, P>::setup(max_degree, true, rng).map_err(Into::into)
+        kzg10::KZG10::<E, P>::setup(max_degree, true, false, rng).map_err(Into::into)
     }
 
     fn trim(
@@ -320,7 +320,8 @@ where
                 ck.powers()
             };
 
-            let (comm, rand) = kzg10::KZG10::commit(&powers, polynomial, hiding_bound, Some(rng))?;
+            let (comm, rand) =
+                kzg10::KZG10::commit_g1(&powers, polynomial, hiding_bound, Some(rng))?;
 
             labeled_comms.push(LabeledCommitment::new(
                 label.to_string(),

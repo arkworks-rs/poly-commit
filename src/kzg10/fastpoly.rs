@@ -1,47 +1,46 @@
 use crate::Error;
 use ark_ec::PairingEngine;
-use ark_ff::{Field, One, Zero};
+use ark_ff::{FftField, Field, Zero};
 use ark_poly::UVPolynomial;
 
-use ark_poly::polynomial::univariate::DensePolynomial;
-
-type P<E: PairingEngine> = DensePolynomial<E::Fr>;
+use ark_poly::polynomial::univariate::DensePolynomial as Poly;
 
 /// Computes the inverse of f mod x^l
-pub fn inverse_mod_xl<E: PairingEngine>(f: &P<E>, l: usize) -> Option<P<E>> {
+pub fn inverse_mod_xl<F: FftField>(f: &Poly<F>, l: usize) -> Option<Poly<F>> {
     //use std::ops::Mul;
     //let r =
     //    std::mem::size_of::<u64>() * 8 - (l as u64).leading_zeros() as usize; // ceil(log_2(l))
 
     //assert_eq!((l as f64).log2().ceil() as usize, r);
-    let r = (l as f64).log2().ceil() as usize; //TODO: rounding problems??
-    let mut g = DensePolynomial::<E::Fr> {
+    //let r = (l as f64).log2().ceil() as usize; //TODO: rounding problems??
+    let r = ark_std::log2(l);
+    let mut g = Poly::<F> {
         coeffs: vec![f.coeffs[0].inverse().unwrap()], //todo unwrap
     };
     let mut i = 2usize;
     for _ in 0..r {
         g = &(&g + &g) - &(f * &(&g * &g)); //todo: g*2?
-        g.coeffs.resize(i, E::Fr::zero());
+        g.coeffs.resize(i, F::zero());
         i *= 2;
     }
     Some(g)
 }
 
 /// Computes the rev_m(f) function in place
-pub fn rev<E: PairingEngine>(f: &mut P<E>, m: usize) {
+pub fn rev<F: FftField>(f: &mut Poly<F>, m: usize) {
     assert!(f.coeffs.len() - 1 <= m);
     for _ in 0..(m - (f.coeffs.len() - 1)) {
-        f.coeffs.push(E::Fr::zero());
+        f.coeffs.push(F::zero());
     }
     f.reverse();
 }
 
 /// Divide f by g in nearly linear time
-pub fn fast_divide_monic<E: PairingEngine>(f: &P<E>, g: &P<E>) -> (P<E>, P<E>) {
+pub fn fast_divide_monic<F: FftField>(f: &Poly<F>, g: &Poly<F>) -> (Poly<F>, Poly<F>) {
     if f.coeffs().len() < g.coeffs().len() {
         return (
-            P::<E> {
-                coeffs: vec![E::Fr::zero()],
+            Poly::<F> {
+                coeffs: vec![F::zero()],
             },
             f.clone(),
         );
@@ -53,71 +52,71 @@ pub fn fast_divide_monic<E: PairingEngine>(f: &P<E>, g: &P<E>) -> (P<E>, P<E>) {
     rev_f.reverse();
     rev_g.reverse();
 
-    let mut q = &rev_f * &inverse_mod_xl::<E>(&rev_g, m + 1).unwrap();
-    q.coeffs.resize(m + 1, E::Fr::zero());
-    rev::<E>(&mut q, m);
+    let mut q = &rev_f * &inverse_mod_xl::<F>(&rev_g, m + 1).unwrap();
+    q.coeffs.resize(m + 1, F::zero());
+    rev::<F>(&mut q, m);
     let r = f - &(g * &q);
     (q, r)
 }
 
 /// The subproduct tree of a polynomial m over a domain u
 #[derive(Debug, Clone)]
-pub struct SubproductDomain<E: PairingEngine> {
+pub struct SubproductDomain<F: FftField> {
     /// Domain values
-    pub u: Vec<E::Fr>,
+    pub u: Vec<F>,
     /// Subproduct tree over domain u
-    pub t: SubproductTree<E>,
+    pub t: SubproductTree<F>,
     /// Derivative of the subproduct polynomial
-    pub prime: P<E>, // Derivative
+    pub prime: Poly<F>, // Derivative
 }
 
-impl<E: PairingEngine> SubproductDomain<E> {
+impl<F: FftField> SubproductDomain<F> {
     /// Create a subproduct tree domain
-    pub fn new(u: Vec<E::Fr>) -> SubproductDomain<E> {
+    pub fn new(u: Vec<F>) -> SubproductDomain<F> {
         let t = SubproductTree::new(&u);
-        let prime = derivative::<E>(&t.m);
+        let prime = derivative::<F>(&t.m);
         SubproductDomain { u, t, prime }
     }
     /// evaluate a polynomial over the domain
-    pub fn fast_evaluate(&self, f: &P<E>) -> Vec<E::Fr> {
-        let mut evals = vec![E::Fr::zero(); self.u.len()];
+    pub fn fast_evaluate(&self, f: &Poly<F>) -> Vec<F> {
+        let mut evals = vec![F::zero(); self.u.len()];
         self.t.fast_evaluate(f, &self.u, &mut evals);
         evals
     }
     /// interpolate a polynomial over the domain
-    pub fn fast_interpolate(&self, v: &[E::Fr]) -> P<E> {
+    pub fn fast_interpolate(&self, v: &[F]) -> Poly<F> {
         self.t.fast_interpolate(&self.u, v)
     }
     /// compute the inverse of the lagrange coefficients fast
-    pub fn fast_inverse_lagrange_coefficients(&self) -> Vec<E::Fr> {
+    pub fn fast_inverse_lagrange_coefficients(&self) -> Vec<F> {
         self.t.fast_inverse_lagrange_coefficients(&self.u)
     }
     /// compute a linear coefficient of lagrange factors times c_i
-    pub fn fast_linear_combine(&self, c: &[E::Fr]) -> P<E> {
+    pub fn fast_linear_combine(&self, c: &[F]) -> Poly<F> {
         self.t.fast_linear_combine(&self.u, &c)
     }
 }
 
 /// A subproduct tree of the subproduct domain
 #[derive(Debug, Clone)]
-pub struct SubproductTree<E: PairingEngine> {
+pub struct SubproductTree<F: FftField> {
     /// The left child
-    pub left: Option<Box<SubproductTree<E>>>,
+    pub left: Option<Box<SubproductTree<F>>>,
     /// The right child
-    pub right: Option<Box<SubproductTree<E>>>,
+    pub right: Option<Box<SubproductTree<F>>>,
     /// The polynomial for this subdomain
-    pub m: P<E>,
+    pub m: Poly<F>,
 }
 
-impl<E: PairingEngine> SubproductTree<E> {
+impl<F: FftField> SubproductTree<F> {
     /// Compute the subproduct tree of m = (x - u_0)*...*(x-u_{n-1})
-    pub fn new(u: &[E::Fr]) -> SubproductTree<E> {
+    pub fn new(u: &[F]) -> SubproductTree<F> {
         if u.len() == 1 {
             SubproductTree {
                 left: None,
                 right: None,
-                m: P::<E> {
-                    coeffs: vec![-u[0], E::Fr::one()],
+                m: Poly::<F> {
+                    coeffs: vec![-u[0], F::one()],
                 },
             }
         } else {
@@ -134,7 +133,7 @@ impl<E: PairingEngine> SubproductTree<E> {
         }
     }
     /// Fast evaluate f over this subproduct tree
-    pub fn fast_evaluate(&self, f: &P<E>, u: &[E::Fr], t: &mut [E::Fr]) {
+    pub fn fast_evaluate(&self, f: &Poly<F>, u: &[F], t: &mut [F]) {
         //todo: assert degree < u.len()
         if u.len() == 1 {
             t[0] = f.coeffs[0];
@@ -144,8 +143,8 @@ impl<E: PairingEngine> SubproductTree<E> {
         let left = self.left.as_ref().unwrap();
         let right = self.right.as_ref().unwrap();
 
-        let (q_0, r_0) = fast_divide_monic::<E>(f, &left.m);
-        let (_, r_1) = fast_divide_monic::<E>(f, &right.m);
+        let (_, r_0) = fast_divide_monic::<F>(f, &left.m);
+        let (_, r_1) = fast_divide_monic::<F>(f, &right.m);
 
         let n = u.len() / 2;
         let (u_0, u_1) = u.split_at(n);
@@ -155,7 +154,7 @@ impl<E: PairingEngine> SubproductTree<E> {
         right.fast_evaluate(&r_1, u_1, t_1);
     }
     /// Fast interpolate over this subproduct tree
-    pub fn fast_interpolate(&self, u: &[E::Fr], v: &[E::Fr]) -> P<E> {
+    pub fn fast_interpolate(&self, u: &[F], v: &[F]) -> Poly<F> {
         let mut lagrange_coeff = self.fast_inverse_lagrange_coefficients(u);
 
         for (s_i, v_i) in lagrange_coeff.iter_mut().zip(v.iter()) {
@@ -165,20 +164,20 @@ impl<E: PairingEngine> SubproductTree<E> {
         self.fast_linear_combine(u, &lagrange_coeff)
     }
     /// Fast compute lagrange coefficients over this subproduct tree
-    pub fn fast_inverse_lagrange_coefficients(&self, u: &[E::Fr]) -> Vec<E::Fr> {
+    pub fn fast_inverse_lagrange_coefficients(&self, u: &[F]) -> Vec<F> {
         //assert u.len() == degree of s.m
         if u.len() == 1 {
-            return vec![E::Fr::one()];
+            return vec![F::one()];
         }
-        let mut evals = vec![E::Fr::zero(); u.len()];
-        let m_prime = derivative::<E>(&self.m);
+        let mut evals = vec![F::zero(); u.len()];
+        let m_prime = derivative::<F>(&self.m);
         self.fast_evaluate(&m_prime, u, &mut evals);
         evals
     }
     /// Fast linear combine over this subproduct tree
-    pub fn fast_linear_combine(&self, u: &[E::Fr], c: &[E::Fr]) -> P<E> {
+    pub fn fast_linear_combine(&self, u: &[F], c: &[F]) -> Poly<F> {
         if u.len() == 1 {
-            return P::<E> { coeffs: vec![c[0]] };
+            return Poly::<F> { coeffs: vec![c[0]] };
         }
         let n = u.len() / 2;
         let (u_0, u_1) = u.split_at(n);
@@ -193,17 +192,17 @@ impl<E: PairingEngine> SubproductTree<E> {
     }
 }
 /// compute the derivative of polynomial p
-pub fn derivative<E: PairingEngine>(p: &P<E>) -> P<E> {
+pub fn derivative<F: FftField>(p: &Poly<F>) -> Poly<F> {
     let mut coeffs = Vec::with_capacity(p.coeffs().len() - 1);
     for (i, c) in p.coeffs.iter().enumerate().skip(1) {
-        coeffs.push(E::Fr::from(i as u64) * c);
+        coeffs.push(F::from(i as u64) * c);
     }
-    P::<E> { coeffs }
+    Poly::<F> { coeffs }
 }
 
 /// Build a vector representation of the circulant matrix of polynomial p
-pub fn build_circulant<E: PairingEngine>(polynomial: &P<E>, size: usize) -> Vec<E::Fr> {
-    let mut circulant = vec![E::Fr::zero(); 2 * size];
+pub fn build_circulant<F: FftField>(polynomial: &Poly<F>, size: usize) -> Vec<F> {
+    let mut circulant = vec![F::zero(); 2 * size];
     let coeffs = polynomial.coeffs();
     if size == coeffs.len() - 1 {
         circulant[0] = *coeffs.last().unwrap();
@@ -217,7 +216,7 @@ pub fn build_circulant<E: PairingEngine>(polynomial: &P<E>, size: usize) -> Vec<
 }
 /// Computes the Toeplitz matrix of polynomial times the vector v
 pub fn toeplitz_mul<E: PairingEngine>(
-    polynomial: &P<E>,
+    polynomial: &Poly<E::Fr>,
     v: &[E::G1Affine],
     size: usize,
 ) -> Result<(Vec<E::G1Projective>, E::Fr), Error> {
@@ -230,7 +229,7 @@ pub fn toeplitz_mul<E: PairingEngine>(
         .ok_or(Error::AmortizedOpeningTooLarge(size))?;
 
     let size = domain.size() / 2;
-    let mut circulant = build_circulant::<E>(polynomial, size);
+    let mut circulant = build_circulant::<E::Fr>(polynomial, size);
 
     let mut tmp: Vec<E::G1Projective> = Vec::with_capacity(domain.size());
 
@@ -269,7 +268,6 @@ mod tests {
     use ark_poly::UVPolynomial;
     use ark_std::UniformRand;
 
-    type E = ark_bls12_381::Bls12_381;
     type Fr = <ark_bls12_381::Bls12_381 as PairingEngine>::Fr;
     #[test]
     fn test_inverse() {
@@ -279,7 +277,7 @@ mod tests {
         let l = 101;
         for _ in 0..100 {
             let p = DensePolynomial::<Fr>::rand(degree, rng);
-            let p_inv = inverse_mod_xl::<E>(&p, l).unwrap();
+            let p_inv = inverse_mod_xl::<Fr>(&p, l).unwrap();
             let mut t = &p * &p_inv;
             t.coeffs.resize(l, Fr::zero());
             assert_eq!(t.coeffs[0], Fr::one());
@@ -294,13 +292,12 @@ mod tests {
         let rng = &mut ark_std::test_rng();
 
         let degree = 100;
-        let l = 101;
         for g_deg in 1..100 {
             let f = DensePolynomial::<Fr>::rand(degree, rng);
             let mut g = DensePolynomial::<Fr>::rand(g_deg, rng);
             *g.last_mut().unwrap() = Fr::one(); //monic
 
-            let (q, r) = fast_divide_monic::<E>(&f, &g);
+            let (q, r) = fast_divide_monic::<Fr>(&f, &g);
 
             let t = &(&q * &g) + &r;
 
@@ -321,7 +318,7 @@ mod tests {
                 evals.push(Fr::rand(rng));
             }
 
-            let s = SubproductDomain::<E>::new(points);
+            let s = SubproductDomain::<Fr>::new(points);
             let p = s.fast_interpolate(&evals);
 
             for (x, y) in s.u.iter().zip(evals.iter()) {
@@ -340,7 +337,7 @@ mod tests {
                 u.push(Fr::rand(rng));
                 c.push(Fr::rand(rng));
             }
-            let s = SubproductDomain::<E>::new(u);
+            let s = SubproductDomain::<Fr>::new(u);
             let f = s.fast_linear_combine(&c);
 
             let r = Fr::rand(rng);
@@ -361,10 +358,10 @@ mod tests {
             for _ in 0..d {
                 u.push(Fr::rand(rng));
             }
-            let s = SubproductDomain::<E>::new(u);
+            let s = SubproductDomain::<Fr>::new(u);
             let f = s.fast_inverse_lagrange_coefficients();
 
-            for (a, (i, j)) in s.u.iter().zip(f.iter()).enumerate() {
+            for (i, j) in s.u.iter().zip(f.iter()) {
                 assert_eq!(s.prime.evaluate(i), *j);
             }
         }

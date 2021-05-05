@@ -74,7 +74,7 @@ where
         _num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        kzg10::KZG10::setup(max_degree, false, rng).map_err(Into::into)
+        kzg10::KZG10::setup(max_degree, false, false, rng).map_err(Into::into)
     }
 
     fn trim(
@@ -215,13 +215,13 @@ where
             ));
 
             let (comm, rand) =
-                kzg10::KZG10::commit(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
+                kzg10::KZG10::commit_g1(&ck.powers(), polynomial, hiding_bound, Some(rng))?;
             let (shifted_comm, shifted_rand) = if let Some(degree_bound) = degree_bound {
                 let shifted_powers = ck
                     .shifted_powers(degree_bound)
                     .ok_or(Error::UnsupportedDegreeBound(degree_bound))?;
                 let (shifted_comm, shifted_rand) =
-                    kzg10::KZG10::commit(&shifted_powers, &polynomial, hiding_bound, Some(rng))?;
+                    kzg10::KZG10::commit_g1(&shifted_powers, &polynomial, hiding_bound, Some(rng))?;
                 (Some(shifted_comm), Some(shifted_rand))
             } else {
                 (None, None)

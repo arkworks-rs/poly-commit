@@ -43,10 +43,9 @@ where
     pub fn setup<R: RngCore>(
         max_degree: usize,
         produce_g2_powers: bool,
+        produce_h_powers: bool,
         rng: &mut R,
     ) -> Result<UniversalParams<E>, Error> {
-        let produce_h_powers = true;
-
         if max_degree < 1 {
             return Err(Error::DegreeIsZero);
         }
@@ -165,7 +164,7 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
-    pub fn commit(
+    pub fn commit_g1(
         powers: &Powers<E>,
         polynomial: &P,
         hiding_bound: Option<usize>,
@@ -342,7 +341,7 @@ where
     }
 
     /// Open a polynomial at an entire evaluation domain simultaneously
-    pub fn open_amortized<'a>(
+    pub fn open_at_domain<'a>(
         pp: &UniversalParams<E>,
         p: &DensePolynomial<E::Fr>,
         domain: &ark_poly::domain::Radix2EvaluationDomain<E::Fr>,
@@ -505,15 +504,15 @@ where
         }
     }
 
-    /// Verifies that `value` is the evaluation at `point` of the polynomial
-    /// committed inside `comm`.
-    pub fn check_amortized(
+    /// Verifies that `evals` are the evaluation at `s` of the polynomial
+    /// committed inside `comm` where `s` is a constructed SubproductDomain
+    pub fn check_at_domain(
         pp: &UniversalParams<E>,
         ck: &Powers<E>,
         comm: &Commitment<E>,
         proof: &Proof<E>,
-        evals: &[E::Fr],         // Evaluations at the SubproductDomain
-        s: &SubproductDomain<E>, // SubproductDomain of the evaluation domain
+        evals: &[E::Fr],             // Evaluations at the SubproductDomain
+        s: &SubproductDomain<E::Fr>, // SubproductDomain of the evaluation domain
     ) -> Result<bool, Error> {
         let evaluation_interpolation_time = start_timer!(|| "Constructing evaluation polynomial");
 
@@ -523,15 +522,15 @@ where
             start_timer!(|| "Constructing commitment to evaluation polynomial in G1");
 
         let evaluation_polynomial_commitment =
-            KZG10::<E, DensePolynomial<E::Fr>>::commit(&ck, &evaluation_polynomial, None, None)?;
+            KZG10::<E, DensePolynomial<E::Fr>>::commit_g1(&ck, &evaluation_polynomial, None, None)?;
 
         end_timer!(evaluation_commit_time);
 
         let s_commitment_time =
             start_timer!(|| "Constructing commitment to SubproductDomain in G2");
-        let s_commitment = Self::G2_commit(pp, &s.t.m)?;
+        let s_commitment = Self::commit_g2(pp, &s.t.m)?;
         end_timer!(s_commitment_time);
-        Self::check_amortized_with_commitments(
+        Self::check_at_domain_with_commitments(
             pp,
             comm,
             proof,
@@ -541,7 +540,7 @@ where
     }
 
     /// Check amortized proof with precomputed commitments
-    pub fn check_amortized_with_commitments(
+    pub fn check_at_domain_with_commitments(
         ck: &UniversalParams<E>,
         comm: &Commitment<E>,
         proof: &Proof<E>,
@@ -643,12 +642,12 @@ mod tests {
         f_p += (f, &p);
 
         let degree = 4;
-        let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
+        let pp = KZG_Bls12_381::setup(degree, false, false, rng).unwrap();
         let (powers, _) = KZG_Bls12_381::trim(&pp, degree).unwrap();
 
         let hiding_bound = None;
-        let (comm, _) = KZG10::commit(&powers, &p, hiding_bound, Some(rng)).unwrap();
-        let (f_comm, _) = KZG10::commit(&powers, &f_p, hiding_bound, Some(rng)).unwrap();
+        let (comm, _) = KZG10::commit_g1(&powers, &p, hiding_bound, Some(rng)).unwrap();
+        let (f_comm, _) = KZG10::commit_g1(&powers, &f_p, hiding_bound, Some(rng)).unwrap();
         let mut f_comm_2 = Commitment::empty();
         f_comm_2 += (f, &comm);
 
@@ -667,11 +666,11 @@ mod tests {
             while degree <= 1 {
                 degree = usize::rand(rng) % 20;
             }
-            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let pp = KZG10::<E, P>::setup(degree, false, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, degree)?;
             let p = P::rand(degree, rng);
             let hiding_bound = Some(1);
-            let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let (comm, rand) = KZG10::<E, P>::commit_g1(&ck, &p, hiding_bound, Some(rng))?;
             let point = E::Fr::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
@@ -695,11 +694,11 @@ mod tests {
         let rng = &mut test_rng();
         for _ in 0..100 {
             let degree = 50;
-            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let pp = KZG10::<E, P>::setup(degree, false, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, 2)?;
             let p = P::rand(1, rng);
             let hiding_bound = Some(1);
-            let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+            let (comm, rand) = KZG10::<E, P>::commit_g1(&ck, &p, hiding_bound, Some(rng))?;
             let point = E::Fr::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
@@ -726,7 +725,7 @@ mod tests {
             while degree <= 1 {
                 degree = usize::rand(rng) % 20;
             }
-            let pp = KZG10::<E, P>::setup(degree, false, rng)?;
+            let pp = KZG10::<E, P>::setup(degree, false, false, rng)?;
             let (ck, vk) = KZG10::<E, P>::trim(&pp, degree)?;
             let mut comms = Vec::new();
             let mut values = Vec::new();
@@ -735,7 +734,7 @@ mod tests {
             for _ in 0..10 {
                 let p = P::rand(degree, rng);
                 let hiding_bound = Some(1);
-                let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
+                let (comm, rand) = KZG10::<E, P>::commit_g1(&ck, &p, hiding_bound, Some(rng))?;
                 let point = E::Fr::rand(rng);
                 let value = p.evaluate(&point);
                 let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
@@ -777,7 +776,7 @@ mod tests {
         let rng = &mut test_rng();
 
         let max_degree = 123;
-        let pp = KZG_Bls12_381::setup(max_degree, false, rng).unwrap();
+        let pp = KZG_Bls12_381::setup(max_degree, false, false, rng).unwrap();
         let (powers, _) = KZG_Bls12_381::trim(&pp, max_degree).unwrap();
 
         let p = DensePoly::<Fr>::rand(max_degree + 1, rng);
@@ -793,8 +792,8 @@ mod tests {
         for total_weight in 15..30 {
             let degree = 2 * total_weight / 3;
 
-            let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
-            let (ck, vk) = KZG_Bls12_381::trim(&pp, degree).unwrap();
+            let pp = KZG_Bls12_381::setup(degree, false, false, rng).unwrap();
+            let (ck, _) = KZG_Bls12_381::trim(&pp, degree).unwrap();
 
             for _ in 0..4 {
                 let polynomial = DensePolynomial::<Fr>::rand(degree, rng);
@@ -804,20 +803,20 @@ mod tests {
 
                 let domain = ark_poly::Radix2EvaluationDomain::<Fr>::new(total_weight).unwrap();
                 let p = ck.powers_of_g[0..m].to_vec();
-                let (h, scale): (Vec<G1Projective>, Fr) =
+                let (h, _scale): (Vec<G1Projective>, Fr) =
                     toeplitz_mul::<Bls12_381>(&polynomial, &p, domain.size()).unwrap();
 
                 let h = h
                     .iter()
                     .map(
-                        |p: &G1Projective| (*p).into_affine(), /*. mul(scale).into_affine()*/
+                        |p: &G1Projective| (*p).into_affine(), /*. mul(_scale).into_affine()*/
                     )
                     .collect::<Vec<G1Affine>>();
 
                 for i in 1..=m {
                     let mut total = G1Projective::zero();
                     for j in 0..=m - i {
-                        total = total + (p[j].mul(coeffs[i + j]));
+                        total += p[j].mul(coeffs[i + j]);
                     }
                     assert_eq!(G1Affine::from(total), h[i - 1]);
                 }
@@ -825,22 +824,22 @@ mod tests {
         }
     }
     #[test]
-    fn test_check_amortized() {
+    fn test_check_at_domain() {
         let rng = &mut test_rng();
         let n = 10;
         let eval_domain_size = 1 << n;
 
         let degree = 1 << (n - 1);
 
-        let pp = KZG_Bls12_381::setup(eval_domain_size, false, rng).unwrap();
+        let pp = KZG_Bls12_381::setup(eval_domain_size, false, true, rng).unwrap();
         let (ck, vk) = KZG_Bls12_381::trim(&pp, degree).unwrap();
 
         let p = DensePoly::<Fr>::rand(degree, rng);
 
-        let (comm, rand) = KZG_Bls12_381::commit(&ck, &p, None, None).unwrap();
+        let (comm, _) = KZG_Bls12_381::commit_g1(&ck, &p, None, None).unwrap();
 
         let domain = ark_poly::Radix2EvaluationDomain::<Fr>::new(eval_domain_size).unwrap();
-        let openings = KZG_Bls12_381::open_amortized(&pp, &p, &domain).unwrap();
+        let openings = KZG_Bls12_381::open_at_domain(&pp, &p, &domain).unwrap();
 
         let evals = p.evaluate_over_domain_by_ref(domain).evals;
 
@@ -872,16 +871,12 @@ mod tests {
         ];
 
         let combined = [
-            openings.combine_at_evals(&(0..100), &evals[0..100], &subproduct_domains[0]),
-            openings.combine_at_evals(&(100..400), &evals[100..400], &subproduct_domains[1]),
-            openings.combine_at_evals(
-                &(400..eval_domain_size),
-                &evals[400..],
-                &subproduct_domains[2],
-            ),
+            openings.combine_at_domain(0, 100, &subproduct_domains[0]),
+            openings.combine_at_domain(100, 400, &subproduct_domains[1]),
+            openings.combine_at_domain(400, eval_domain_size, &subproduct_domains[2]),
         ];
 
-        assert!(KZG_Bls12_381::check_amortized(
+        assert!(KZG_Bls12_381::check_at_domain(
             &pp,
             &ck,
             &comm,
@@ -890,7 +885,7 @@ mod tests {
             &subproduct_domains[0]
         )
         .unwrap());
-        assert!(KZG_Bls12_381::check_amortized(
+        assert!(KZG_Bls12_381::check_at_domain(
             &pp,
             &ck,
             &comm,
@@ -899,7 +894,7 @@ mod tests {
             &subproduct_domains[1]
         )
         .unwrap());
-        assert!(KZG_Bls12_381::check_amortized(
+        assert!(KZG_Bls12_381::check_at_domain(
             &pp,
             &ck,
             &comm,

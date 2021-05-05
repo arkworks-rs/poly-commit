@@ -575,15 +575,15 @@ pub struct AmortizedProof<E: PairingEngine> {
 
 impl<E: PairingEngine> AmortizedProof<E> {
     /// Combine opening proofs onto a subset of the domain
-    pub fn combine_at_evals(
+    pub fn combine_at_domain(
         &self,
-        range: &std::ops::Range<usize>, // Domain is omega^{start}, ..., omega^{end-1}
-        evals: &[E::Fr],                // Evaluation of polynomial at domain
-        s: &super::fastpoly::SubproductDomain<E>, // SubproductDomain of the domain
+        start: usize, // Domain is omega^{start}, ..., omega^{end-1}
+        end: usize,
+        s: &super::fastpoly::SubproductDomain<E::Fr>, // SubproductDomain of the domain
     ) -> Proof<E> {
         let lagrange_coeff = s.fast_inverse_lagrange_coefficients();
         let mut total = E::G1Projective::zero();
-        for (c_i, point) in lagrange_coeff.iter().zip(self.w[range.clone()].iter()) {
+        for (c_i, point) in lagrange_coeff.iter().zip(self.w[start..end].iter()) {
             total += point.into_affine().mul::<E::Fr>(c_i.inverse().unwrap());
         }
         Proof {
