@@ -15,8 +15,8 @@ use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use ark_sponge::collect_sponge_field_elements_gadget;
 use ark_sponge::constraints::AbsorbableGadget;
+use ark_sponge::{collect_sponge_field_elements_gadget, Absorbable};
 use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, vec};
 
 /// High level variable representing the verification key of the `MarlinKZG10` polynomial commitment scheme.
@@ -25,12 +25,20 @@ use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, v
 pub struct VerifierKeyVar<E: PairingEngine, PG: PairingVar<E, E::Fq>> {
     /// Generator of G1.
     pub g: PG::G1Var,
+    /// The generator of G1 that is used for making a commitment hiding.
+    pub gamma_g: PG::G1Var,
     /// Generator of G2.
     pub h: PG::G2Var,
     /// Generator of G1, times first monomial.
     pub beta_h: PG::G2Var,
     /// Used for the shift powers associated with different degree bounds.
     pub degree_bounds_and_shift_powers: Option<Vec<(usize, FpVar<E::Fq>, PG::G1Var)>>,
+    /// The maximum degree supported by the `UniversalParams` `self` was derived
+    /// from.
+    pub max_degree: FpVar<E::Fq>,
+    /// The maximum degree supported by the trimmed parameters that `self` is
+    /// a part of.
+    pub supported_degree: FpVar<E::Fq>,
 }
 
 impl<E, PG> VerifierKeyVar<E, PG>
@@ -131,7 +139,8 @@ where
         let VerifierKey {
             vk,
             degree_bounds_and_shift_powers,
-            ..
+            max_degree,
+            supported_degree,
         } = vk_orig;
 
         let degree_bounds_and_shift_powers = degree_bounds_and_shift_powers.map(|vec| {
@@ -152,18 +161,41 @@ where
                 .collect()
         });
 
-        let KZG10VerifierKey { g, h, beta_h, .. } = vk;
+        let KZG10VerifierKey {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            ..
+        } = vk;
 
         let g = PG::G1Var::new_variable(ark_relations::ns!(cs, "g"), || Ok(g), mode)?;
+        let gamma_g =
+            PG::G1Var::new_variable(ark_relations::ns!(cs, "gamma_g"), || Ok(gamma_g), mode)?;
         let h = PG::G2Var::new_variable(ark_relations::ns!(cs, "h"), || Ok(h), mode)?;
         let beta_h =
             PG::G2Var::new_variable(ark_relations::ns!(cs, "beta_h"), || Ok(beta_h), mode)?;
 
+        let max_degree = FpVar::<E::Fq>::new_variable(
+            ark_relations::ns!(cs, "max degree"),
+            || Ok(<E::Fq as From<u128>>::from(max_degree as u128)),
+            mode,
+        )?;
+
+        let supported_degree = FpVar::<E::Fq>::new_variable(
+            ark_relations::ns!(cs, "max degree"),
+            || Ok(<E::Fq as From<u128>>::from(supported_degree as u128)),
+            mode,
+        )?;
+
         Ok(Self {
             g,
+            gamma_g,
             h,
             beta_h,
             degree_bounds_and_shift_powers,
+            max_degree,
+            supported_degree,
         })
     }
 }
@@ -178,6 +210,7 @@ where
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(&self.g.to_bytes()?);
+        bytes.extend_from_slice(&self.gamma_g.to_bytes()?);
         bytes.extend_from_slice(&self.h.to_bytes()?);
         bytes.extend_from_slice(&self.beta_h.to_bytes()?);
 
@@ -189,6 +222,9 @@ where
                 bytes.extend_from_slice(&shift_power.to_bytes()?);
             }
         }
+
+        bytes.extend_from_slice(&self.max_degree.to_bytes()?);
+        bytes.extend_from_slice(&self.supported_degree.to_bytes()?);
 
         Ok(bytes)
     }
@@ -206,10 +242,12 @@ where
         let mut res = Vec::new();
 
         let mut g_gadget = self.g.to_constraint_field()?;
+        let mut gamma_g_gadget = self.gamma_g.to_constraint_field()?;
         let mut h_gadget = self.h.to_constraint_field()?;
         let mut beta_h_gadget = self.beta_h.to_constraint_field()?;
 
         res.append(&mut g_gadget);
+        res.append(&mut gamma_g_gadget);
         res.append(&mut h_gadget);
         res.append(&mut beta_h_gadget);
 
@@ -224,7 +262,61 @@ where
             }
         }
 
+        res.push(self.max_degree.clone());
+        res.push(self.supported_degree.clone());
+
         Ok(res)
+    }
+}
+
+impl<E, PG> AbsorbableGadget<E::Fq> for VerifierKeyVar<E, PG>
+where
+    E: PairingEngine,
+    PG: PairingVar<E, E::Fq>,
+    PG::G1Var: AbsorbableGadget<E::Fq>,
+    PG::G2Var: AbsorbableGadget<E::Fq>,
+{
+    fn to_sponge_field_elements(
+        &self,
+    ) -> Result<Vec<FpVar<<E as PairingEngine>::Fq>>, SynthesisError> {
+        let (length, degree_bounds, shift_powers) = if let Some(degree_bounds_and_shift_powers) =
+            self.degree_bounds_and_shift_powers.as_ref()
+        {
+            let length = {
+                let length: E::Fq = degree_bounds_and_shift_powers
+                    .len()
+                    .to_sponge_field_elements()
+                    .pop()
+                    .unwrap();
+                FpVar::<E::Fq>::Constant(length)
+            };
+
+            let mut degree_bounds = Vec::new();
+            for (_, d, _) in degree_bounds_and_shift_powers {
+                degree_bounds.push(d)
+            }
+
+            let shift_powers = degree_bounds_and_shift_powers
+                .iter()
+                .map(|d| &d.2)
+                .collect::<Vec<_>>();
+
+            (Some(length), Some(degree_bounds), Some(shift_powers))
+        } else {
+            (None, None, None)
+        };
+
+        collect_sponge_field_elements_gadget!(
+            self.g,
+            self.gamma_g,
+            self.h,
+            self.beta_h,
+            length,
+            degree_bounds,
+            shift_powers,
+            self.max_degree,
+            self.supported_degree
+        )
     }
 }
 

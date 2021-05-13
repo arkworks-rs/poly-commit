@@ -3,7 +3,7 @@ use crate::{
     PCVerifierKey, UVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
+use ark_ff::{to_bytes, Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_sponge::{collect_sponge_bytes, collect_sponge_field_elements, Absorbable};
 use ark_std::io::{Read, Write};
@@ -159,14 +159,17 @@ where
             self.degree_bounds_and_shift_powers.as_ref()
         {
             let length = degree_bounds_and_shift_powers.len();
+
             let degree_bounds = degree_bounds_and_shift_powers
                 .iter()
-                .map(|d| &d.0)
+                .map(|(d, _)| *d)
                 .collect::<Vec<_>>();
+
             let shift_powers = degree_bounds_and_shift_powers
                 .iter()
                 .map(|d| &d.1)
                 .collect::<Vec<_>>();
+
             (Some(length), Some(degree_bounds), Some(shift_powers))
         } else {
             (None, None, None)
@@ -188,14 +191,17 @@ where
             self.degree_bounds_and_shift_powers.as_ref()
         {
             let length = degree_bounds_and_shift_powers.len();
+
             let degree_bounds = degree_bounds_and_shift_powers
                 .iter()
-                .map(|d| &d.0)
+                .map(|(d, _)| *d)
                 .collect::<Vec<_>>();
+
             let shift_powers = degree_bounds_and_shift_powers
                 .iter()
                 .map(|d| &d.1)
                 .collect::<Vec<_>>();
+
             (Some(length), Some(degree_bounds), Some(shift_powers))
         } else {
             (None, None, None)
