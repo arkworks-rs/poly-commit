@@ -35,7 +35,7 @@ derivative = { version = "2", features = [ "use_core" ] }
 
 # Dependencies for r1cs
 ark-crypto-primitives = { version = "^0.2.0", default-features = false, optional = true }
-ark-nonnative-field = { version = "^0.2.0", default-features = false, optional = true }
+ark-nonnative-field = { git = "https://github.com/arkworks-rs/nonnative", default-features = false, optional = true }
 ark-relations = { version = "^0.2.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.2.0", default-features = false, optional = true }
 hashbrown = { version = "0.9", optional = true }
