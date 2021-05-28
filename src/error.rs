@@ -94,7 +94,7 @@ pub enum Error {
         label: String,
     },
 
-    /// Attempt to open_amortized on too large a domain
+    /// Attempt to `open_amortized` on too large a domain
     AmortizedOpeningTooLarge(usize),
 }
 
