@@ -53,9 +53,7 @@ pub fn fast_divide_monic<F: FftField>(f: &Poly<F>, g: &Poly<F>) -> (Poly<F>, Pol
 
     if f.coeffs().len() < g.coeffs().len() {
         return (
-            Poly::<F> {
-                coeffs: vec![F::zero()],
-            },
+            Poly::zero(),
             f.clone(),
         );
     }
