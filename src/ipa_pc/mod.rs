@@ -149,7 +149,7 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
+        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(&combined_v.into_repr());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();

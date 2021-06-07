@@ -5,7 +5,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, UniformRand, Zero};
+use ark_ff::{One, UniformRand, Zero, PrimeField};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, vec};
 
@@ -60,7 +60,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(randomizer.into());
+                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_repr());
             }
 
             // Accumulate values in the BTreeMap
@@ -80,7 +80,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
 
         if let Some(randomizer) = randomizer {
             witness = proof.w.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(randomizer.into());
+            adjusted_witness = adjusted_witness.mul(&randomizer.into_repr());
         }
 
         *combined_witness += &witness;
