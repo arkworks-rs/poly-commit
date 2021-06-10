@@ -5,9 +5,9 @@ use ark_poly::{Polynomial, UVPolynomial};
 
 use ark_poly::polynomial::univariate::DensePolynomial as Poly;
 
-/// Where indicated, algorithms are from Modern Computer Algebra, 3rd edition, by Gathen and Gerhard
-/// Abbreviated as GG
-/// Let M(n) denote the time to multiply.
+//! Where indicated, algorithms are from Modern Computer Algebra, 3rd edition, by Gathen and Gerhard
+//! Abbreviated as GG
+//! Let M(n) denote the time to multiply.
 
 /// GG Algorithm 9.3
 /// Computes the inverse of f mod x^l
