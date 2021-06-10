@@ -49,7 +49,7 @@ pub fn rev<F: FftField>(f: &mut Poly<F>, m: usize) {
 /// GG Algorithm 9.5
 /// Divide f by g in nearly linear time
 pub fn fast_divide_monic<F: FftField>(f: &Poly<F>, g: &Poly<F>) -> (Poly<F>, Poly<F>) {
-    //assert_eq!(g.coeffs.last(), F::one()); //TODO: check monic condition
+    assert_eq!(g.coeffs.last(), F::one()); // check that `g` is monic
 
     if f.coeffs().len() < g.coeffs().len() {
         return (
