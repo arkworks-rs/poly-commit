@@ -5,9 +5,9 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, UniformRand, Zero};
+use ark_ff::{One, PrimeField, UniformRand, Zero};
+use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
@@ -60,7 +60,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(randomizer.into());
+                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_repr());
             }
 
             // Accumulate values in the BTreeMap
@@ -80,7 +80,7 @@ impl<E: PairingEngine, P: UVPolynomial<E::Fr>> SonicKZG10<E, P> {
 
         if let Some(randomizer) = randomizer {
             witness = proof.w.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(randomizer.into());
+            adjusted_witness = adjusted_witness.mul(&randomizer.into_repr());
         }
 
         *combined_witness += &witness;
@@ -682,6 +682,7 @@ mod tests {
     use ark_ec::PairingEngine;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_std::rand::rngs::StdRng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
@@ -693,12 +694,12 @@ mod tests {
     fn rand_poly<E: PairingEngine>(
         degree: usize,
         _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
+        rng: &mut StdRng,
     ) -> DensePoly<E::Fr> {
         DensePoly::<E::Fr>::rand(degree, rng)
     }
 
-    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> E::Fr {
+    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut StdRng) -> E::Fr {
         E::Fr::rand(rng)
     }
 

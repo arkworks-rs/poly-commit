@@ -12,7 +12,7 @@ use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::UVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, vec};
 
-use rand_core::RngCore;
+use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -344,8 +344,8 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer.into());
-            total_w += &w.mul(randomizer);
+            total_c += &c.mul(randomizer.into_repr());
+            total_w += &w.mul(randomizer.into_repr());
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();

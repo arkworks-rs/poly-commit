@@ -12,7 +12,7 @@ use ark_std::{
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use rand_core::RngCore;
+use ark_std::rand::RngCore;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
 #[derive(Derivative)]

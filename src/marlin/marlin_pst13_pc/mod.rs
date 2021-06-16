@@ -12,8 +12,8 @@ use ark_ec::{
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, MVPolynomial};
+use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
@@ -255,7 +255,7 @@ where
             .collect();
         let beta_h: Vec<_> = betas
             .iter()
-            .map(|b| h.mul((*b).into()).into_affine())
+            .map(|b| h.mul(&(*b).into_repr()).into_affine())
             .collect();
         let h = h.into_affine();
         let prepared_h = h.into();
@@ -628,7 +628,7 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer.into());
+            total_c += &c.mul(&randomizer.into_repr());
             ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
@@ -636,8 +636,8 @@ where
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(g_multiplier.into());
-        total_c -= &gamma_g.mul(gamma_g_multiplier.into());
+        total_c -= &g.mul(&g_multiplier.into_repr());
+        total_c -= &gamma_g.mul(&gamma_g_multiplier.into_repr());
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
@@ -722,6 +722,7 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         MVPolynomial,
     };
+    use ark_std::rand::rngs::StdRng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
@@ -733,15 +734,12 @@ mod tests {
     fn rand_poly<E: PairingEngine>(
         degree: usize,
         num_vars: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
+        rng: &mut StdRng,
     ) -> SparsePoly<E::Fr, SparseTerm> {
         SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: PairingEngine>(
-        num_vars: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> Vec<E::Fr> {
+    fn rand_point<E: PairingEngine>(num_vars: Option<usize>, rng: &mut StdRng) -> Vec<E::Fr> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {

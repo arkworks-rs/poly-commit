@@ -5,8 +5,8 @@ use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitmen
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
-use rand_core::RngCore;
 
 mod data_structures;
 pub use data_structures::*;
@@ -149,7 +149,8 @@ impl<G: AffineCurve, D: Digest, P: UVPolynomial<G::ScalarField>> InnerProductArg
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(combined_v.into());
+        let mut round_commitment_proj =
+            combined_commitment_proj + &h_prime.mul(&combined_v.into_repr());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
@@ -1034,29 +1035,22 @@ mod tests {
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_std::rand::rngs::StdRng;
     use blake2::Blake2s;
 
     type UniPoly = DensePoly<Fr>;
     type PC<E, D, P> = InnerProductArgPC<E, D, P>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly>;
 
-    fn rand_poly<F: PrimeField>(
-        degree: usize,
-        _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> DensePoly<F> {
+    fn rand_poly<F: PrimeField>(degree: usize, _: Option<usize>, rng: &mut StdRng) -> DensePoly<F> {
         DensePoly::rand(degree, rng)
     }
 
-    fn constant_poly<F: PrimeField>(
-        _: usize,
-        _: Option<usize>,
-        rng: &mut rand::prelude::StdRng,
-    ) -> DensePoly<F> {
+    fn constant_poly<F: PrimeField>(_: usize, _: Option<usize>, rng: &mut StdRng) -> DensePoly<F> {
         DensePoly::from_coefficients_slice(&[F::rand(rng)])
     }
 
-    fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut rand::prelude::StdRng) -> F {
+    fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut StdRng) -> F {
         F::rand(rng)
     }
 
