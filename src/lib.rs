@@ -97,6 +97,8 @@ pub mod sonic_pc;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 pub mod ipa_pc;
 
+/// Defines the challenge strategies and challenge generator.
+pub mod challenge;
 /// A multilinear polynomial commitment scheme that converts n-variate multilinear polynomial into
 /// n quotient UV polynomial. This scheme is based on hardness of the discrete logarithm
 /// in prime-order groups. Construction is detailed in [[XZZPD19]][xzzpd19] and [[ZGKPP18]][zgkpp18]
