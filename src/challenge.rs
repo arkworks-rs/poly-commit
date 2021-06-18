@@ -22,9 +22,9 @@ impl<F: PrimeField> UnivariateGeneratorState<F> {
 // TODO: Copy and Clone trait cannot be derived
 /// Challenge Generator (todo doc)
 pub enum ChallengeGenerator<'a, F: PrimeField, S: 'a + FieldBasedCryptographicSponge<F>> {
-    /// todo: doc
+    /// Each challenge is freshly squeezed from a sponge.
     Multivariate(&'a mut S),
-    /// todo: doc
+    /// ach challenge is a power of one squeezed element from sponge.
     Univariate(UnivariateGeneratorState<F>),
 }
 
