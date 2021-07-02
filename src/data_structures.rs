@@ -8,6 +8,7 @@ use ark_std::{
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
+use ark_sponge::FieldBasedCryptographicSponge;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
@@ -104,11 +105,12 @@ pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeser
 
 /// A proof of satisfaction of linear combinations.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
-pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P>> {
+pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P, S>, S: FieldBasedCryptographicSponge<F>> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
     /// Evaluations required to verify the proof.
     pub evals: Option<Vec<F>>,
+    _sponge: PhantomData<S>
 }
 
 /// A polynomial along with information about its degree bound (if any), and the

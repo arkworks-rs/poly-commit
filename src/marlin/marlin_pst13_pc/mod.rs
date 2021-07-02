@@ -438,7 +438,7 @@ where
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    fn open_individual_opening_challenges<'a>(
+    fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -537,7 +537,7 @@ where
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check_individual_opening_challenges<'a>(
+    fn check<'a>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
@@ -580,7 +580,7 @@ where
         Ok(lhs == rhs)
     }
 
-    fn batch_check_individual_opening_challenges<'a, R: RngCore>(
+    fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
@@ -655,7 +655,7 @@ where
         Ok(result)
     }
 
-    fn open_combinations_individual_opening_challenges<'a>(
+    fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
@@ -684,7 +684,7 @@ where
 
     /// Checks that `values` are the true evaluations at `query_set` of the polynomials
     /// committed in `labeled_commitments`.
-    fn check_combinations_individual_opening_challenges<'a, R: RngCore>(
+    fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,

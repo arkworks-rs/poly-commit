@@ -2,6 +2,7 @@ use ark_ff::PrimeField;
 use ark_sponge::FieldBasedCryptographicSponge;
 
 /// State stored for univariate generator
+#[derive(Copy, Clone)]
 pub struct UnivariateGeneratorState<F: PrimeField> {
     gen: F,
     next: F,
@@ -19,8 +20,8 @@ impl<F: PrimeField> UnivariateGeneratorState<F> {
     }
 }
 
-// TODO: Copy and Clone trait cannot be derived
 /// Challenge Generator (todo doc)
+#[derive(Copy, Clone)]
 pub enum ChallengeGenerator<'a, F: PrimeField, S: 'a + FieldBasedCryptographicSponge<F>> {
     /// Each challenge is freshly squeezed from a sponge.
     Multivariate(&'a mut S),

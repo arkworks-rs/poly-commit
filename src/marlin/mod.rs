@@ -6,6 +6,8 @@ use crate::{PCRandomness, Polynomial, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, Zero};
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign};
+use ark_sponge::FieldBasedCryptographicSponge;
+use crate::challenge::ChallengeGenerator;
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by
@@ -210,13 +212,13 @@ impl<E: PairingEngine> Marlin<E> {
     /// On input a list of polynomials, linear combinations of those polynomials,
     /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
-    fn open_combinations_individual_opening_challenges<'a, P, D, PC>(
+    fn open_combinations_individual_opening_challenges<'a, P, D, PC, S>(
         ck: &PC::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<D>,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        mut opening_challenges: ChallengeGenerator<E::Fr>,
         rands: impl IntoIterator<Item = &'a PC::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::Fr, P, PC>, Error>
@@ -226,10 +228,12 @@ impl<E: PairingEngine> Marlin<E> {
         PC: PolynomialCommitment<
             E::Fr,
             P,
+            S,
             Commitment = marlin_pc::Commitment<E>,
             PreparedCommitment = marlin_pc::PreparedCommitment<E>,
             Error = Error,
         >,
+        S: FieldBasedCryptographicSponge<E::Fr>,
         PC::Randomness: 'a + AddAssign<(E::Fr, &'a PC::Randomness)>,
         PC::Commitment: 'a,
     {
@@ -292,7 +296,7 @@ impl<E: PairingEngine> Marlin<E> {
             .map(|((label, d), c)| LabeledCommitment::new(label, c, d))
             .collect::<Vec<_>>();
 
-        let proof = PC::batch_open_individual_opening_challenges(
+        let proof = PC::batch_open(
             ck,
             lc_polynomials.iter(),
             lc_commitments.iter(),
@@ -387,7 +391,7 @@ impl<E: PairingEngine> Marlin<E> {
             .collect::<Vec<_>>();
         end_timer!(combined_comms_norm_time);
 
-        PC::batch_check_individual_opening_challenges(
+        PC::batch_check(
             vk,
             &lc_commitments,
             &query_set,
