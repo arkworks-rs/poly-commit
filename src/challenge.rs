@@ -39,10 +39,15 @@ impl<'a, F: PrimeField, S: 'a + CryptographicSponge> ChallengeGenerator<'a, F, S
         }
     }
 
+    /// Returns the next challenge generated where next challenge has `size` bits. Only works for
+    /// multivariate generator.
+    ///
+    /// ## Panics
+    /// This function will panic if `self` is univariate.
     pub fn next_challenge_of_size(&mut self, size: ark_sponge::FieldElementSize) -> F {
-        match self{
+        match self {
             Self::Multivariate(s) => s.squeeze_field_elements_with_sizes(&[size])[0],
-            Self::Univariate(gen, next) => {
+            Self::Univariate(_, _) => {
                 panic!("`next_challenge_of_size` only supports multivariate generator.")
             }
         }
