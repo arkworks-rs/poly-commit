@@ -1,6 +1,7 @@
 use crate::{Polynomial, PolynomialCommitment, Rc, String, Vec};
-use ark_ff::{Field, ToConstraintField};
+use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_sponge::CryptographicSponge;
 use ark_std::rand::RngCore;
 use ark_std::{
     borrow::Borrow,
@@ -8,7 +9,6 @@ use ark_std::{
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
-use ark_sponge::FieldBasedCryptographicSponge;
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;
@@ -105,12 +105,17 @@ pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeser
 
 /// A proof of satisfaction of linear combinations.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
-pub struct BatchLCProof<F: Field, P: Polynomial<F>, PC: PolynomialCommitment<F, P, S>, S: FieldBasedCryptographicSponge<F>> {
+pub struct BatchLCProof<
+    F: PrimeField,
+    P: Polynomial<F>,
+    PC: PolynomialCommitment<F, P, S>,
+    S: CryptographicSponge,
+> {
     /// Evaluation proof.
     pub proof: PC::BatchProof,
     /// Evaluations required to verify the proof.
     pub evals: Option<Vec<F>>,
-    _sponge: PhantomData<S>
+    pub(crate) _sponge: PhantomData<S>,
 }
 
 /// A polynomial along with information about its degree bound (if any), and the
