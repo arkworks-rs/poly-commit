@@ -2,7 +2,7 @@ use ark_ff::PrimeField;
 use ark_sponge::CryptographicSponge;
 
 /// Challenge Generator (todo doc)
-/// TODO: probably move it to sponge
+/// TODO: move it to sponge
 /// Note that mutable reference cannot be cloned.
 pub enum ChallengeGenerator<'a, F: PrimeField, S: 'a + CryptographicSponge> {
     /// Each challenge is freshly squeezed from a sponge.
@@ -35,6 +35,15 @@ impl<'a, F: PrimeField, S: 'a + CryptographicSponge> ChallengeGenerator<'a, F, S
                 let result = next.clone();
                 *next *= *gen;
                 result
+            }
+        }
+    }
+
+    pub fn next_challenge_of_size(&mut self, size: ark_sponge::FieldElementSize) -> F {
+        match self{
+            Self::Multivariate(s) => s.squeeze_field_elements_with_sizes(&[size])[0],
+            Self::Univariate(gen, next) => {
+                panic!("`next_challenge_of_size` only supports multivariate generator.")
             }
         }
     }
