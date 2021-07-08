@@ -2,21 +2,21 @@ use ark_ff::PrimeField;
 use ark_sponge::CryptographicSponge;
 
 /// Challenge Generator (todo doc)
-/// TODO: move it to sponge
 /// Note that mutable reference cannot be cloned.
-pub enum ChallengeGenerator<'a, F: PrimeField, S: 'a + CryptographicSponge> {
+#[derive(Clone)]
+pub enum ChallengeGenerator<F: PrimeField, S: CryptographicSponge> {
     /// Each challenge is freshly squeezed from a sponge.
-    Multivariate(&'a mut S),
+    Multivariate(S),
     /// Each challenge is a power of one squeezed element from sponge.
     ///
     /// `Univariate(generator, next_element)`
     Univariate(F, F),
 }
 
-impl<'a, F: PrimeField, S: 'a + CryptographicSponge> ChallengeGenerator<'a, F, S> {
+impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     /// Returns a challenge generator with multivariate strategy. Each challenge is freshly squeezed
     /// from a sponge.
-    pub fn new_multivariate(sponge: &'a mut S) -> Self {
+    pub fn new_multivariate(sponge: S) -> Self {
         Self::Multivariate(sponge)
     }
 
@@ -47,11 +47,20 @@ impl<'a, F: PrimeField, S: 'a + CryptographicSponge> ChallengeGenerator<'a, F, S
     pub fn next_challenge_of_size(&mut self, size: ark_sponge::FieldElementSize) -> F {
         match self {
             Self::Multivariate(s) => s.squeeze_field_elements_with_sizes(&[size])[0],
-            Self::Univariate(_, _) => {
+            _ => {
                 panic!("`next_challenge_of_size` only supports multivariate generator.")
             }
         }
     }
 
-    // TODO: pub fn next_challenge_with_bit_size -> Option<F>
+    /// Returns the sponge state if `self` is multivariate.
+    ///
+    /// ## Panics
+    /// This function will panic is `self` is univariate.
+    pub fn into_sponge(self) -> S {
+        match self {
+            Self::Multivariate(s) => s,
+            _ => panic!("only multivariate generator can be converted to sponge."),
+        }
+    }
 }
