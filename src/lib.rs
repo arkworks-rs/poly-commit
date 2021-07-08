@@ -90,7 +90,7 @@ pub mod kzg10;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-// pub mod sonic_pc; // TODO: refactor me!
+pub mod sonic_pc;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.
