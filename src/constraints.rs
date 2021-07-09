@@ -7,9 +7,9 @@ use ark_nonnative_field::NonNativeFieldVar;
 use ark_poly::Polynomial;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_sponge::CryptographicSponge;
 use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
 use hashbrown::{HashMap, HashSet};
-use ark_sponge::CryptographicSponge;
 
 /// Define the minimal interface of prepared allocated structures.
 pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
@@ -96,7 +96,7 @@ pub trait PCCheckVar<
     P: Polynomial<PCF>,
     PC: PolynomialCommitment<PCF, P, S>,
     ConstraintF: PrimeField,
-    S: CryptographicSponge
+    S: CryptographicSponge,
 >: Clone
 {
     /// An allocated version of `PC::VerifierKey`.

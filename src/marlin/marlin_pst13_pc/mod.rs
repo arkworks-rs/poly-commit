@@ -21,10 +21,10 @@ pub use data_structures::*;
 mod combinations;
 use combinations::*;
 
+use crate::challenge::ChallengeGenerator;
+use ark_sponge::CryptographicSponge;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use ark_sponge::CryptographicSponge;
-use crate::challenge::ChallengeGenerator;
 
 /// Multivariate polynomial commitment based on the construction in [[PST13]][pst]
 /// with batching and (optional) hiding property inspired by the univariate scheme
@@ -553,13 +553,12 @@ where
     {
         let check_time = start_timer!(|| "Checking evaluations");
         // Accumulate commitments and values
-        let (combined_comm, combined_value) =
-            Marlin::accumulate_commitments_and_values(
-                commitments,
-                values,
-                opening_challenges,
-                None,
-            )?;
+        let (combined_comm, combined_value) = Marlin::accumulate_commitments_and_values(
+            commitments,
+            values,
+            opening_challenges,
+            None,
+        )?;
         // Compute both sides of the pairing equation
         let mut inner = combined_comm.into().into_projective() - &vk.g.mul(combined_value);
         if let Some(random_v) = proof.random_v {
@@ -724,8 +723,8 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         MVPolynomial,
     };
-    use ark_std::rand::rngs::StdRng;
     use ark_sponge::poseidon::PoseidonSponge;
+    use ark_std::rand::rngs::StdRng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
@@ -763,14 +762,14 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-377");
         single_poly_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-381");
     }
@@ -783,7 +782,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
@@ -791,7 +790,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -805,7 +804,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
@@ -813,7 +812,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -827,7 +826,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
@@ -835,7 +834,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -849,7 +848,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
@@ -857,7 +856,7 @@ mod tests {
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
-            multivariate_challenge_generator_for_test
+            multivariate_challenge_generator_for_test,
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
