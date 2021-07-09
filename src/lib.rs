@@ -50,8 +50,7 @@ pub use error::*;
 /// the approach outlined in [[CHMMVW20, "Marlin"]][marlin].
 ///
 /// [marlin]: https://eprint.iacr.org/2019/1047
-/// TODO: refactor me!
-// pub mod marlin;
+pub mod marlin;
 
 /// A random number generator that bypasses some limitations of the Rust borrow
 /// checker.
@@ -78,7 +77,7 @@ pub mod kzg10;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/1047
-// pub use marlin::marlin_pc; // TODO: refactor me!
+pub use marlin::marlin_pc;
 
 /// Polynomial commitment scheme based on the construction in [[KZG10]][kzg],
 /// modified to obtain batching and to enforce strict
@@ -107,7 +106,7 @@ pub mod challenge;
 ///
 /// [xzzpd19]: https://eprint.iacr.org/2019/317
 /// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
-pub mod multilinear_pc; // TODO: no need to refactor, but still give a double check.
+pub mod multilinear_pc;
 
 // /// Multivariate polynomial commitment based on the construction in
 // /// [[PST13]][pst] with batching and (optional) hiding property inspired
