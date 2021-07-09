@@ -23,6 +23,8 @@ use combinations::*;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use ark_sponge::CryptographicSponge;
+use crate::challenge::ChallengeGenerator;
 
 /// Multivariate polynomial commitment based on the construction in [[PST13]][pst]
 /// with batching and (optional) hiding property inspired by the univariate scheme
@@ -30,12 +32,13 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: PairingEngine, P: MVPolynomial<E::Fr>> {
+pub struct MarlinPST13<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
+    _sponge: PhantomData<S>,
 }
 
-impl<E: PairingEngine, P: MVPolynomial<E::Fr>> MarlinPST13<E, P> {
+impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -136,10 +139,11 @@ impl<E: PairingEngine, P: MVPolynomial<E::Fr>> MarlinPST13<E, P> {
     }
 }
 
-impl<E, P> PolynomialCommitment<E::Fr, P> for MarlinPST13<E, P>
+impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinPST13<E, P, S>
 where
     E: PairingEngine,
     P: MVPolynomial<E::Fr> + Sync,
+    S: CryptographicSponge,
     P::Point: Index<usize, Output = E::Fr>,
 {
     type UniversalParams = UniversalParams<E, P>;
@@ -443,7 +447,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -455,13 +459,11 @@ where
         // Compute random linear combinations of committed polynomials and randomness
         let mut p = P::zero();
         let mut r = Randomness::empty();
-        let mut opening_challenge_counter = 0;
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges(opening_challenge_counter);
-            opening_challenge_counter += 1;
+            let challenge_j = opening_challenges.next_challenge();
 
             p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, rand);
@@ -543,7 +545,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -552,7 +554,7 @@ where
         let check_time = start_timer!(|| "Checking evaluations");
         // Accumulate commitments and values
         let (combined_comm, combined_value) =
-            Marlin::accumulate_commitments_and_values_individual_opening_challenges(
+            Marlin::accumulate_commitments_and_values(
                 commitments,
                 values,
                 opening_challenges,
@@ -586,7 +588,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<P::Point, E::Fr>,
         proof: &Self::BatchProof,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -661,16 +663,16 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, P, Self>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, P, Self, S>, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        Marlin::open_combinations_individual_opening_challenges(
+        Marlin::open_combinations(
             ck,
             lc_s,
             polynomials,
@@ -690,14 +692,14 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, P, Self>,
-        opening_challenges: &dyn Fn(u64) -> E::Fr,
+        proof: &BatchLCProof<E::Fr, P, Self, S>,
+        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
-        Marlin::check_combinations_individual_opening_challenges(
+        Marlin::check_combinations(
             vk,
             lc_s,
             commitments,
@@ -723,13 +725,18 @@ mod tests {
         MVPolynomial,
     };
     use ark_std::rand::rngs::StdRng;
+    use ark_sponge::poseidon::PoseidonSponge;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
 
-    type PC<E, P> = MarlinPST13<E, P>;
-    type PC_Bls12_381 = PC<Bls12_381, MVPoly_381>;
-    type PC_Bls12_377 = PC<Bls12_377, MVPoly_377>;
+    type PC<E, P, S> = MarlinPST13<E, P, S>;
+
+    type Sponge_bls12_381 = PoseidonSponge<<Bls12_381 as PairingEngine>::Fr>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as PairingEngine>::Fr>;
+
+    type PC_Bls12_381 = PC<Bls12_381, MVPoly_381, Sponge_bls12_381>;
+    type PC_Bls12_377 = PC<Bls12_377, MVPoly_377, Sponge_Bls12_377>;
 
     fn rand_poly<E: PairingEngine>(
         degree: usize,
@@ -752,16 +759,18 @@ mod tests {
     fn single_poly_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_poly_test::<_, _, PC_Bls12_377>(
+        single_poly_test::<_, _, PC_Bls12_377, _>(
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-377");
-        single_poly_test::<_, _, PC_Bls12_381>(
+        single_poly_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-381");
     }
@@ -770,17 +779,19 @@ mod tests {
     fn full_end_to_end_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_test::<_, _, PC_Bls12_377>(
+        full_end_to_end_test::<_, _, PC_Bls12_377, _>(
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_test::<_, _, PC_Bls12_381>(
+        full_end_to_end_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -790,17 +801,19 @@ mod tests {
     fn single_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        single_equation_test::<_, _, PC_Bls12_377>(
+        single_equation_test::<_, _, PC_Bls12_377, _>(
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        single_equation_test::<_, _, PC_Bls12_381>(
+        single_equation_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -810,17 +823,19 @@ mod tests {
     fn two_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        two_equation_test::<_, _, PC_Bls12_377>(
+        two_equation_test::<_, _, PC_Bls12_377, _>(
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        two_equation_test::<_, _, PC_Bls12_381>(
+        two_equation_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");
@@ -830,17 +845,19 @@ mod tests {
     fn full_end_to_end_equation_test() {
         use crate::tests::*;
         let num_vars = Some(10);
-        full_end_to_end_equation_test::<_, _, PC_Bls12_377>(
+        full_end_to_end_equation_test::<_, _, PC_Bls12_377, _>(
             num_vars,
             rand_poly::<Bls12_377>,
             rand_point::<Bls12_377>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-377");
         println!("Finished bls12-377");
-        full_end_to_end_equation_test::<_, _, PC_Bls12_381>(
+        full_end_to_end_equation_test::<_, _, PC_Bls12_381, _>(
             num_vars,
             rand_poly::<Bls12_381>,
             rand_point::<Bls12_381>,
+            multivariate_challenge_generator_for_test
         )
         .expect("test failed for bls12-381");
         println!("Finished bls12-381");

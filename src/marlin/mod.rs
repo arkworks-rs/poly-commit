@@ -23,7 +23,7 @@ pub mod marlin_pc;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
-// pub mod marlin_pst13_pc; // TODO: refactor me
+pub mod marlin_pst13_pc;
 
 /// Common functionalities between `marlin_pc` and `marlin_pst13_pc`
 struct Marlin<E: PairingEngine, S: CryptographicSponge> {
