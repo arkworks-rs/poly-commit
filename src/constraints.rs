@@ -9,6 +9,7 @@ use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
 use hashbrown::{HashMap, HashSet};
+use ark_sponge::CryptographicSponge;
 
 /// Define the minimal interface of prepared allocated structures.
 pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
@@ -93,8 +94,9 @@ pub struct PCCheckRandomDataVar<TargetField: PrimeField, BaseField: PrimeField> 
 pub trait PCCheckVar<
     PCF: PrimeField,
     P: Polynomial<PCF>,
-    PC: PolynomialCommitment<PCF, P>,
+    PC: PolynomialCommitment<PCF, P, S>,
     ConstraintF: PrimeField,
+    S: CryptographicSponge
 >: Clone
 {
     /// An allocated version of `PC::VerifierKey`.
@@ -117,7 +119,7 @@ pub trait PCCheckVar<
     type ProofVar: AllocVar<PC::Proof, ConstraintF> + Clone;
 
     /// An allocated version of `PC::BatchLCProof`.
-    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, P, PC>, ConstraintF> + Clone;
+    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, P, PC, S>, ConstraintF> + Clone;
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that check that `proof_i` is a valid evaluation
     /// proof at `point_i` for the polynomial in `commitment_i`.
