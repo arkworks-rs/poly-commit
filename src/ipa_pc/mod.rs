@@ -102,7 +102,7 @@ where
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>, //&dyn Fn(u64) -> G::ScalarField,
+        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
     ) -> Option<SuccinctCheckPolynomial<G::ScalarField>> {
         let check_time = start_timer!(|| "Succinct checking");
 
