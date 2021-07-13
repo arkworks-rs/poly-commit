@@ -1075,7 +1075,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1087,7 +1087,7 @@ mod tests {
             None,
             constant_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1098,7 +1098,7 @@ mod tests {
         quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1109,7 +1109,7 @@ mod tests {
         linear_poly_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1120,7 +1120,7 @@ mod tests {
         single_poly_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1131,7 +1131,7 @@ mod tests {
         single_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1142,7 +1142,7 @@ mod tests {
         two_polys_degree_bound_single_query_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1154,7 +1154,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1167,7 +1167,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1180,7 +1180,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1192,7 +1192,7 @@ mod tests {
         two_equation_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1205,7 +1205,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1218,7 +1218,7 @@ mod tests {
         bad_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            multivariate_challenge_generator_for_test,
+            poseidon_sponge_for_test,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");

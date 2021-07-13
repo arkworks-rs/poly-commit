@@ -108,16 +108,16 @@ pub mod challenge;
 /// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
 pub mod multilinear_pc;
 
-// /// Multivariate polynomial commitment based on the construction in
-// /// [[PST13]][pst] with batching and (optional) hiding property inspired
-// /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
-// ///
-// /// [pst]: https://eprint.iacr.org/2011/587.pdf
-// /// [marlin]: https://eprint.iacr.org/2019/104
-// pub use marlin::marlin_pst13_pc;
 use crate::challenge::ChallengeGenerator;
 use ark_sponge::CryptographicSponge;
 use ark_std::marker::PhantomData;
+/// Multivariate polynomial commitment based on the construction in
+/// [[PST13]][pst] with batching and (optional) hiding property inspired
+/// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
+///
+/// [pst]: https://eprint.iacr.org/2011/587.pdf
+/// [marlin]: https://eprint.iacr.org/2019/104
+pub use marlin::marlin_pst13_pc;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
@@ -549,13 +549,13 @@ pub mod tests {
         num_equations: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     }
 
     pub fn bad_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -563,82 +563,90 @@ pub mod tests {
         PC: PolynomialCommitment<F, P, S>,
         S: CryptographicSponge,
     {
-        let rng = &mut test_rng();
-        let max_degree = 100;
-        let pp = PC::setup(max_degree, None, rng)?;
-        for _ in 0..10 {
-            let supported_degree = Uniform::from(1..=max_degree).sample(rng);
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
+        let opening_challenges = vec![
+            ChallengeGenerator::new_multivariate(sponge()),
+            ChallengeGenerator::new_univariate(&mut sponge()),
+        ];
 
-            let mut labels = Vec::new();
-            let mut polynomials = Vec::new();
-            let mut degree_bounds = Vec::new();
+        for opening_challenge in opening_challenges {
+            let rng = &mut test_rng();
+            let max_degree = 100;
+            let pp = PC::setup(max_degree, None, rng)?;
+            for _ in 0..10 {
+                let supported_degree = Uniform::from(1..=max_degree).sample(rng);
+                assert!(
+                    max_degree >= supported_degree,
+                    "max_degree < supported_degree"
+                );
 
-            for i in 0..10 {
-                let label = format!("Test{}", i);
-                labels.push(label.clone());
-                let degree_bound = 1usize;
-                let hiding_bound = Some(1);
-                degree_bounds.push(degree_bound);
+                let mut labels = Vec::new();
+                let mut polynomials = Vec::new();
+                let mut degree_bounds = Vec::new();
 
-                polynomials.push(LabeledPolynomial::new(
-                    label,
-                    rand_poly(supported_degree, None, rng),
-                    Some(degree_bound),
-                    hiding_bound,
-                ));
+                for i in 0..10 {
+                    let label = format!("Test{}", i);
+                    labels.push(label.clone());
+                    let degree_bound = 1usize;
+                    let hiding_bound = Some(1);
+                    degree_bounds.push(degree_bound);
+
+                    polynomials.push(LabeledPolynomial::new(
+                        label,
+                        rand_poly(supported_degree, None, rng),
+                        Some(degree_bound),
+                        hiding_bound,
+                    ));
+                }
+
+                let supported_hiding_bound = polynomials
+                    .iter()
+                    .map(|p| p.hiding_bound().unwrap_or(0))
+                    .max()
+                    .unwrap_or(0);
+                println!("supported degree: {:?}", supported_degree);
+                println!("supported hiding bound: {:?}", supported_hiding_bound);
+                let (ck, vk) = PC::trim(
+                    &pp,
+                    supported_degree,
+                    supported_hiding_bound,
+                    Some(degree_bounds.as_slice()),
+                )?;
+                println!("Trimmed");
+
+                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+                let mut query_set = QuerySet::new();
+                let mut values = Evaluations::new();
+                let point = rand_point(None, rng);
+                for (i, label) in labels.iter().enumerate() {
+                    query_set.insert((label.clone(), (format!("{}", i), point.clone())));
+                    let value = polynomials[i].evaluate(&point);
+                    values.insert((label.clone(), point.clone()), value);
+                }
+                println!("Generated query set");
+
+                let proof = PC::batch_open(
+                    &ck,
+                    &polynomials,
+                    &comms,
+                    &query_set,
+                    &mut (opening_challenge.clone()),
+                    &rands,
+                    Some(rng),
+                )?;
+                let result = PC::batch_check(
+                    &vk,
+                    &comms,
+                    &query_set,
+                    &values,
+                    &proof,
+                    &mut (opening_challenge.clone()),
+                    rng,
+                )?;
+                assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
             }
-
-            let supported_hiding_bound = polynomials
-                .iter()
-                .map(|p| p.hiding_bound().unwrap_or(0))
-                .max()
-                .unwrap_or(0);
-            println!("supported degree: {:?}", supported_degree);
-            println!("supported hiding bound: {:?}", supported_hiding_bound);
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                supported_hiding_bound,
-                Some(degree_bounds.as_slice()),
-            )?;
-            println!("Trimmed");
-
-            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
-
-            let mut query_set = QuerySet::new();
-            let mut values = Evaluations::new();
-            let point = rand_point(None, rng);
-            for (i, label) in labels.iter().enumerate() {
-                query_set.insert((label.clone(), (format!("{}", i), point.clone())));
-                let value = polynomials[i].evaluate(&point);
-                values.insert((label.clone(), point.clone()), value);
-            }
-            println!("Generated query set");
-
-            let proof = PC::batch_open(
-                &ck,
-                &polynomials,
-                &comms,
-                &query_set,
-                &mut opening_challenge(),
-                &rands,
-                Some(rng),
-            )?;
-            let result = PC::batch_check(
-                &vk,
-                &comms,
-                &query_set,
-                &values,
-                &proof,
-                &mut opening_challenge(),
-                rng,
-            )?;
-            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
+
         Ok(())
     }
 
@@ -660,122 +668,129 @@ pub mod tests {
             num_equations: _,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         } = info;
 
-        let rng = &mut test_rng();
-        // If testing multivariate polynomials, make the max degree lower
-        let max_degree = match num_vars {
-            Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
-            None => max_degree.unwrap_or(Uniform::from(2..=64).sample(rng)),
-        };
-        let pp = PC::setup(max_degree, num_vars, rng)?;
+        let opening_challenges = vec![
+            ChallengeGenerator::new_multivariate(sponge()),
+            ChallengeGenerator::new_univariate(&mut sponge()),
+        ];
 
-        for _ in 0..num_iters {
-            let supported_degree =
-                supported_degree.unwrap_or(Uniform::from(1..=max_degree).sample(rng));
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
-            let mut polynomials: Vec<LabeledPolynomial<F, P>> = Vec::new();
-            let mut degree_bounds = if enforce_degree_bounds {
-                Some(Vec::new())
-            } else {
-                None
+        for opening_challenge in opening_challenges {
+            let rng = &mut test_rng();
+            // If testing multivariate polynomials, make the max degree lower
+            let max_degree = match num_vars {
+                Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
+                None => max_degree.unwrap_or(Uniform::from(2..=64).sample(rng)),
             };
+            let pp = PC::setup(max_degree, num_vars, rng)?;
 
-            let mut labels = Vec::new();
-            println!("Sampled supported degree");
-
-            // Generate polynomials
-            let num_points_in_query_set = Uniform::from(1..=max_num_queries).sample(rng);
-            for i in 0..num_polynomials {
-                let label = format!("Test{}", i);
-                labels.push(label.clone());
-                let degree = Uniform::from(1..=supported_degree).sample(rng);
-                let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
-                    let range = Uniform::from(degree..=supported_degree);
-                    let degree_bound = range.sample(rng);
-                    degree_bounds.push(degree_bound);
-                    Some(degree_bound)
+            for _ in 0..num_iters {
+                let supported_degree =
+                    supported_degree.unwrap_or(Uniform::from(1..=max_degree).sample(rng));
+                assert!(
+                    max_degree >= supported_degree,
+                    "max_degree < supported_degree"
+                );
+                let mut polynomials: Vec<LabeledPolynomial<F, P>> = Vec::new();
+                let mut degree_bounds = if enforce_degree_bounds {
+                    Some(Vec::new())
                 } else {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set >= degree {
-                    Some(degree)
-                } else {
-                    Some(num_points_in_query_set)
-                };
+                let mut labels = Vec::new();
+                println!("Sampled supported degree");
 
-                polynomials.push(LabeledPolynomial::new(
-                    label,
-                    rand_poly(degree, num_vars, rng).into(),
-                    degree_bound,
-                    hiding_bound,
-                ))
-            }
-            let supported_hiding_bound = polynomials
-                .iter()
-                .map(|p| p.hiding_bound().unwrap_or(0))
-                .max()
-                .unwrap_or(0);
-            println!("supported degree: {:?}", supported_degree);
-            println!("supported hiding bound: {:?}", supported_hiding_bound);
-            println!("num_points_in_query_set: {:?}", num_points_in_query_set);
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                supported_hiding_bound,
-                degree_bounds.as_ref().map(|s| s.as_slice()),
-            )?;
-            println!("Trimmed");
+                // Generate polynomials
+                let num_points_in_query_set = Uniform::from(1..=max_num_queries).sample(rng);
+                for i in 0..num_polynomials {
+                    let label = format!("Test{}", i);
+                    labels.push(label.clone());
+                    let degree = Uniform::from(1..=supported_degree).sample(rng);
+                    let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
+                        let range = Uniform::from(degree..=supported_degree);
+                        let degree_bound = range.sample(rng);
+                        degree_bounds.push(degree_bound);
+                        Some(degree_bound)
+                    } else {
+                        None
+                    };
 
-            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+                    let hiding_bound = if num_points_in_query_set >= degree {
+                        Some(degree)
+                    } else {
+                        Some(num_points_in_query_set)
+                    };
 
-            // Construct query set
-            let mut query_set = QuerySet::new();
-            let mut values = Evaluations::new();
-            for _ in 0..num_points_in_query_set {
-                let point = rand_point(num_vars, rng);
-                for (i, label) in labels.iter().enumerate() {
-                    query_set.insert((label.clone(), (format!("{}", i), point.clone())));
-                    let value = polynomials[i].evaluate(&point);
-                    values.insert((label.clone(), point.clone()), value);
+                    polynomials.push(LabeledPolynomial::new(
+                        label,
+                        rand_poly(degree, num_vars, rng).into(),
+                        degree_bound,
+                        hiding_bound,
+                    ))
                 }
-            }
-            println!("Generated query set");
+                let supported_hiding_bound = polynomials
+                    .iter()
+                    .map(|p| p.hiding_bound().unwrap_or(0))
+                    .max()
+                    .unwrap_or(0);
+                println!("supported degree: {:?}", supported_degree);
+                println!("supported hiding bound: {:?}", supported_hiding_bound);
+                println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+                let (ck, vk) = PC::trim(
+                    &pp,
+                    supported_degree,
+                    supported_hiding_bound,
+                    degree_bounds.as_ref().map(|s| s.as_slice()),
+                )?;
+                println!("Trimmed");
 
-            let proof = PC::batch_open(
-                &ck,
-                &polynomials,
-                &comms,
-                &query_set,
-                &mut opening_challenge(),
-                &rands,
-                Some(rng),
-            )?;
-            let result = PC::batch_check(
-                &vk,
-                &comms,
-                &query_set,
-                &values,
-                &proof,
-                &mut opening_challenge(),
-                rng,
-            )?;
-            if !result {
-                println!(
-                    "Failed with {} polynomials, num_points_in_query_set: {:?}",
-                    num_polynomials, num_points_in_query_set
-                );
-                println!("Degree of polynomials:",);
-                for poly in polynomials {
-                    println!("Degree: {:?}", poly.degree());
+                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+                // Construct query set
+                let mut query_set = QuerySet::new();
+                let mut values = Evaluations::new();
+                for _ in 0..num_points_in_query_set {
+                    let point = rand_point(num_vars, rng);
+                    for (i, label) in labels.iter().enumerate() {
+                        query_set.insert((label.clone(), (format!("{}", i), point.clone())));
+                        let value = polynomials[i].evaluate(&point);
+                        values.insert((label.clone(), point.clone()), value);
+                    }
                 }
+                println!("Generated query set");
+
+                let proof = PC::batch_open(
+                    &ck,
+                    &polynomials,
+                    &comms,
+                    &query_set,
+                    &mut (opening_challenge.clone()),
+                    &rands,
+                    Some(rng),
+                )?;
+                let result = PC::batch_check(
+                    &vk,
+                    &comms,
+                    &query_set,
+                    &values,
+                    &proof,
+                    &mut (opening_challenge.clone()),
+                    rng,
+                )?;
+                if !result {
+                    println!(
+                        "Failed with {} polynomials, num_points_in_query_set: {:?}",
+                        num_polynomials, num_points_in_query_set
+                    );
+                    println!("Degree of polynomials:",);
+                    for poly in polynomials {
+                        println!("Degree: {:?}", poly.degree());
+                    }
+                }
+                assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
             }
-            assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
         }
         Ok(())
     }
@@ -798,162 +813,169 @@ pub mod tests {
             num_equations,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         } = info;
 
-        let rng = &mut test_rng();
-        // If testing multivariate polynomials, make the max degree lower
-        let max_degree = match num_vars {
-            Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
-            None => max_degree.unwrap_or(Uniform::from(2..=64).sample(rng)),
-        };
-        let pp = PC::setup(max_degree, num_vars, rng)?;
+        let opening_challenges = vec![
+            ChallengeGenerator::new_multivariate(sponge()),
+            ChallengeGenerator::new_univariate(&mut sponge()),
+        ];
 
-        for _ in 0..num_iters {
-            let supported_degree =
-                supported_degree.unwrap_or(Uniform::from(1..=max_degree).sample(rng));
-            assert!(
-                max_degree >= supported_degree,
-                "max_degree < supported_degree"
-            );
-            let mut polynomials = Vec::new();
-            let mut degree_bounds = if enforce_degree_bounds {
-                Some(Vec::new())
-            } else {
-                None
+        for opening_challenge in opening_challenges {
+            let rng = &mut test_rng();
+            // If testing multivariate polynomials, make the max degree lower
+            let max_degree = match num_vars {
+                Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
+                None => max_degree.unwrap_or(Uniform::from(2..=64).sample(rng)),
             };
+            let pp = PC::setup(max_degree, num_vars, rng)?;
 
-            let mut labels = Vec::new();
-            println!("Sampled supported degree");
-
-            // Generate polynomials
-            let num_points_in_query_set = Uniform::from(1..=max_num_queries).sample(rng);
-            for i in 0..num_polynomials {
-                let label = format!("Test{}", i);
-                labels.push(label.clone());
-                let degree = Uniform::from(1..=supported_degree).sample(rng);
-                let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
-                    if rng.gen() {
-                        let range = Uniform::from(degree..=supported_degree);
-                        let degree_bound = range.sample(rng);
-                        degree_bounds.push(degree_bound);
-                        Some(degree_bound)
-                    } else {
-                        None
-                    }
+            for _ in 0..num_iters {
+                let supported_degree =
+                    supported_degree.unwrap_or(Uniform::from(1..=max_degree).sample(rng));
+                assert!(
+                    max_degree >= supported_degree,
+                    "max_degree < supported_degree"
+                );
+                let mut polynomials = Vec::new();
+                let mut degree_bounds = if enforce_degree_bounds {
+                    Some(Vec::new())
                 } else {
                     None
                 };
 
-                let hiding_bound = if num_points_in_query_set >= degree {
-                    Some(degree)
-                } else {
-                    Some(num_points_in_query_set)
-                };
-                println!("Hiding bound: {:?}", hiding_bound);
+                let mut labels = Vec::new();
+                println!("Sampled supported degree");
 
-                polynomials.push(LabeledPolynomial::new(
-                    label,
-                    rand_poly(degree, num_vars, rng),
-                    degree_bound,
-                    hiding_bound,
-                ))
-            }
-            println!("supported degree: {:?}", supported_degree);
-            println!("num_points_in_query_set: {:?}", num_points_in_query_set);
-            println!("{:?}", degree_bounds);
-            println!("{}", num_polynomials);
-            println!("{}", enforce_degree_bounds);
-
-            let (ck, vk) = PC::trim(
-                &pp,
-                supported_degree,
-                supported_degree,
-                degree_bounds.as_ref().map(|s| s.as_slice()),
-            )?;
-            println!("Trimmed");
-
-            let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
-
-            // Let's construct our equations
-            let mut linear_combinations = Vec::new();
-            let mut query_set = QuerySet::new();
-            let mut values = Evaluations::new();
-            for i in 0..num_points_in_query_set {
-                let point = rand_point(num_vars, rng);
-                for j in 0..num_equations.unwrap() {
-                    let label = format!("query {} eqn {}", i, j);
-                    let mut lc = LinearCombination::empty(label.clone());
-
-                    let mut value = F::zero();
-                    let should_have_degree_bounds: bool = rng.gen();
-                    for (k, label) in labels.iter().enumerate() {
-                        if should_have_degree_bounds {
-                            value += &polynomials[k].evaluate(&point);
-                            lc.push((F::one(), label.to_string().into()));
-                            break;
+                // Generate polynomials
+                let num_points_in_query_set = Uniform::from(1..=max_num_queries).sample(rng);
+                for i in 0..num_polynomials {
+                    let label = format!("Test{}", i);
+                    labels.push(label.clone());
+                    let degree = Uniform::from(1..=supported_degree).sample(rng);
+                    let degree_bound = if let Some(degree_bounds) = &mut degree_bounds {
+                        if rng.gen() {
+                            let range = Uniform::from(degree..=supported_degree);
+                            let degree_bound = range.sample(rng);
+                            degree_bounds.push(degree_bound);
+                            Some(degree_bound)
                         } else {
-                            let poly = &polynomials[k];
-                            if poly.degree_bound().is_some() {
-                                continue;
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    let hiding_bound = if num_points_in_query_set >= degree {
+                        Some(degree)
+                    } else {
+                        Some(num_points_in_query_set)
+                    };
+                    println!("Hiding bound: {:?}", hiding_bound);
+
+                    polynomials.push(LabeledPolynomial::new(
+                        label,
+                        rand_poly(degree, num_vars, rng),
+                        degree_bound,
+                        hiding_bound,
+                    ))
+                }
+                println!("supported degree: {:?}", supported_degree);
+                println!("num_points_in_query_set: {:?}", num_points_in_query_set);
+                println!("{:?}", degree_bounds);
+                println!("{}", num_polynomials);
+                println!("{}", enforce_degree_bounds);
+
+                let (ck, vk) = PC::trim(
+                    &pp,
+                    supported_degree,
+                    supported_degree,
+                    degree_bounds.as_ref().map(|s| s.as_slice()),
+                )?;
+                println!("Trimmed");
+
+                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+
+                // Let's construct our equations
+                let mut linear_combinations = Vec::new();
+                let mut query_set = QuerySet::new();
+                let mut values = Evaluations::new();
+                for i in 0..num_points_in_query_set {
+                    let point = rand_point(num_vars, rng);
+                    for j in 0..num_equations.unwrap() {
+                        let label = format!("query {} eqn {}", i, j);
+                        let mut lc = LinearCombination::empty(label.clone());
+
+                        let mut value = F::zero();
+                        let should_have_degree_bounds: bool = rng.gen();
+                        for (k, label) in labels.iter().enumerate() {
+                            if should_have_degree_bounds {
+                                value += &polynomials[k].evaluate(&point);
+                                lc.push((F::one(), label.to_string().into()));
+                                break;
                             } else {
-                                assert!(poly.degree_bound().is_none());
-                                let coeff = F::rand(rng);
-                                value += &(coeff * poly.evaluate(&point));
-                                lc.push((coeff, label.to_string().into()));
+                                let poly = &polynomials[k];
+                                if poly.degree_bound().is_some() {
+                                    continue;
+                                } else {
+                                    assert!(poly.degree_bound().is_none());
+                                    let coeff = F::rand(rng);
+                                    value += &(coeff * poly.evaluate(&point));
+                                    lc.push((coeff, label.to_string().into()));
+                                }
                             }
                         }
-                    }
-                    values.insert((label.clone(), point.clone()), value);
-                    if !lc.is_empty() {
-                        linear_combinations.push(lc);
-                        // Insert query
-                        query_set.insert((label.clone(), (format!("{}", i), point.clone())));
+                        values.insert((label.clone(), point.clone()), value);
+                        if !lc.is_empty() {
+                            linear_combinations.push(lc);
+                            // Insert query
+                            query_set.insert((label.clone(), (format!("{}", i), point.clone())));
+                        }
                     }
                 }
-            }
-            if linear_combinations.is_empty() {
-                continue;
-            }
-            println!("Generated query set");
-            println!("Linear combinations: {:?}", linear_combinations);
+                if linear_combinations.is_empty() {
+                    continue;
+                }
+                println!("Generated query set");
+                println!("Linear combinations: {:?}", linear_combinations);
 
-            let proof = PC::open_combinations(
-                &ck,
-                &linear_combinations,
-                &polynomials,
-                &comms,
-                &query_set,
-                &mut opening_challenge(),
-                &rands,
-                Some(rng),
-            )?;
-            println!("Generated proof");
-            let result = PC::check_combinations(
-                &vk,
-                &linear_combinations,
-                &comms,
-                &query_set,
-                &values,
-                &proof,
-                &mut opening_challenge(),
-                rng,
-            )?;
-            if !result {
-                println!(
-                    "Failed with {} polynomials, num_points_in_query_set: {:?}",
-                    num_polynomials, num_points_in_query_set
-                );
-                println!("Degree of polynomials:",);
-                for poly in polynomials {
-                    println!("Degree: {:?}", poly.degree());
+                let proof = PC::open_combinations(
+                    &ck,
+                    &linear_combinations,
+                    &polynomials,
+                    &comms,
+                    &query_set,
+                    &mut (opening_challenge.clone()),
+                    &rands,
+                    Some(rng),
+                )?;
+                println!("Generated proof");
+                let result = PC::check_combinations(
+                    &vk,
+                    &linear_combinations,
+                    &comms,
+                    &query_set,
+                    &values,
+                    &proof,
+                    &mut (opening_challenge.clone()),
+                    rng,
+                )?;
+                if !result {
+                    println!(
+                        "Failed with {} polynomials, num_points_in_query_set: {:?}",
+                        num_polynomials, num_points_in_query_set
+                    );
+                    println!("Degree of polynomials:",);
+                    for poly in polynomials {
+                        println!("Degree: {:?}", poly.degree());
+                    }
                 }
+                assert!(
+                    result,
+                    "proof was incorrect, equations: {:#?}",
+                    linear_combinations
+                );
             }
-            assert!(
-                result,
-                "proof was incorrect, equations: {:#?}",
-                linear_combinations
-            );
         }
         Ok(())
     }
@@ -962,7 +984,7 @@ pub mod tests {
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -981,7 +1003,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -989,7 +1011,7 @@ pub mod tests {
     pub fn linear_poly_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1008,7 +1030,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1016,7 +1038,7 @@ pub mod tests {
     pub fn single_poly_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1035,7 +1057,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1043,7 +1065,7 @@ pub mod tests {
     pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1062,7 +1084,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1070,7 +1092,7 @@ pub mod tests {
     pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1089,7 +1111,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1097,7 +1119,7 @@ pub mod tests {
     pub fn two_polys_degree_bound_single_query_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1116,7 +1138,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1125,7 +1147,7 @@ pub mod tests {
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1144,7 +1166,7 @@ pub mod tests {
             num_equations: None,
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         test_template::<F, P, PC, S>(info)
     }
@@ -1153,7 +1175,7 @@ pub mod tests {
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1172,7 +1194,7 @@ pub mod tests {
             num_equations: Some(10),
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         equation_test_template::<F, P, PC, S>(info)
     }
@@ -1181,7 +1203,7 @@ pub mod tests {
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1200,7 +1222,7 @@ pub mod tests {
             num_equations: Some(1),
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         equation_test_template::<F, P, PC, S>(info)
     }
@@ -1209,7 +1231,7 @@ pub mod tests {
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1228,7 +1250,7 @@ pub mod tests {
             num_equations: Some(2),
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         equation_test_template::<F, P, PC, S>(info)
     }
@@ -1236,7 +1258,7 @@ pub mod tests {
     pub fn two_equation_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
         rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
-        opening_challenge: fn() -> ChallengeGenerator<F, S>,
+        sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1255,16 +1277,13 @@ pub mod tests {
             num_equations: Some(2),
             rand_poly,
             rand_point,
-            opening_challenge,
+            sponge,
         };
         equation_test_template::<F, P, PC, S>(info)
     }
 
-    pub(crate) fn multivariate_challenge_generator_for_test<F: PrimeField>(
-    ) -> ChallengeGenerator<F, PoseidonSponge<F>> {
-        let param = poseidon_parameters_for_test();
-        let sponge = PoseidonSponge::new(&param);
-        ChallengeGenerator::new_multivariate(sponge)
+    pub(crate) fn poseidon_sponge_for_test<F: PrimeField>() -> PoseidonSponge<F> {
+        PoseidonSponge::new(&poseidon_parameters_for_test())
     }
 
     /// Generate default parameters for alpha = 17, state-size = 8

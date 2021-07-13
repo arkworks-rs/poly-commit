@@ -1,7 +1,10 @@
 use ark_ff::PrimeField;
 use ark_sponge::CryptographicSponge;
 
-/// Challenge Generator (todo doc)
+/// `ChallengeGenerator` generates opening challenges using multivariate or univariate strategy.
+/// For multivariate strategy, each challenge is freshly squeezed from a sponge.
+/// For univariate strategy, each challenge is a power of one squeezed element from sponge.
+///
 /// Note that mutable reference cannot be cloned.
 #[derive(Clone)]
 pub enum ChallengeGenerator<F: PrimeField, S: CryptographicSponge> {
@@ -56,7 +59,7 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     /// Returns the sponge state if `self` is multivariate.
     ///
     /// ## Panics
-    /// This function will panic is `self` is univariate.
+    /// This function will panic if `self` is univariate.
     pub fn into_sponge(self) -> S {
         match self {
             Self::Multivariate(s) => s,
