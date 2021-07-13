@@ -219,7 +219,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rands: impl IntoIterator<Item = &'a PC::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, P, PC, S>, Error>
+    ) -> Result<BatchLCProof<E::Fr, PC::BatchProof>, Error>
     where
         P: 'a + Polynomial<E::Fr, Point = D>,
         D: Debug + Clone + Hash + Ord + Sync,
@@ -303,11 +303,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
             rng,
         )?;
 
-        Ok(BatchLCProof {
-            proof,
-            evals: None,
-            _sponge: core::marker::PhantomData,
-        })
+        Ok(BatchLCProof { proof, evals: None })
     }
 
     fn check_combinations<'a, R, P, D, PC>(
@@ -316,7 +312,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, P, PC, S>,
+        proof: &BatchLCProof<E::Fr, PC::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rng: &mut R,
     ) -> Result<bool, Error>

@@ -658,14 +658,14 @@ where
 
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, P, Self, S>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, Self::BatchProof>, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
@@ -673,7 +673,7 @@ where
     {
         Marlin::open_combinations(
             ck,
-            lc_s,
+            linear_combinations,
             polynomials,
             commitments,
             query_set,
@@ -687,11 +687,11 @@ where
     /// committed in `labeled_commitments`.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, P, Self, S>,
+        eqn_query_set: &QuerySet<P::Point>,
+        eqn_evaluations: &Evaluations<P::Point, E::Fr>,
+        proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
@@ -700,10 +700,10 @@ where
     {
         Marlin::check_combinations(
             vk,
-            lc_s,
+            linear_combinations,
             commitments,
-            query_set,
-            evaluations,
+            eqn_query_set,
+            eqn_evaluations,
             proof,
             opening_challenges,
             rng,

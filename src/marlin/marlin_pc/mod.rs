@@ -408,7 +408,7 @@ where
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, P, Self, S>, Self::Error>
+    ) -> Result<BatchLCProof<E::Fr, Self::BatchProof>, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
@@ -434,7 +434,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<E::Fr, P::Point>,
-        proof: &BatchLCProof<E::Fr, P, Self, S>,
+        proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>

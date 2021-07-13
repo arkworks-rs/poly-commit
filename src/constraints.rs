@@ -119,7 +119,7 @@ pub trait PCCheckVar<
     type ProofVar: AllocVar<PC::Proof, ConstraintF> + Clone;
 
     /// An allocated version of `PC::BatchLCProof`.
-    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, P, PC, S>, ConstraintF> + Clone;
+    type BatchLCProofVar: AllocVar<BatchLCProof<PCF, PC::BatchProof>, ConstraintF> + Clone;
 
     /// Add to `ConstraintSystemRef<ConstraintF>` new constraints that check that `proof_i` is a valid evaluation
     /// proof at `point_i` for the polynomial in `commitment_i`.

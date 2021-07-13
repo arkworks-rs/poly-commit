@@ -110,7 +110,6 @@ pub mod multilinear_pc;
 
 use crate::challenge::ChallengeGenerator;
 use ark_sponge::CryptographicSponge;
-use ark_std::marker::PhantomData;
 /// Multivariate polynomial commitment based on the construction in
 /// [[PST13]][pst] with batching and (optional) hiding property inspired
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
@@ -307,7 +306,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         opening_challenges: &mut ChallengeGenerator<F, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<F, P, Self, S>, Self::Error>
+    ) -> Result<BatchLCProof<F, Self::BatchProof>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
@@ -330,7 +329,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Ok(BatchLCProof {
             proof,
             evals: Some(poly_evals.values().copied().collect()),
-            _sponge: PhantomData,
         })
     }
 
@@ -341,18 +339,14 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, F>,
-        proof: &BatchLCProof<F, P, Self, S>,
+        proof: &BatchLCProof<F, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<F, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
-        let BatchLCProof {
-            proof,
-            evals,
-            _sponge: _,
-        } = proof;
+        let BatchLCProof { proof, evals } = proof;
 
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
