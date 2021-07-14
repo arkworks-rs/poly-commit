@@ -26,12 +26,26 @@ pub mod marlin_pc;
 pub mod marlin_pst13_pc;
 
 /// Common functionalities between `marlin_pc` and `marlin_pst13_pc`
-struct Marlin<E: PairingEngine, S: CryptographicSponge> {
+struct Marlin<E, S, P, PC>
+where
+    E: PairingEngine,
+    S: CryptographicSponge,
+    P: Polynomial<E::Fr>,
+    PC: PolynomialCommitment<E::Fr, P, S>,
+{
     _engine: core::marker::PhantomData<E>,
     _sponge: core::marker::PhantomData<S>,
+    _poly: core::marker::PhantomData<P>,
+    _pc: core::marker::PhantomData<PC>,
 }
 
-impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
+impl<E, S, P, PC> Marlin<E, S, P, PC>
+where
+    E: PairingEngine,
+    S: CryptographicSponge,
+    P: Polynomial<E::Fr>,
+    PC: PolynomialCommitment<E::Fr, P, S>,
+{
     /// MSM for `commitments` and `coeffs`
     fn combine_commitments<'a>(
         coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a marlin_pc::Commitment<E>)>,
@@ -185,7 +199,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
                 values_to_combine.push(*v_i);
             }
 
-            let (c, v) = Marlin::accumulate_commitments_and_values(
+            let (c, v) = Self::accumulate_commitments_and_values(
                 comms_to_combine,
                 values_to_combine,
                 opening_challenges,
@@ -210,7 +224,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
     /// On input a list of polynomials, linear combinations of those polynomials,
     /// and a query set, `open_combination` outputs a proof of evaluation of
     /// the combinations at the points in the query set.
-    fn open_combinations<'a, P, D, PC>(
+    fn open_combinations<'a, D>(
         ck: &PC::CommitterKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
@@ -306,7 +320,7 @@ impl<E: PairingEngine, S: CryptographicSponge> Marlin<E, S> {
         Ok(BatchLCProof { proof, evals: None })
     }
 
-    fn check_combinations<'a, R, P, D, PC>(
+    fn check_combinations<'a, R, D>(
         vk: &PC::VerifierKey,
         lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,

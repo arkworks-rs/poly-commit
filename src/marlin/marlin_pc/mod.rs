@@ -354,12 +354,13 @@ where
         Self::Commitment: 'a,
     {
         let check_time = start_timer!(|| "Checking evaluations");
-        let (combined_comm, combined_value) = Marlin::accumulate_commitments_and_values(
-            commitments,
-            values,
-            opening_challenges,
-            Some(vk),
-        )?;
+        let (combined_comm, combined_value) =
+            Marlin::<E, S, P, Self>::accumulate_commitments_and_values(
+                commitments,
+                values,
+                opening_challenges,
+                Some(vk),
+            )?;
         let combined_comm = kzg10::Commitment(combined_comm.into());
         let result = kzg10::KZG10::check(&vk.vk, &combined_comm, *point, combined_value, proof)?;
         end_timer!(check_time);
@@ -378,13 +379,14 @@ where
     where
         Self::Commitment: 'a,
     {
-        let (combined_comms, combined_queries, combined_evals) = Marlin::combine_and_normalize(
-            commitments,
-            query_set,
-            values,
-            opening_challenges,
-            Some(vk),
-        )?;
+        let (combined_comms, combined_queries, combined_evals) =
+            Marlin::<E, S, P, Self>::combine_and_normalize(
+                commitments,
+                query_set,
+                values,
+                opening_challenges,
+                Some(vk),
+            )?;
         assert_eq!(proof.len(), combined_queries.len());
         let proof_time = start_timer!(|| "Checking KZG10::Proof");
         let result = kzg10::KZG10::batch_check(
@@ -414,7 +416,7 @@ where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        Marlin::open_combinations(
+        Marlin::<E, S, P, Self>::open_combinations(
             ck,
             lc_s,
             polynomials,
@@ -441,7 +443,7 @@ where
     where
         Self::Commitment: 'a,
     {
-        Marlin::check_combinations(
+        Marlin::<E, S, P, Self>::check_combinations(
             vk,
             lc_s,
             commitments,

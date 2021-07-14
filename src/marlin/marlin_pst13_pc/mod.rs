@@ -553,12 +553,13 @@ where
     {
         let check_time = start_timer!(|| "Checking evaluations");
         // Accumulate commitments and values
-        let (combined_comm, combined_value) = Marlin::accumulate_commitments_and_values(
-            commitments,
-            values,
-            opening_challenges,
-            None,
-        )?;
+        let (combined_comm, combined_value) =
+            Marlin::<E, S, P, Self>::accumulate_commitments_and_values(
+                commitments,
+                values,
+                opening_challenges,
+                None,
+            )?;
         // Compute both sides of the pairing equation
         let mut inner = combined_comm.into().into_projective() - &vk.g.mul(combined_value);
         if let Some(random_v) = proof.random_v {
@@ -593,13 +594,14 @@ where
     where
         Self::Commitment: 'a,
     {
-        let (combined_comms, combined_queries, combined_evals) = Marlin::combine_and_normalize(
-            commitments,
-            query_set,
-            values,
-            opening_challenges,
-            None,
-        )?;
+        let (combined_comms, combined_queries, combined_evals) =
+            Marlin::<E, S, P, Self>::combine_and_normalize(
+                commitments,
+                query_set,
+                values,
+                opening_challenges,
+                None,
+            )?;
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", combined_comms.len()));
         let g = vk.g.into_projective();
@@ -671,7 +673,7 @@ where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        Marlin::open_combinations(
+        Marlin::<E, S, P, Self>::open_combinations(
             ck,
             linear_combinations,
             polynomials,
@@ -698,7 +700,7 @@ where
     where
         Self::Commitment: 'a,
     {
-        Marlin::check_combinations(
+        Marlin::<E, S, P, Self>::check_combinations(
             vk,
             linear_combinations,
             commitments,
