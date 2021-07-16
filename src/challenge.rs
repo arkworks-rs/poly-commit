@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-use ark_sponge::CryptographicSponge;
+use ark_sponge::{CryptographicSponge, FieldElementSize};
 
 /// `ChallengeGenerator` generates opening challenges using multivariate or univariate strategy.
 /// For multivariate strategy, each challenge is freshly squeezed from a sponge.
@@ -9,7 +9,7 @@ use ark_sponge::CryptographicSponge;
 #[derive(Clone)]
 pub enum ChallengeGenerator<F: PrimeField, S: CryptographicSponge> {
     /// Each challenge is freshly squeezed from a sponge.
-    Multivariate(S),
+    Multivariate(S, FieldElementSize),
     /// Each challenge is a power of one squeezed element from sponge.
     ///
     /// `Univariate(generator, next_element)`
@@ -20,7 +20,13 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     /// Returns a challenge generator with multivariate strategy. Each challenge is freshly squeezed
     /// from a sponge.
     pub fn new_multivariate(sponge: S) -> Self {
-        Self::Multivariate(sponge)
+        Self::new_multivariate_of_size(sponge, FieldElementSize::Full)
+    }
+
+    /// Returns a challenge generator with multivariate strategy.Each challenge is freshly squeezed
+    /// from a sponge and has `size` bits.
+    pub fn new_multivariate_of_size(sponge: S, size: FieldElementSize) -> Self {
+        Self::Multivariate(sponge, size)
     }
 
     /// Returns a challenge generator with univariate strategy. Each challenge is a power of one
@@ -33,25 +39,19 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     /// Returns the next challenge generated.
     pub fn next_challenge(&mut self) -> F {
         match self {
-            Self::Multivariate(s) => s.squeeze_field_elements(1)[0],
+            // multivariate (full)
+            Self::Multivariate(sponge, FieldElementSize::Full) => {
+                sponge.squeeze_field_elements(1)[0]
+            }
+            // multivariate (truncated)
+            Self::Multivariate(sponge, size) => {
+                sponge.squeeze_field_elements_with_sizes(&[*size])[0]
+            }
+            // univariate
             Self::Univariate(gen, next) => {
                 let result = next.clone();
                 *next *= *gen;
                 result
-            }
-        }
-    }
-
-    /// Returns the next challenge generated where next challenge has `size` bits. Only works for
-    /// multivariate generator.
-    ///
-    /// ## Panics
-    /// This function will panic if `self` is univariate.
-    pub fn next_challenge_of_size(&mut self, size: ark_sponge::FieldElementSize) -> F {
-        match self {
-            Self::Multivariate(s) => s.squeeze_field_elements_with_sizes(&[size])[0],
-            _ => {
-                panic!("`next_challenge_of_size` only supports multivariate generator.")
             }
         }
     }
@@ -62,7 +62,7 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     /// This function will panic if `self` is univariate.
     pub fn into_sponge(self) -> S {
         match self {
-            Self::Multivariate(s) => s,
+            Self::Multivariate(s, _) => s,
             _ => panic!("only multivariate generator can be converted to sponge."),
         }
     }
