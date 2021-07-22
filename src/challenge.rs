@@ -23,7 +23,7 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
         Self::new_multivariate_of_size(sponge, FieldElementSize::Full)
     }
 
-    /// Returns a challenge generator with multivariate strategy.Each challenge is freshly squeezed
+    /// Returns a challenge generator with multivariate strategy. Each challenge is freshly squeezed
     /// from a sponge and has `size` bits.
     pub fn new_multivariate_of_size(sponge: S, size: FieldElementSize) -> Self {
         Self::Multivariate(sponge, size)
