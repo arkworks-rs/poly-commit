@@ -21,6 +21,8 @@ pub struct UniversalParams<E: PairingEngine> {
     pub h: E::G2Affine,
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
+    /// Group elements of the form `{ \beta^i H }`, where `i` ranges from 0 to `degree`.
+    pub powers_of_h: Vec<E::G2Affine>,
     /// Group elements of the form `{ \beta^i G2 }`, where `i` ranges from `0` to `-degree`.
     pub neg_powers_of_h: BTreeMap<usize, E::G2Affine>,
     /// The generator of G2, prepared for use in pairings.
@@ -95,6 +97,7 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
             powers_of_gamma_g,
             h,
             beta_h,
+            powers_of_h: vec![],
             neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
@@ -118,6 +121,7 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
             powers_of_gamma_g,
             h,
             beta_h,
+            powers_of_h: vec![],
             neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
@@ -139,6 +143,7 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
             powers_of_gamma_g,
             h,
             beta_h,
+            powers_of_h: vec![],
             neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
@@ -555,5 +560,38 @@ impl<E: PairingEngine> ToBytes for Proof<E> {
             .as_ref()
             .unwrap_or(&E::Fr::zero())
             .write(&mut writer)
+    }
+}
+
+/// Opening proofs of a commitment on a large domain
+pub struct DomainProof<E: PairingEngine> {
+    /// This is a vector of commitments to the witness polynomials
+    /// over a domain 1, omega, omega^2, ..., omega^{n-1}
+    /// where omega is a primitive n'th root of unity
+    pub w: Vec<E::G1Projective>,
+    /// Scale factor whose multiplication is deferred until the proofs are combined
+    pub scale: E::Fr,
+}
+
+impl<E: PairingEngine> DomainProof<E> {
+    /// Combine opening proofs onto a subset of the domain
+    /// represented by the SubproductDomain s
+    pub fn combine_at_domain(
+        &self,
+        start: usize, // Domain is omega^{start}, ..., omega^{end-1}
+        end: usize,
+        s: &super::subproductdomain::SubproductDomain<E::Fr>, // SubproductDomain of the domain
+    ) -> Proof<E> {
+        let lagrange_coeff = s.inverse_lagrange_coefficients();
+        let mut total = E::G1Projective::zero();
+        for (c_i, point) in lagrange_coeff.iter().zip(self.w[start..end].iter()) {
+            total += point.into_affine().mul::<E::Fr>(c_i.inverse().unwrap());
+        }
+        Proof {
+            w: total.into(),
+            // NOTE: if the ifft had not multiplied by domain_size_inv
+            //w: total.into_affine().mul::<E::Fr>(self.scale).into(),
+            random_v: None,
+        }
     }
 }

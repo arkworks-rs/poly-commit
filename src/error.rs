@@ -93,6 +93,9 @@ pub enum Error {
         /// Index of the offending polynomial.
         label: String,
     },
+
+    /// Attempt to `open_amortized` on too large a domain
+    AmortizedOpeningTooLarge(usize),
 }
 
 impl core::fmt::Display for Error {
@@ -179,6 +182,8 @@ impl core::fmt::Display for Error {
                 support up to degree ({:?})", label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
+            Error::AmortizedOpeningTooLarge(s) => write!(f, "tried to open_amortized on too large domain of size {:?}", s),
+
         }
     }
 }
