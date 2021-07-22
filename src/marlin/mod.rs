@@ -125,7 +125,7 @@ where
             combined_value += &(value * &challenge_i);
 
             if let Some(degree_bound) = degree_bound {
-                let challenge_i_1 = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+                let challenge_i_1 = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
 
                 let shifted_comm = commitment
                     .shifted_comm
