@@ -56,10 +56,7 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
         }
     }
 
-    /// Returns the sponge state if `self` is multivariate.
-    ///
-    /// ## Panics
-    /// This function will panic if `self` is univariate.
+    /// Returns the sponge state if `self` is multivariate. Returns `None` otherwise.
     pub fn into_sponge(self) -> Option<S> {
         match self {
             Self::Multivariate(s, _) => Some(s),
