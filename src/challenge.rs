@@ -60,10 +60,10 @@ impl<F: PrimeField, S: CryptographicSponge> ChallengeGenerator<F, S> {
     ///
     /// ## Panics
     /// This function will panic if `self` is univariate.
-    pub fn into_sponge(self) -> S {
+    pub fn into_sponge(self) -> Option<S> {
         match self {
-            Self::Multivariate(s, _) => s,
-            _ => panic!("only multivariate generator can be converted to sponge."),
+            Self::Multivariate(s, _) => Some(s),
+            _ => None,
         }
     }
 }
