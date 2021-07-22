@@ -1,4 +1,4 @@
-use crate::{kzg10, PCCommitterKey};
+use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -50,7 +50,7 @@ where
     ) {
         let acc_time = start_timer!(|| "Accumulating elements");
 
-        let mut curr_challenge = opening_challenges.next_challenge();
+        let mut curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
         // Keeps track of running combination of values
         let mut combined_values = E::Fr::zero();
@@ -73,7 +73,7 @@ where
             *combined_comms
                 .entry(degree_bound)
                 .or_insert(E::G1Projective::zero()) += &comm_with_challenge;
-            curr_challenge = opening_challenges.next_challenge();
+            curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
@@ -358,7 +358,7 @@ where
         let mut combined_polynomial = P::zero();
         let mut combined_rand = kzg10::Randomness::empty();
 
-        let mut curr_challenge = opening_challenges.next_challenge();
+        let mut curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
         for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -375,7 +375,7 @@ where
 
             combined_polynomial += (curr_challenge, polynomial.polynomial());
             combined_rand += (curr_challenge, rand);
-            curr_challenge = opening_challenges.next_challenge();
+            curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
         let proof_time = start_timer!(|| "Creating proof for polynomials");

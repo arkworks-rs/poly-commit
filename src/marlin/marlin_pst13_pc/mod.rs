@@ -1,6 +1,7 @@
 use crate::{
     kzg10,
     marlin::{marlin_pc, Marlin},
+    CHALLENGE_SIZE,
 };
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -463,7 +464,7 @@ where
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges.next_challenge();
+            let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, rand);

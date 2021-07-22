@@ -1,4 +1,4 @@
-use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
+use crate::{BTreeMap, BTreeSet, String, ToString, Vec, CHALLENGE_SIZE};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
@@ -114,7 +114,7 @@ where
         let mut combined_commitment_proj = G::Projective::zero();
         let mut combined_v = G::ScalarField::zero();
 
-        let mut cur_challenge = opening_challenges.next_challenge();
+        let mut cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
         let labeled_commitments = commitments.into_iter();
         let values = values.into_iter();
@@ -123,7 +123,7 @@ where
             let commitment = labeled_commitment.commitment();
             combined_v += &(cur_challenge * &value);
             combined_commitment_proj += &labeled_commitment.commitment().comm.mul(cur_challenge);
-            cur_challenge = opening_challenges.next_challenge();
+            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             let degree_bound = labeled_commitment.degree_bound();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
@@ -134,7 +134,7 @@ where
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
             }
 
-            cur_challenge = opening_challenges.next_challenge();
+            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
         let mut combined_commitment = combined_commitment_proj.into_affine();
@@ -487,7 +487,7 @@ where
 
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
 
-        let mut cur_challenge = opening_challenges.next_challenge();
+        let mut cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
         for (labeled_polynomial, (labeled_commitment, randomness)) in
             polys_iter.zip(comms_iter.zip(rands_iter))
@@ -509,7 +509,7 @@ where
                 combined_rand += &(cur_challenge * &randomness.rand);
             }
 
-            cur_challenge = opening_challenges.next_challenge();
+            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             let has_degree_bound = degree_bound.is_some();
 
@@ -542,7 +542,7 @@ where
                 }
             }
 
-            cur_challenge = opening_challenges.next_challenge();
+            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
         end_timer!(combine_time);

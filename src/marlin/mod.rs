@@ -1,4 +1,4 @@
-use crate::challenge::ChallengeGenerator;
+use crate::{challenge::ChallengeGenerator, CHALLENGE_SIZE};
 use crate::{kzg10, Error};
 use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
@@ -104,11 +104,11 @@ where
             .collect()
     }
 
-    /// Accumulate `commitments` and `values` according to `opening_challenge`.
+    /// Accumulate `commitments` and `values` according to the challenges produces by `challenge_gen`.
     fn accumulate_commitments_and_values<'a>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         values: impl IntoIterator<Item = E::Fr>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        challenge_gen: &mut ChallengeGenerator<E::Fr, S>,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(E::G1Projective, E::Fr), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
@@ -119,13 +119,13 @@ where
             let commitment = labeled_commitment.commitment();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
 
-            let challenge_i = opening_challenges.next_challenge();
+            let challenge_i = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             combined_comm += &commitment.comm.0.mul(challenge_i);
             combined_value += &(value * &challenge_i);
 
             if let Some(degree_bound) = degree_bound {
-                let challenge_i_1 = opening_challenges.next_challenge();
+                let challenge_i_1 = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
                 let shifted_comm = commitment
                     .shifted_comm

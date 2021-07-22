@@ -1,4 +1,4 @@
-use crate::{kzg10, marlin::Marlin, PCCommitterKey};
+use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -282,8 +282,8 @@ where
                 &polynomial,
             )?;
 
-            // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges.next_challenge();
+            // compute next challenges challenge^j and challenge^{j+1}.
+            let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
@@ -299,7 +299,7 @@ where
                         *point,
                         &shifted_rand,
                     )?;
-                let challenge_j_1 = opening_challenges.next_challenge();
+                let challenge_j_1 = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
                 let shifted_witness = shift_polynomial(ck, &witness, degree_bound);
 
