@@ -78,8 +78,8 @@ EUROCRYPT 2020
 Benedikt Bünz, Alessandro Chiesa, [Pratyush Mishra](https://www.github.com/pratyush), Nicholas Spooner     
 TCC 2020
 
-[Signatures of Correct Computation][pst]  
-Charalampos Papamanthou, Elaine Shi, Roberto Tamassia  
+[Signatures of Correct Computation][pst]    
+Charalampos Papamanthou, Elaine Shi, Roberto Tamassia   
 TCC 2013
 
 ## Acknowledgements
