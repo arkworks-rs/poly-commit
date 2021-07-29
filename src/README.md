@@ -64,8 +64,8 @@ The construction is described in the following paper.
 
 [pst]: https://ia.cr.org/2011/587
 
-[Signatures of Correct Computation][pst]  
-Charalampos Papamanthou, Elaine Shi, Roberto Tamassia  
+[Signatures of Correct Computation][pst]    
+Charalampos Papamanthou, Elaine Shi, Roberto Tamassia   
 TCC 2013
 
 [Marlin: Preprocessing zkSNARKs with Universal and Updatable SRS][marlin]     
