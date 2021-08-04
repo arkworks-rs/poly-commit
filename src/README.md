@@ -35,7 +35,7 @@ ASIACRYPT 2010
 
 Polynomial commitment based on the Kate-Zaverucha-Goldberg construction, with degree enforcement and batching taken from Sonic (more precisely, their counterparts in AuroraLight that avoid negative G1 powers). The (optional) hiding property of the commitment scheme follows the approach described in Marlin.
 
-The construction is described in the following paper.
+The construction is described in the following papers.
 
 [sonic]: https://ia.cr/2019/099
 [aurora-light]: https://ia.cr/2019/601
@@ -74,9 +74,8 @@ EUROCRYPT 2020
 
 ## Comparison
 
-### Marlin vs Sonic/AuroraLight variant of the Kate-Zaverucha-Goldberg PC
+### Comparison of `MarlinKZG10` and `SonicKZG10`
 
-We summarize the differences between the first one (MarlinPC) and the second one (SonicPC) as follows.
 
 #### High-level:
 They handle degree bounds differently. 
@@ -87,19 +86,19 @@ SonicPC uses shift powers in G1 and G2 and requires only one commitment to enfor
 
 #### Setup:
 
-SonicPC additionally computes some G2 elements for shift powers: `(1/\beta)^i H`. This results in a longer verifying key, as shift powers in SonicPC are in G2, while shift powers in Marlin are in G1.
+SonicPC additionally computes some G2 elements for shift powers: `(1/\beta)^i H`. This results in a longer verifying key, as shift powers in SonicPC are in G2, while shift powers in Marlin are in G1, and are shared with the "non-shift" powers.
 
 #### Commit:
 
 When there is no degree bound, both are the same.
 
-When there is a degree bound, MarlinPC is more expensive: it needs one more commitment. 
+When there is a degree bound, MarlinPC is more expensive: it needs an additional commitment to commit to the shifted poynomial. 
 
 #### Open: 
 
 When there is no degree bound, both are the same.
 
-When there is a degree bound, MarlinPC is slightly more expensive: it requires more computation on the scalar field.
+When there is a degree bound, MarlinPC is slightly more expensive: it requires more scalar field computations.
 
 #### Check:
 
