@@ -11,7 +11,12 @@ use ark_std::{
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""))]
+#[derivative(
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
+)]
 pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
@@ -221,7 +226,13 @@ impl<'a, E: PairingEngine> CanonicalDeserialize for Powers<'a, E> {
 }
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""))]
+#[derivative(
+    Default(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
+)]
 pub struct VerifierKey<E: PairingEngine> {
     /// The generator of G1.
     pub g: E::G1Affine,
