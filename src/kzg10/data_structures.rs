@@ -11,7 +11,12 @@ use ark_std::{
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Debug(bound = ""))]
+#[derivative(
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
+)]
 pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
@@ -24,10 +29,10 @@ pub struct UniversalParams<E: PairingEngine> {
     /// Group elements of the form `{ \beta^i G2 }`, where `i` ranges from `0` to `-degree`.
     pub neg_powers_of_h: BTreeMap<usize, E::G2Affine>,
     /// The generator of G2, prepared for use in pairings.
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     pub prepared_h: E::G2Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     pub prepared_beta_h: E::G2Prepared,
 }
 
@@ -153,7 +158,8 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
     Default(bound = ""),
     Hash(bound = ""),
     Clone(bound = ""),
-    Debug(bound = "")
+    Debug(bound = ""),
+    PartialEq
 )]
 pub struct Powers<'a, E: PairingEngine> {
     /// Group elements of the form `β^i G`, for different values of `i`.
@@ -169,9 +175,64 @@ impl<E: PairingEngine> Powers<'_, E> {
     }
 }
 
+impl<'a, E: PairingEngine> CanonicalSerialize for Powers<'a, E> {
+    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.powers_of_g.serialize(&mut writer)?;
+        self.powers_of_gamma_g.serialize(&mut writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.powers_of_g.serialized_size() + self.powers_of_gamma_g.serialized_size()
+    }
+
+    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.powers_of_g.serialize_unchecked(&mut writer)?;
+        self.powers_of_gamma_g.serialize_unchecked(&mut writer)
+    }
+
+    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+        self.powers_of_g.serialize_uncompressed(&mut writer)?;
+        self.powers_of_gamma_g.serialize_uncompressed(&mut writer)
+    }
+}
+
+impl<'a, E: PairingEngine> CanonicalDeserialize for Powers<'a, E> {
+    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
+        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
+        Ok(Self {
+            powers_of_g: Cow::Owned(powers_of_g),
+            powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
+        })
+    }
+
+    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
+        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
+        Ok(Self {
+            powers_of_g: Cow::Owned(powers_of_g),
+            powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
+        })
+    }
+
+    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize_uncompressed(&mut reader)?;
+        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_uncompressed(&mut reader)?;
+        Ok(Self {
+            powers_of_g: Cow::Owned(powers_of_g),
+            powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
+        })
+    }
+}
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+#[derivative(
+    Default(bound = ""),
+    Clone(bound = ""),
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = "")
+)]
 pub struct VerifierKey<E: PairingEngine> {
     /// The generator of G1.
     pub g: E::G1Affine,
@@ -182,10 +243,10 @@ pub struct VerifierKey<E: PairingEngine> {
     /// \beta times the above generator of G2.
     pub beta_h: E::G2Affine,
     /// The generator of G2, prepared for use in pairings.
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     pub prepared_h: E::G2Prepared,
     /// \beta times the above generator of G2, prepared for use in pairings.
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore", PartialEq = "ignore")]
     pub prepared_beta_h: E::G2Prepared,
 }
 
