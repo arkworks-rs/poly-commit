@@ -62,7 +62,7 @@ Multivariate polynomial commitment based on the construction in the Papamanthou-
 
 The construction is described in the following paper.
 
-[pst]: https://ia.cr.org/2011/587
+[pst]: https://ia.cr/2011/587
 
 [Signatures of Correct Computation][pst]    
 Charalampos Papamanthou, Elaine Shi, Roberto Tamassia   
