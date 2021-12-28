@@ -54,7 +54,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [sonic]: https://ia.cr/2019/099
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
-[pst]: https://ia.cr.org/2011/587
+[pst]: https://ia.cr/2011/587
 
 ## Reference papers
 
