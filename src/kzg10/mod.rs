@@ -6,7 +6,7 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
-use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
+use ark_ec::msm::{FixedBase, VariableBase};
 use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::UVPolynomial;
@@ -58,21 +58,17 @@ where
             cur *= &beta;
         }
 
-        let window_size = FixedBaseMSM::get_mul_window_size(max_degree + 1);
+        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
 
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
-        let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
-        let powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &powers_of_beta,
-        );
+        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
+        let powers_of_g =
+            FixedBase::msm::<E::G1Projective>(scalar_bits, window_size, &g_table, &powers_of_beta);
         end_timer!(g_time);
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
-        let gamma_g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, gamma_g);
-        let mut powers_of_gamma_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
+        let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
+        let mut powers_of_gamma_g = FixedBase::msm::<E::G1Projective>(
             scalar_bits,
             window_size,
             &gamma_g_table,
@@ -99,8 +95,8 @@ where
                 cur /= &beta;
             }
 
-            let neg_h_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, h);
-            let neg_powers_of_h = FixedBaseMSM::multi_scalar_mul::<E::G2Projective>(
+            let neg_h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
+            let neg_powers_of_h = FixedBase::msm::<E::G2Projective>(
                 scalar_bits,
                 window_size,
                 &neg_h_table,
@@ -156,10 +152,8 @@ where
             skip_leading_zeros_and_convert_to_bigints(polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = VariableBaseMSM::multi_scalar_mul(
-            &powers.powers_of_g[num_leading_zeros..],
-            &plain_coeffs,
-        );
+        let mut commitment =
+            VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
         end_timer!(msm_time);
 
         let mut randomness = Randomness::<E::Fr, P>::empty();
@@ -181,8 +175,7 @@ where
         let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
         let random_commitment =
-            VariableBaseMSM::multi_scalar_mul(&powers.powers_of_gamma_g, random_ints.as_slice())
-                .into_affine();
+            VariableBase::msm(&powers.powers_of_gamma_g, random_ints.as_slice()).into_affine();
         end_timer!(msm_time);
 
         commitment.add_assign_mixed(&random_commitment);
@@ -233,10 +226,7 @@ where
             skip_leading_zeros_and_convert_to_bigints(witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBaseMSM::multi_scalar_mul(
-            &powers.powers_of_g[num_leading_zeros..],
-            &witness_coeffs,
-        );
+        let mut w = VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
         end_timer!(witness_comm_time);
 
         let random_v = if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
@@ -248,10 +238,7 @@ where
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs());
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBaseMSM::multi_scalar_mul(
-                &powers.powers_of_gamma_g,
-                &random_witness_coeffs,
-            );
+            w += &VariableBase::msm(&powers.powers_of_gamma_g, &random_witness_coeffs);
             end_timer!(witness_comm_time);
             Some(blinding_evaluation)
         } else {

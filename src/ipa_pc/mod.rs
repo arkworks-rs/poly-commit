@@ -3,7 +3,7 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
+use ark_ec::{msm::VariableBase, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
@@ -65,7 +65,7 @@ where
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
 
-        let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, &scalars_bigint);
+        let mut comm = VariableBase::msm(comm_key, &scalars_bigint);
 
         if randomizer.is_some() {
             assert!(hiding_generator.is_some());
