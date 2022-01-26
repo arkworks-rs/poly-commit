@@ -1044,23 +1044,31 @@ mod tests {
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
-    use ark_std::rand::rngs::StdRng;
     use blake2::Blake2s;
+    use rand_chacha::ChaCha20Rng;
 
     type UniPoly = DensePoly<Fr>;
     type Sponge = PoseidonSponge<<EdwardsAffine as AffineCurve>::ScalarField>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, Sponge>;
 
-    fn rand_poly<F: PrimeField>(degree: usize, _: Option<usize>, rng: &mut StdRng) -> DensePoly<F> {
+    fn rand_poly<F: PrimeField>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePoly<F> {
         DensePoly::rand(degree, rng)
     }
 
-    fn constant_poly<F: PrimeField>(_: usize, _: Option<usize>, rng: &mut StdRng) -> DensePoly<F> {
+    fn constant_poly<F: PrimeField>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePoly<F> {
         DensePoly::from_coefficients_slice(&[F::rand(rng)])
     }
 
-    fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut StdRng) -> F {
+    fn rand_point<F: PrimeField>(_: Option<usize>, rng: &mut ChaCha20Rng) -> F {
         F::rand(rng)
     }
 

@@ -530,10 +530,10 @@ pub mod tests {
     use ark_sponge::poseidon::{PoseidonParameters, PoseidonSponge};
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
-        rngs::StdRng,
-        Rng,
+        Rng, SeedableRng,
     };
     use ark_std::test_rng;
+    use rand_chacha::ChaCha20Rng;
 
     struct TestInfo<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> {
         num_iters: usize,
@@ -544,14 +544,14 @@ pub mod tests {
         enforce_degree_bounds: bool,
         max_num_queries: usize,
         num_equations: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     }
 
     pub fn bad_degree_bound_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -566,7 +566,7 @@ pub mod tests {
         ];
 
         for challenge_gen in challenge_generators {
-            let rng = &mut test_rng();
+            let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
             let max_degree = 100;
             let pp = PC::setup(max_degree, None, rng)?;
             for _ in 0..10 {
@@ -674,7 +674,7 @@ pub mod tests {
         ];
 
         for challenge_gen in challenge_gens {
-            let rng = &mut test_rng();
+            let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
             // If testing multivariate polynomials, make the max degree lower
             let max_degree = match num_vars {
                 Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
@@ -819,7 +819,7 @@ pub mod tests {
         ];
 
         for challenge_gen in challenge_gens {
-            let rng = &mut test_rng();
+            let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
             // If testing multivariate polynomials, make the max degree lower
             let max_degree = match num_vars {
                 Some(_) => max_degree.unwrap_or(Uniform::from(2..=10).sample(rng)),
@@ -979,8 +979,8 @@ pub mod tests {
 
     pub fn single_poly_test<F, P, PC, S>(
         num_vars: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1006,8 +1006,8 @@ pub mod tests {
     }
 
     pub fn linear_poly_degree_bound_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1033,8 +1033,8 @@ pub mod tests {
     }
 
     pub fn single_poly_degree_bound_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1060,8 +1060,8 @@ pub mod tests {
     }
 
     pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1087,8 +1087,8 @@ pub mod tests {
     }
 
     pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1114,8 +1114,8 @@ pub mod tests {
     }
 
     pub fn two_polys_degree_bound_single_query_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1142,8 +1142,8 @@ pub mod tests {
 
     pub fn full_end_to_end_test<F, P, PC, S>(
         num_vars: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1170,8 +1170,8 @@ pub mod tests {
 
     pub fn full_end_to_end_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1198,8 +1198,8 @@ pub mod tests {
 
     pub fn single_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1226,8 +1226,8 @@ pub mod tests {
 
     pub fn two_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where
@@ -1253,8 +1253,8 @@ pub mod tests {
     }
 
     pub fn two_equation_degree_bound_test<F, P, PC, S>(
-        rand_poly: fn(usize, Option<usize>, &mut StdRng) -> P,
-        rand_point: fn(Option<usize>, &mut StdRng) -> P::Point,
+        rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
+        rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
         sponge: fn() -> S,
     ) -> Result<(), PC::Error>
     where

@@ -685,7 +685,7 @@ mod tests {
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
-    use ark_std::rand::rngs::StdRng;
+    use rand_chacha::ChaCha20Rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
@@ -699,12 +699,12 @@ mod tests {
     fn rand_poly<E: PairingEngine>(
         degree: usize,
         _: Option<usize>,
-        rng: &mut StdRng,
+        rng: &mut ChaCha20Rng,
     ) -> DensePoly<E::Fr> {
         DensePoly::<E::Fr>::rand(degree, rng)
     }
 
-    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut StdRng) -> E::Fr {
+    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::Fr {
         E::Fr::rand(rng)
     }
 
