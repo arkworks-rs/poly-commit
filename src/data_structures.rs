@@ -108,6 +108,7 @@ pub struct BatchLCProof<F: PrimeField, T: Clone + CanonicalSerialize + Canonical
     /// Evaluation proof.
     pub proof: T,
     /// Evaluations required to verify the proof.
+    // TODO `Option<Vec<_>>` should be `Vec<_>`
     pub evals: Option<Vec<F>>,
 }
 

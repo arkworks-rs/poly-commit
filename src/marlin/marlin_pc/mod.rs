@@ -6,6 +6,7 @@ use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
 use ark_poly::UVPolynomial;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
 
@@ -32,6 +33,7 @@ pub use constraints::*;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
+#[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 pub struct MarlinKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
