@@ -15,6 +15,7 @@ use ark_nonnative_field::{NonNativeFieldMulResultVar, NonNativeFieldVar};
 use ark_poly::UVPolynomial;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_sponge::CryptographicSponge;
 use ark_std::{borrow::Borrow, convert::TryInto, marker::PhantomData, ops::Div, vec};
 
 type E2Fr<E> = <<E as CurveCycle>::E2 as AffineCurve>::ScalarField;
@@ -804,6 +805,7 @@ pub struct BatchLCProofVar<
     E: PairingFriendlyCycle,
     P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
     PG: PairingVar<E::Engine2, E2Fq<E>>,
+    S: CryptographicSponge,
 > where
     E2Fq<E>: PrimeField,
 {
@@ -813,16 +815,19 @@ pub struct BatchLCProofVar<
     pub evals: Option<Vec<NonNativeFieldVar<E2Fr<E>, E2Fq<E>>>>,
     #[doc(hidden)]
     pub polynomial: PhantomData<P>,
+    _sponge: PhantomData<S>,
 }
 
-impl<E, P, PG> AllocVar<BatchLCProof<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>>, E2Fq<E>>
-    for BatchLCProofVar<E, P, PG>
+impl<E, P, PG, S>
+    AllocVar<BatchLCProof<E2Fr<E>, Vec<Proof<<E as PairingFriendlyCycle>::Engine2>>>, E2Fq<E>>
+    for BatchLCProofVar<E, P, PG, S>
 where
     E: PairingFriendlyCycle,
     E2Fq<E>: PrimeField,
     P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<E::Engine2, E2Fq<E>>,
+    S: CryptographicSponge,
 {
     #[tracing::instrument(target = "r1cs", skip(cs, value_gen))]
     fn new_variable<T>(
@@ -831,7 +836,7 @@ where
         mode: AllocationMode,
     ) -> R1CSResult<Self>
     where
-        T: Borrow<BatchLCProof<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>>>,
+        T: Borrow<BatchLCProof<E2Fr<E>, Vec<Proof<<E as PairingFriendlyCycle>::Engine2>>>>,
     {
         value_gen().map(|proof| {
             let ns = cs.into();
@@ -839,8 +844,7 @@ where
 
             let BatchLCProof { proof, evals } = proof.borrow().clone();
 
-            let proofs: Vec<Proof<_>> = proof.to_vec();
-            let proofs: Vec<ProofVar<E, PG>> = proofs
+            let proofs: Vec<ProofVar<E, PG>> = proof
                 .iter()
                 .map(|p| {
                     ProofVar::new_variable(ark_relations::ns!(cs, "proof"), || Ok(p), mode).unwrap()
@@ -869,6 +873,7 @@ where
                 proofs,
                 evals,
                 polynomial: PhantomData,
+                _sponge: PhantomData,
             }
         })
     }
@@ -892,49 +897,53 @@ where
 /// Gadget for the `MarlinKZG10` polynomial commitment verifier.
 #[derive(Derivative)]
 #[derivative(Clone(bound = "E: PairingFriendlyCycle"))]
-pub struct MarlinKZG10Gadget<E, P, PG>
+pub struct MarlinKZG10Gadget<E, P, PG, S>
 where
     E: PairingFriendlyCycle,
     P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
     PG: PairingVar<E::Engine2, E2Fq<E>>,
+    S: CryptographicSponge,
 {
     _cycle_engine: PhantomData<E>,
     _pairing_gadget: PhantomData<PG>,
     _polynomial: PhantomData<P>,
+    _sponge: PhantomData<S>,
 }
 
-impl<E, P, PG> MarlinKZG10Gadget<E, P, PG>
+impl<E, P, PG, S> MarlinKZG10Gadget<E, P, PG, S>
 where
     E: PairingFriendlyCycle,
     E2Fq<E>: PrimeField,
     P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<E::Engine2, E2Fq<E>>,
+    S: CryptographicSponge,
 {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     #[tracing::instrument(
         target = "r1cs",
         skip(prepared_verification_key, lc_info, query_set, evaluations, proofs)
     )]
+    // rustfmt bug with generics struct
+    #[rustfmt::skip]
     fn prepared_batch_check_evaluations(
         cs: ConstraintSystemRef<E2Fq<E>>,
         prepared_verification_key: &<Self as PCCheckVar<
             E2Fr<E>,
             P,
-            MarlinKZG10<E::Engine2, P>,
+            MarlinKZG10<E::Engine2, P, S>,
             E2Fq<E>,
+            S,
         >>::PreparedVerifierKeyVar,
-        lc_info: &[(
-            String,
-            Vec<LCItem<E, PG>>,
-        )],
+        lc_info: &[(String, Vec<LCItem<E, PG>>)],
         query_set: &QuerySetVar<E2Fr<E>, E2Fq<E>>,
         evaluations: &EvaluationsVar<E2Fr<E>, E2Fq<E>>,
         proofs: &[<Self as PCCheckVar<
             E2Fr<E>,
             P,
-            MarlinKZG10<E::Engine2, P>,
+            MarlinKZG10<E::Engine2, P, S>,
             E2Fq<E>,
+            S,
         >>::ProofVar],
         opening_challenges: &[NonNativeFieldVar<E2Fr<E>, E2Fq<E>>],
         opening_challenges_bits: &[Vec<Boolean<E2Fq<E>>>],
@@ -944,13 +953,8 @@ where
         let mut batching_rands = batching_rands.to_vec();
         let mut batching_rands_bits = batching_rands_bits.to_vec();
 
-        let commitment_lcs: BTreeMap<
-            String,
-            (
-                String,
-                Vec<LCItem<E, PG>>,
-            ),
-        > = lc_info.iter().map(|c| (c.0.clone(), c.clone())).collect();
+        let commitment_lcs: BTreeMap<String, (String, Vec<LCItem<E, PG>>)> =
+            lc_info.iter().map(|c| (c.0.clone(), c.clone())).collect();
 
         let mut query_to_labels_map = BTreeMap::new();
 
@@ -966,9 +970,7 @@ where
         let mut combined_comms = Vec::new();
         let mut combined_evals = Vec::new();
         for (_, (point, labels)) in query_to_labels_map.into_iter() {
-            let mut comms_to_combine = Vec::<
-                Vec<LCItem<E, PG>>,
-            >::new();
+            let mut comms_to_combine = Vec::<Vec<LCItem<E, PG>>>::new();
             let mut values_to_combine = Vec::new();
             for label in labels.into_iter() {
                 let commitment_lc = commitment_lcs.get(label).unwrap().clone();
@@ -998,7 +1000,12 @@ where
                 opening_challenges_counter += 1;
 
                 for lc_info in commitment_lcs.iter() {
-                    let LCItem::<E, PG> { coeff, degree_bound, comm, negate } = lc_info;
+                    let LCItem::<E, PG> {
+                        coeff,
+                        degree_bound,
+                        comm,
+                        negate,
+                    } = lc_info;
                     let PreparedCommitmentVar { shifted_comm, .. } = comm;
 
                     if coeff.is_none() {
@@ -1189,14 +1196,15 @@ where
     }
 }
 
-impl<E, P, PG> PCCheckVar<E2Fr<E>, P, MarlinKZG10<E::Engine2, P>, E2Fq<E>>
-    for MarlinKZG10Gadget<E, P, PG>
+impl<E, P, PG, S> PCCheckVar<E2Fr<E>, P, MarlinKZG10<E::Engine2, P, S>, E2Fq<E>, S>
+    for MarlinKZG10Gadget<E, P, PG, S>
 where
     E: PairingFriendlyCycle,
     E2Fq<E>: PrimeField,
     P: UVPolynomial<E2Fr<E>, Point = E2Fr<E>>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     PG: PairingVar<E::Engine2, E2Fq<E>>,
+    S: CryptographicSponge,
 {
     type VerifierKeyVar = VerifierKeyVar<E, PG>;
     type PreparedVerifierKeyVar = PreparedVerifierKeyVar<E, PG>;
@@ -1205,7 +1213,7 @@ where
     type LabeledCommitmentVar = LabeledCommitmentVar<E, PG>;
     type PreparedLabeledCommitmentVar = PreparedLabeledCommitmentVar<E, PG>;
     type ProofVar = ProofVar<E, PG>;
-    type BatchLCProofVar = BatchLCProofVar<E, P, PG>;
+    type BatchLCProofVar = BatchLCProofVar<E, P, PG, S>;
 
     #[allow(clippy::type_complexity)]
     #[tracing::instrument(
@@ -1462,11 +1470,11 @@ where
                         LinearCombinationCoeffVar::Var(variable) => Some(variable.clone()),
                     };
 
-                    coeffs_and_comms.push( LCItem {
+                    coeffs_and_comms.push(LCItem {
                         coeff,
                         degree_bound: cur_comm.degree_bound.clone(),
                         comm: cur_comm.prepared_commitment.clone(),
-                        negate
+                        negate,
                     });
                 }
             }
