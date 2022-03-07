@@ -727,7 +727,7 @@ mod tests {
         MVPolynomial,
     };
     use ark_sponge::poseidon::PoseidonSponge;
-    use ark_std::rand::rngs::StdRng;
+    use rand_chacha::ChaCha20Rng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
     type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
@@ -743,12 +743,12 @@ mod tests {
     fn rand_poly<E: PairingEngine>(
         degree: usize,
         num_vars: Option<usize>,
-        rng: &mut StdRng,
+        rng: &mut ChaCha20Rng,
     ) -> SparsePoly<E::Fr, SparseTerm> {
         SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: PairingEngine>(num_vars: Option<usize>, rng: &mut StdRng) -> Vec<E::Fr> {
+    fn rand_point<E: PairingEngine>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::Fr> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {
