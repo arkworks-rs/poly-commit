@@ -66,7 +66,7 @@ where
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_repr());
+                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_bigint());
             }
 
             // Accumulate values in the BTreeMap
@@ -85,7 +85,7 @@ where
 
         if let Some(randomizer) = randomizer {
             witness = proof.w.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(&randomizer.into_repr());
+            adjusted_witness = adjusted_witness.mul(&randomizer.into_bigint());
         }
 
         *combined_witness += &witness;

@@ -62,7 +62,7 @@ where
         randomizer: Option<G::ScalarField>,
     ) -> G::Projective {
         let scalars_bigint = ark_std::cfg_iter!(scalars)
-            .map(|s| s.into_repr())
+            .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
 
         let mut comm = VariableBase::msm(comm_key, &scalars_bigint);
@@ -160,7 +160,7 @@ where
         let h_prime = vk.h.mul(round_challenge);
 
         let mut round_commitment_proj =
-            combined_commitment_proj + &h_prime.mul(&combined_v.into_repr());
+            combined_commitment_proj + &h_prime.mul(&combined_v.into_bigint());
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();

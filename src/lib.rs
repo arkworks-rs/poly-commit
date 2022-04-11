@@ -118,6 +118,14 @@ use ark_sponge::{CryptographicSponge, FieldElementSize};
 /// [marlin]: https://eprint.iacr.org/2019/104
 pub use marlin::marlin_pst13_pc;
 
+/// Streaming polynomial commitment based on the construction in
+/// [[BCHO22, "Gemini"]][gemini] with batching techniques inspired
+/// by [[BDFG20]][bdfg].
+///
+/// [gemini]:
+/// [bdfg]: https://eprint.iacr.org/2020/081.pdf
+pub mod streaming_kzg;
+
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
