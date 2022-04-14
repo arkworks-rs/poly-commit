@@ -281,8 +281,8 @@ fn test_folded_polynomial_tree() {
     let challenges = vec![F::one(); 4];
     let coefficients_stream = coefficients.as_slice();
     let fold_streamer = FoldedPolynomialTree::new(&coefficients_stream, challenges.as_slice());
-    let mut fold_iter = fold_streamer.iter();
-    fold_iter.advance_by(5).unwrap();
+    let fold_init = fold_streamer.iter();
+    let mut fold_iter = fold_init.skip(5);
     assert_eq!(fold_iter.next(), Some((1, two)));
     assert_eq!(fold_iter.last(), Some((4, coefficients.iter().sum())));
 }

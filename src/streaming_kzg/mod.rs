@@ -284,7 +284,7 @@ fn interpolate_poly<E: PairingEngine>(
 }
 
 /// The polynomial in \\(\FF\\) that vanishes in all the points `points`.
-fn vanishing_polynomial<F: Field>(points: &[F]) -> DensePolynomial<F> {
+pub(crate) fn vanishing_polynomial<F: Field>(points: &[F]) -> DensePolynomial<F> {
     let one = DensePolynomial::from_coefficients_vec(vec![F::one()]);
     points
         .iter()
@@ -293,13 +293,16 @@ fn vanishing_polynomial<F: Field>(points: &[F]) -> DensePolynomial<F> {
 }
 
 /// Return ceil(x / y).
-fn ceil_div(x: usize, y: usize) -> usize {
+pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
     // XXX. warning: this expression can overflow.
     (x + y - 1) / y
 }
 
 /// Compute a linear combination of the polynomials `polynomials` with the given challenges.
-fn linear_combination<F: Field, PP>(polynomials: &[PP], challenges: &[F]) -> Option<Vec<F>>
+pub(crate) fn linear_combination<F: Field, PP>(
+    polynomials: &[PP],
+    challenges: &[F],
+) -> Option<Vec<F>>
 where
     PP: Borrow<Vec<F>>,
 {
@@ -313,7 +316,7 @@ where
 }
 
 /// Return a vector of length `len` containing the consecutive powers of element.
-fn powers<F: Field>(element: F, len: usize) -> Vec<F> {
+pub(crate) fn powers<F: Field>(element: F, len: usize) -> Vec<F> {
     let mut powers = vec![F::one(); len];
     for i in 1..len {
         powers[i] = element * powers[i - 1];
@@ -321,9 +324,32 @@ fn powers<F: Field>(element: F, len: usize) -> Vec<F> {
     powers
 }
 
+/// Polynomial evaluation, assuming that the
+/// coefficients are in little-endian.
+#[inline]
+pub(crate) fn evaluate_le<F>(polynomial: &[F], x: &F) -> F
+where
+    F: Field,
+{
+    evaluate_be(polynomial.iter().rev(), x)
+}
+
+/// Polynomial evaluation, assuming that the
+/// coeffients are in big-endian.
+#[inline]
+pub(crate) fn evaluate_be<I, F>(polynomial: I, x: &F) -> F
+where
+    F: Field,
+    I: IntoIterator,
+    I::Item: Borrow<F>,
+{
+    polynomial
+        .into_iter()
+        .fold(F::zero(), |previous, c| previous * x + c.borrow())
+}
+
 #[test]
 fn test_vanishing_polynomial() {
-    use crate::misc::evaluate_le;
     use ark_bls12_381::Fr as F;
     use ark_ff::Zero;
 

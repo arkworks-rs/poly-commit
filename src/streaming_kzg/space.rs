@@ -252,18 +252,12 @@ where
     }
 }
 
-impl<E, SG> From<&CommitterKey<E>> for CommitterKeyStream<E, Reverse<SG>>
-where
-    E: PairingEngine,
-    SG: Iterable,
-    SG::Iter: DoubleEndedIterator,
+impl<'a, E: PairingEngine> From<&'a CommitterKey<E>>
+    for CommitterKeyStream<E, Reverse<&'a [E::G1Affine]>>
 {
-    fn from(ck: &CommitterKey<E>) -> Self {
+    fn from(ck: &'a CommitterKey<E>) -> Self {
         CommitterKeyStream {
-            powers_of_g: Reverse(&ck.powers_of_g),
-            /*
-                TODO: Gives more G2 elements
-            */
+            powers_of_g: Reverse(ck.powers_of_g.as_slice()),
             powers_of_g2: ck.powers_of_g2.clone(),
         }
     }
@@ -294,7 +288,7 @@ where
 #[test]
 fn test_open_multi_points() {
     use crate::ark_std::UniformRand;
-    use crate::misc::evaluate_be;
+    use crate::streaming_kzg::evaluate_be;
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ff::Field;
     use ark_poly::univariate::DensePolynomial;

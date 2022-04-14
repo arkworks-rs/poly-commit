@@ -1,22 +1,20 @@
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::UVPolynomial;
-use ark_std::test_rng;
 use ark_std::vec::Vec;
 use ark_std::UniformRand;
 
-use crate::iterable::{Iterable, Reversed};
-use crate::kzg::space::CommitterKeyStream;
-use crate::kzg::time::CommitterKey;
-use crate::kzg::VerifierKey;
-use crate::misc::evaluate_le;
+use crate::streaming_kzg::space::CommitterKeyStream;
+use crate::streaming_kzg::time::CommitterKey;
+use crate::streaming_kzg::{evaluate_le, VerifierKey};
+use ark_std::iterable::{Iterable, Reverse};
 
 #[test]
 fn test_commitment_consistency() {
     let rng = &mut ark_std::test_rng();
     let d = 15;
     let polynomial = DensePolynomial::<Fr>::rand(d, rng);
-    let polynomial_stream = Reversed::new(polynomial.coeffs());
+    let polynomial_stream = Reverse(polynomial.coeffs());
     let time_ck = CommitterKey::<Bls12_381>::new(d + 1, 3, rng);
     let space_ck = CommitterKeyStream::from(&time_ck);
 
@@ -44,7 +42,7 @@ fn test_open_consistency() {
     let d = 15;
     let max_msm_buffer = 1 << 20;
     let polynomials = DensePolynomial::<Fr>::rand(d, rng);
-    let polynomial_stream = Reversed::new(polynomials.coeffs());
+    let polynomial_stream = Reverse(polynomials.coeffs());
     let time_ck = CommitterKey::<Bls12_381>::new(d + 1, 3, rng);
     let space_ck = CommitterKeyStream::from(&time_ck);
     let alpha = Fr::rand(rng);
@@ -59,7 +57,7 @@ fn test_open_consistency() {
 
 #[test]
 fn test_open_multipoints_correctness() {
-    let mut rng = &mut test_rng();
+    let mut rng = &mut ark_std::test_rng();
     let d = 100;
 
     let eval_points = (0..5).map(|_| Fr::rand(rng)).collect::<Vec<_>>();

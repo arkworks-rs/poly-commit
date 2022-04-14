@@ -33,7 +33,7 @@ ark-r1cs-std = { version = "^0.3.0", default-features = false, optional = true }
 # ark-nonnative-field = { version = "^0.3.0", default-features = false, optional = true }
 hashbrown = { version = "0.9", optional = true }
 
-digest = "0.10.3"
+digest = "0.9"
 rayon = { version = "1", optional = true }
 derivative = { version = "2", features = [ "use_core" ] }
 

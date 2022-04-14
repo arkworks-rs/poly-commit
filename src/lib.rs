@@ -535,7 +535,7 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 pub mod tests {
     use crate::*;
     use ark_poly::Polynomial;
-    use ark_sponge::poseidon::{PoseidonParameters, PoseidonSponge};
+    use ark_sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,
@@ -1295,7 +1295,7 @@ pub mod tests {
     ///
     /// WARNING: This poseidon parameter is not secure. Please generate
     /// your own parameters according the field you use.
-    pub(crate) fn poseidon_parameters_for_test<F: PrimeField>() -> PoseidonParameters<F> {
+    pub(crate) fn poseidon_parameters_for_test<F: PrimeField>() -> PoseidonConfig<F> {
         let full_rounds = 8;
         let partial_rounds = 31;
         let alpha = 17;
@@ -1317,6 +1317,6 @@ pub mod tests {
             }
             ark.push(res);
         }
-        PoseidonParameters::new(full_rounds, partial_rounds, alpha, mds, ark)
+        PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, ark)
     }
 }
