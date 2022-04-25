@@ -222,14 +222,14 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Commitment: 'a;
 
     /// check but with individual challenges
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
         challenge_generator: &mut ChallengeGenerator<F, S>,
-        rng: Option<&mut dyn RngCore>,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a;
@@ -242,7 +242,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         evaluations: &Evaluations<P::Point, F>,
         proof: &Self::BatchProof,
         challenge_generator: &mut ChallengeGenerator<F, S>,
-        rng: &mut R,
+        mut rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -289,7 +289,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                 values,
                 &proof,
                 challenge_generator,
-                Some(rng),
+                rng.as_mut(),
             )?;
             end_timer!(proof_time);
         }
@@ -341,7 +341,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         eqn_evaluations: &Evaluations<P::Point, F>,
         proof: &BatchLCProof<F, Self::BatchProof>,
         challenge_generator: &mut ChallengeGenerator<F, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -638,7 +638,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    rng,
+                    Some(rng),
                 )?;
                 assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
             }
@@ -774,7 +774,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    rng,
+                    Some(rng),
                 )?;
                 if !result {
                     println!(
@@ -955,7 +955,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    rng,
+                    Some(rng),
                 )?;
                 if !result {
                     println!(

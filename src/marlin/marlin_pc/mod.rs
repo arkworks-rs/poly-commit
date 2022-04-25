@@ -349,14 +349,14 @@ where
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        _rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -382,7 +382,7 @@ where
         values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -446,7 +446,7 @@ where
         evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
