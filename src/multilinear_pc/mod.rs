@@ -1,7 +1,7 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
-use ark_ec::msm::{FixedBase, VariableBase};
+use ark_ec::msm::{FixedBaseMSM, VariableBaseMSM};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField};
 use ark_ff::{One, Zero};
@@ -59,22 +59,16 @@ impl<E: PairingEngine> MultilinearPC<E> {
             pp_powers.extend(pp_k_powers);
             total_scalars += 1 << (num_vars - i);
         }
-        let window_size = FixedBase::get_mul_window_size(total_scalars);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
-        let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_projective());
+        let window_size = FixedBaseMSM::get_mul_window_size(total_scalars);
+        let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g.into_projective());
+        let h_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, h.into_projective());
 
-        let pp_g = E::G1Projective::batch_normalization_into_affine(&FixedBase::msm(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &pp_powers,
-        ));
-        let pp_h = E::G2Projective::batch_normalization_into_affine(&FixedBase::msm(
-            scalar_bits,
-            window_size,
-            &h_table,
-            &pp_powers,
-        ));
+        let pp_g = E::G1Projective::batch_normalization_into_affine(
+            &FixedBaseMSM::multi_scalar_mul(scalar_bits, window_size, &g_table, &pp_powers),
+        );
+        let pp_h = E::G2Projective::batch_normalization_into_affine(
+            &FixedBaseMSM::multi_scalar_mul(scalar_bits, window_size, &h_table, &pp_powers),
+        );
         let mut start = 0;
         for i in 0..num_vars {
             let size = 1 << (num_vars - i);
@@ -88,10 +82,10 @@ impl<E: PairingEngine> MultilinearPC<E> {
         // uncomment to measure the time for calculating vp
         // let vp_generation_timer = start_timer!(|| "VP generation");
         let g_mask = {
-            let window_size = FixedBase::get_mul_window_size(num_vars);
+            let window_size = FixedBaseMSM::get_mul_window_size(num_vars);
             let g_table =
-                FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
-            E::G1Projective::batch_normalization_into_affine(&FixedBase::msm(
+                FixedBaseMSM::get_window_table(scalar_bits, window_size, g.into_projective());
+            E::G1Projective::batch_normalization_into_affine(&FixedBaseMSM::multi_scalar_mul(
                 scalar_bits,
                 window_size,
                 &g_table,
@@ -146,7 +140,8 @@ impl<E: PairingEngine> MultilinearPC<E> {
             .into_iter()
             .map(|x| x.into_repr())
             .collect();
-        let g_product = VariableBase::msm(&ck.powers_of_g[0], scalars.as_slice()).into_affine();
+        let g_product =
+            VariableBaseMSM::multi_scalar_mul(&ck.powers_of_g[0], scalars.as_slice()).into_affine();
         Commitment { nv, g_product }
     }
 
@@ -178,7 +173,8 @@ impl<E: PairingEngine> MultilinearPC<E> {
                 .map(|x| q[k][x >> 1].into_repr()) // fine
                 .collect();
 
-            let pi_h = VariableBase::msm(&ck.powers_of_h[i], &scalars).into_affine(); // no need to move outside and partition
+            let pi_h =
+                VariableBaseMSM::multi_scalar_mul(&ck.powers_of_h[i], &scalars).into_affine(); // no need to move outside and partition
             proofs.push(pi_h);
         }
 
@@ -200,10 +196,12 @@ impl<E: PairingEngine> MultilinearPC<E> {
         );
 
         let scalar_size = E::Fr::size_in_bits();
-        let window_size = FixedBase::get_mul_window_size(vk.nv);
+        let window_size = FixedBaseMSM::get_mul_window_size(vk.nv);
 
-        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());
-        let g_mul: Vec<E::G1Projective> = FixedBase::msm(scalar_size, window_size, &g_table, point);
+        let g_table =
+            FixedBaseMSM::get_window_table(scalar_size, window_size, vk.g.into_projective());
+        let g_mul: Vec<E::G1Projective> =
+            FixedBaseMSM::multi_scalar_mul(scalar_size, window_size, &g_table, point);
 
         let pairing_lefts: Vec<_> = (0..vk.nv)
             .map(|i| vk.g_mask_random[i].into_projective() - &g_mul[i])

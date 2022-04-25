@@ -44,10 +44,10 @@ pub struct CommitterKey<E: PairingEngine> {
 
 impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
-    pub fn powers<'a>(&'a self) -> kzg10::Powers<'a, E> {
+    pub fn powers<'a>(&self) -> kzg10::Powers<'a, E> {
         kzg10::Powers {
-            powers_of_g: self.powers.as_slice().into(),
-            powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
+            powers_of_g: ark_std::borrow::Cow::Owned(self.powers.clone()),
+            powers_of_gamma_g: ark_std::borrow::Cow::Owned(self.powers_of_gamma_g.clone()),
         }
     }
 

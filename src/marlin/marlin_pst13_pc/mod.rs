@@ -8,7 +8,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::{
-    msm::{FixedBase, VariableBase},
+    msm::{FixedBaseMSM, VariableBaseMSM},
     AffineCurve, PairingEngine, ProjectiveCurve,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
@@ -215,17 +215,21 @@ where
 
         let scalar_bits = E::Fr::size_in_bits();
         let g_time = start_timer!(|| "Generating powers of G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
-        let mut powers_of_g =
-            FixedBase::msm::<E::G1Projective>(scalar_bits, window_size, &g_table, &powers_of_beta);
+        let window_size = FixedBaseMSM::get_mul_window_size(max_degree + 1);
+        let g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, g);
+        let mut powers_of_g = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
+            scalar_bits,
+            window_size,
+            &g_table,
+            &powers_of_beta,
+        );
         powers_of_g.push(g);
         powers_of_beta_terms.push(P::Term::new(vec![]));
         end_timer!(g_time);
 
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 2);
-        let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
+        let window_size = FixedBaseMSM::get_mul_window_size(max_degree + 2);
+        let gamma_g_table = FixedBaseMSM::get_window_table(scalar_bits, window_size, gamma_g);
         // Each element `i` of `powers_of_gamma_g` is a vector of length `max_degree+1`
         // containing `betas[i]^j \gamma G` for `j` from 1 to `max_degree+1` to support
         // up to `max_degree` queries
@@ -239,7 +243,7 @@ where
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = FixedBase::msm::<E::G1Projective>(
+                *v = FixedBaseMSM::multi_scalar_mul::<E::G1Projective>(
                     scalar_bits,
                     window_size,
                     &gamma_g_table,
@@ -383,7 +387,7 @@ where
             end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-            let mut commitment = VariableBase::msm(&powers_of_g, &plain_ints);
+            let mut commitment = VariableBaseMSM::multi_scalar_mul(&powers_of_g, &plain_ints);
             end_timer!(msm_time);
 
             // Sample random polynomial
@@ -419,7 +423,7 @@ where
 
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment =
-                VariableBase::msm(&powers_of_gamma_g, &random_ints).into_affine();
+                VariableBaseMSM::multi_scalar_mul(&powers_of_gamma_g, &random_ints).into_affine();
             end_timer!(msm_time);
 
             // Mask commitment with random poly
@@ -487,7 +491,7 @@ where
                 // Convert coefficients to BigInt
                 let witness_ints = Self::convert_to_bigints(&w);
                 // Compute MSM
-                VariableBase::msm(&powers_of_g, &witness_ints)
+                VariableBaseMSM::multi_scalar_mul(&powers_of_g, &witness_ints)
             })
             .collect::<Vec<_>>();
         end_timer!(witness_comm_time);
@@ -517,7 +521,10 @@ where
                     // Convert coefficients to BigInt
                     let hiding_witness_ints = Self::convert_to_bigints(hiding_witness);
                     // Compute MSM and add result to witness
-                    *witness += &VariableBase::msm(&powers_of_gamma_g, &hiding_witness_ints);
+                    *witness += &VariableBaseMSM::multi_scalar_mul(
+                        &powers_of_gamma_g,
+                        &hiding_witness_ints,
+                    );
                 });
             end_timer!(witness_comm_time);
             Some(r.blinding_polynomial.evaluate(point))
@@ -533,14 +540,14 @@ where
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        _rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -583,11 +590,12 @@ where
         values: &Evaluations<P::Point, E::Fr>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let (combined_comms, combined_queries, combined_evals) =
             Marlin::<E, S, P, Self>::combine_and_normalize(
                 commitments,
@@ -689,7 +697,7 @@ where
         eqn_evaluations: &Evaluations<P::Point, E::Fr>,
         proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

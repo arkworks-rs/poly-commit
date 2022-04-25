@@ -3,7 +3,7 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{msm::VariableBase, AffineCurve, ProjectiveCurve};
+use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
@@ -65,7 +65,7 @@ where
             .map(|s| s.into_repr())
             .collect::<Vec<_>>();
 
-        let mut comm = VariableBase::msm(comm_key, &scalars_bigint);
+        let mut comm = VariableBaseMSM::multi_scalar_mul(comm_key, &scalars_bigint);
 
         if randomizer.is_some() {
             assert!(hiding_generator.is_some());
@@ -701,14 +701,14 @@ where
         })
     }
 
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
-        _rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -759,11 +759,12 @@ where
         values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
@@ -956,7 +957,7 @@ where
         eqn_evaluations: &Evaluations<P::Point, G::ScalarField>,
         proof: &BatchLCProof<G::ScalarField, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

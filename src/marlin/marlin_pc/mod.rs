@@ -6,6 +6,7 @@ use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
 use ark_poly::UVPolynomial;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
 
@@ -13,6 +14,12 @@ mod data_structures;
 use crate::challenge::ChallengeGenerator;
 use ark_sponge::CryptographicSponge;
 pub use data_structures::*;
+
+/// R1CS constraints for the commitment scheme.
+#[cfg(feature = "r1cs")]
+mod constraints;
+#[cfg(feature = "r1cs")]
+pub use constraints::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
 /// and (optional) hiding property taken from [[CHMMVW20, “Marlin”]][marlin].
@@ -26,6 +33,7 @@ pub use data_structures::*;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
+#[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 pub struct MarlinKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
@@ -341,14 +349,14 @@ where
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
-    fn check<'a>(
+    fn check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::Fr>,
         proof: &Self::Proof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        _rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -374,7 +382,7 @@ where
         values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -438,7 +446,7 @@ where
         evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
