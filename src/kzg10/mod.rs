@@ -321,11 +321,12 @@ where
         points: &[E::Fr],
         values: &[E::Fr],
         proofs: &[Proof<E>],
-        rng: &mut R,
+        rng: Option<&mut R>,
     ) -> Result<bool, Error> {
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
 
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let mut total_c = <E::G1Projective>::zero();
         let mut total_w = <E::G1Projective>::zero();
 
@@ -616,7 +617,12 @@ mod tests {
                 proofs.push(proof);
             }
             assert!(KZG10::<E, P>::batch_check(
-                &vk, &comms, &points, &values, &proofs, rng
+                &vk,
+                &comms,
+                &points,
+                &values,
+                &proofs,
+                Some(rng)
             )?);
         }
         Ok(())
