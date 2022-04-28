@@ -1317,6 +1317,6 @@ pub mod tests {
             }
             ark.push(res);
         }
-        PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, ark)
+        PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, ark, 2, 1)
     }
 }
