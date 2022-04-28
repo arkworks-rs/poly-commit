@@ -3,8 +3,8 @@ use crate::{
     PolynomialCommitment, String, Vec,
 };
 use ark_ff::PrimeField;
-use ark_nonnative_field::NonNativeFieldVar;
 use ark_poly::Polynomial;
+use ark_r1cs_std::fields::nonnative::NonNativeFieldVar;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use ark_sponge::CryptographicSponge;
