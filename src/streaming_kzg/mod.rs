@@ -44,7 +44,7 @@
 //! [`VerifierKey`](self::VerifierKey).
 //!
 //! ```
-//! use ark_gemini::kzg::CommitterKey;
+//! use ark_poly_commit::streaming_kzg::CommitterKey;
 //! use ark_bls12_381::{Fr, Bls12_381};
 //!
 //! let rng = &mut ark_std::test_rng();
@@ -58,7 +58,7 @@
 //! # let commitment  = ck.commit(&f);
 //! # let alpha = Fr::from(42u64);
 //! # let (evaluation, proof) = ck.open(&f, &alpha);
-//! # use ark_gemini::kzg::VerifierKey;
+//! # use ark_poly_commit::streaming_kzg::VerifierKey;
 //! # let vk = VerifierKey::from(&ck);
 //! # assert!(vk.verify(&commitment, &alpha, &evaluation, &proof).is_ok())
 //! ````
