@@ -323,39 +323,3 @@ pub(crate) fn powers<F: Field>(element: F, len: usize) -> Vec<F> {
     }
     powers
 }
-
-/// Polynomial evaluation, assuming that the
-/// coefficients are in little-endian.
-#[inline]
-pub(crate) fn evaluate_le<F>(polynomial: &[F], x: &F) -> F
-where
-    F: Field,
-{
-    evaluate_be(polynomial.iter().rev(), x)
-}
-
-/// Polynomial evaluation, assuming that the
-/// coeffients are in big-endian.
-#[inline]
-pub(crate) fn evaluate_be<I, F>(polynomial: I, x: &F) -> F
-where
-    F: Field,
-    I: IntoIterator,
-    I::Item: Borrow<F>,
-{
-    polynomial
-        .into_iter()
-        .fold(F::zero(), |previous, c| previous * x + c.borrow())
-}
-
-#[test]
-fn test_vanishing_polynomial() {
-    use ark_bls12_381::Fr as F;
-    use ark_ff::Zero;
-
-    let points = [F::from(10u64), F::from(5u64), F::from(13u64)];
-    let zeros = vanishing_polynomial(&points);
-    assert_eq!(evaluate_le(&zeros, &points[0]), F::zero());
-    assert_eq!(evaluate_le(&zeros, &points[1]), F::zero());
-    assert_eq!(evaluate_le(&zeros, &points[2]), F::zero());
-}
