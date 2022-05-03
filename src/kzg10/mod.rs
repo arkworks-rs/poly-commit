@@ -293,7 +293,7 @@ where
         }
         let inner2 = vk.beta_h.into_projective() - &vk.h.mul(point);
 
-        let pairing_prod_inputs:Vec<(E::G1Prepared, E::G2Prepared)> = vec![
+        let pairing_prod_inputs: Vec<(E::G1Prepared, E::G2Prepared)> = vec![
             ((-inner).into_affine().into(), vk.h.into()),
             (proof.w.into(), inner2.into_affine().into()),
         ];

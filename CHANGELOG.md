@@ -13,6 +13,8 @@
 
 ### Improvements
 
+- [\#98](https://github.com/arkworks-rs/poly-commit/pull/98) Improve KZG10 verification speed.
+
 ### Bug fixes
 
 ## v0.3.0
