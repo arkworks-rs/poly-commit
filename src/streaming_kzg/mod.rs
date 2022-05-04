@@ -61,7 +61,7 @@
 //! # use ark_poly_commit::streaming_kzg::VerifierKey;
 //! # let vk = VerifierKey::from(&ck);
 //! # assert!(vk.verify(&commitment, &alpha, &evaluation, &proof).is_ok())
-//! ````
+//! ```
 //!
 //! Then to commit to a polynomial `f`:
 //! ```ignore
@@ -81,7 +81,6 @@
 //! let vk = VerifierKey::from(&ck);
 //! assert!(vk.verify(&commitment, &alpha, &evaluation, &proof).is_ok())
 //! ```
-//!
 
 mod data_structures;
 mod space;

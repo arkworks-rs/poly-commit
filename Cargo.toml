@@ -30,7 +30,6 @@ ark-sponge = {version = "^0.3.0", default-features = false}
 ark-std = { version = "^0.3.0", default-features = false }
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.0", default-features = false, optional = true }
-# ark-nonnative-field = { version = "^0.3.0", default-features = false, optional = true }
 hashbrown = { version = "0.9", optional = true }
 
 digest = "0.9"
