@@ -60,7 +60,7 @@ where
 
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
 
-        let scalar_bits = E::Fr::size_in_bits();
+        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let powers_of_g =
@@ -331,8 +331,8 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer.into_repr());
-            total_w += &w.mul(randomizer.into_repr());
+            total_c += &c.mul(randomizer.into_bigint());
+            total_w += &w.mul(randomizer.into_bigint());
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
@@ -430,7 +430,7 @@ fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
 fn convert_to_bigints<F: PrimeField>(p: &[F]) -> Vec<F::BigInt> {
     let to_bigint_time = start_timer!(|| "Converting polynomial coeffs to bigints");
     let coeffs = ark_std::cfg_iter!(p)
-        .map(|s| s.into_repr())
+        .map(|s| s.into_bigint())
         .collect::<Vec<_>>();
     end_timer!(to_bigint_time);
     coeffs

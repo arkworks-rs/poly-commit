@@ -118,6 +118,14 @@ use ark_sponge::{CryptographicSponge, FieldElementSize};
 /// [marlin]: https://eprint.iacr.org/2019/104
 pub use marlin::marlin_pst13_pc;
 
+/// Streaming polynomial commitment based on the construction in
+/// [[BCHO22, "Gemini"]][gemini] with batching techniques inspired
+/// by [[BDFG20]][bdfg].
+///
+/// [gemini]:
+/// [bdfg]: https://eprint.iacr.org/2020/081.pdf
+pub mod streaming_kzg;
+
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
 /// `(label, (point_label, point))`, where `label` is the label of a polynomial in `p`,
@@ -527,7 +535,7 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 pub mod tests {
     use crate::*;
     use ark_poly::Polynomial;
-    use ark_sponge::poseidon::{PoseidonParameters, PoseidonSponge};
+    use ark_sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,
@@ -1287,7 +1295,7 @@ pub mod tests {
     ///
     /// WARNING: This poseidon parameter is not secure. Please generate
     /// your own parameters according the field you use.
-    pub(crate) fn poseidon_parameters_for_test<F: PrimeField>() -> PoseidonParameters<F> {
+    pub(crate) fn poseidon_parameters_for_test<F: PrimeField>() -> PoseidonConfig<F> {
         let full_rounds = 8;
         let partial_rounds = 31;
         let alpha = 17;
@@ -1309,6 +1317,6 @@ pub mod tests {
             }
             ark.push(res);
         }
-        PoseidonParameters::new(full_rounds, partial_rounds, alpha, mds, ark)
+        PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, ark, 2, 1)
     }
 }

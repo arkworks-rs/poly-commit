@@ -32,7 +32,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
         let mut powers_of_g = Vec::new();
         let mut powers_of_h = Vec::new();
         let t: Vec<_> = (0..num_vars).map(|_| E::Fr::rand(rng)).collect();
-        let scalar_bits = E::Fr::size_in_bits();
+        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
 
         let mut eq: LinkedList<DenseMultilinearExtension<E::Fr>> =
             LinkedList::from_iter(eq_extension(&t).into_iter());
@@ -144,7 +144,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
         let scalars: Vec<_> = polynomial
             .to_evaluations()
             .into_iter()
-            .map(|x| x.into_repr())
+            .map(|x| x.into_bigint())
             .collect();
         let g_product = VariableBase::msm(&ck.powers_of_g[0], scalars.as_slice()).into_affine();
         Commitment { nv, g_product }
@@ -175,7 +175,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
                     + &(r[k][(b << 1) + 1] * &point_at_k);
             }
             let scalars: Vec<_> = (0..(1 << k))
-                .map(|x| q[k][x >> 1].into_repr()) // fine
+                .map(|x| q[k][x >> 1].into_bigint()) // fine
                 .collect();
 
             let pi_h = VariableBase::msm(&ck.powers_of_h[i], &scalars).into_affine(); // no need to move outside and partition
@@ -199,7 +199,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
             vk.h,
         );
 
-        let scalar_size = E::Fr::size_in_bits();
+        let scalar_size = E::Fr::MODULUS_BIT_SIZE as usize;
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
         let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());

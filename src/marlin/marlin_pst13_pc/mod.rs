@@ -134,7 +134,7 @@ impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST
     /// Convert polynomial coefficients to `BigInt`
     fn convert_to_bigints(p: &P) -> Vec<<E::Fr as PrimeField>::BigInt> {
         let plain_coeffs = ark_std::cfg_into_iter!(p.terms())
-            .map(|(coeff, _)| coeff.into_repr())
+            .map(|(coeff, _)| coeff.into_bigint())
             .collect();
         plain_coeffs
     }
@@ -213,7 +213,7 @@ where
             })
             .unzip();
 
-        let scalar_bits = E::Fr::size_in_bits();
+        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
@@ -256,7 +256,7 @@ where
             .collect();
         let beta_h: Vec<_> = betas
             .iter()
-            .map(|b| h.mul(&(*b).into_repr()).into_affine())
+            .map(|b| h.mul(&(*b).into_bigint()).into_affine())
             .collect();
         let h = h.into_affine();
         let prepared_h = h.into();
@@ -625,7 +625,7 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(&randomizer.into_repr());
+            total_c += &c.mul(&randomizer.into_bigint());
             ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
@@ -633,8 +633,8 @@ where
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(&g_multiplier.into_repr());
-        total_c -= &gamma_g.mul(&gamma_g_multiplier.into_repr());
+        total_c -= &g.mul(&g_multiplier.into_bigint());
+        total_c -= &gamma_g.mul(&gamma_g_multiplier.into_bigint());
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");

@@ -30,7 +30,6 @@ ark-sponge = {version = "^0.3.0", default-features = false}
 ark-std = { version = "^0.3.0", default-features = false }
 ark-relations = { version = "^0.3.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.3.0", default-features = false, optional = true }
-ark-nonnative-field = { version = "^0.3.0", default-features = false, optional = true }
 hashbrown = { version = "0.9", optional = true }
 
 digest = "0.9"
@@ -61,14 +60,17 @@ debug = true
 ark-std = { git = "https://github.com/arkworks-rs/std" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra" }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
 ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
+ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
 
 [features]
 default = [ "std", "parallel" ]
-std = [ "ark-ff/std", "ark-ec/std", "ark-nonnative-field/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-sponge/std"]
-r1cs = [ "ark-relations", "ark-r1cs-std", "ark-nonnative-field", "hashbrown", "ark-sponge/r1cs"]
+std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-sponge/std"]
+r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-sponge/r1cs"]
 print-trace = [ "ark-std/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]

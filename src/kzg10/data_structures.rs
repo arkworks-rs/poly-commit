@@ -391,7 +391,7 @@ pub struct PreparedVerifierKey<E: PairingEngine> {
 impl<E: PairingEngine> PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     pub fn prepare(vk: &VerifierKey<E>) -> Self {
-        let supported_bits = E::Fr::size_in_bits();
+        let supported_bits = E::Fr::MODULUS_BIT_SIZE as usize;
 
         let mut prepared_g = Vec::<E::G1Affine>::new();
         let mut g = E::G1Projective::from(vk.g.clone());
@@ -458,7 +458,7 @@ where
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
-        let mut other = other.0.mul(f.into_repr());
+        let mut other = other.0.mul(f.into_bigint());
         other.add_assign_mixed(&self.0);
         self.0 = other.into();
     }
@@ -485,7 +485,7 @@ impl<E: PairingEngine> PreparedCommitment<E> {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
         let mut cur = E::G1Projective::from(comm.0.clone());
 
-        let supported_bits = E::Fr::size_in_bits();
+        let supported_bits = E::Fr::MODULUS_BIT_SIZE as usize;
 
         for _ in 0..supported_bits {
             prepared_comm.push(cur.clone().into());
