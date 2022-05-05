@@ -290,10 +290,6 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     fn has_degree_bound(&self) -> bool {
         self.shifted_comm.is_some()
     }
-
-    fn size_in_bytes(&self) -> usize {
-        self.comm.size_in_bytes() + self.shifted_comm.as_ref().map_or(0, |c| c.size_in_bytes())
-    }
 }
 
 /// Prepared commitment to a polynomial that optionally enforces a degree bound.
