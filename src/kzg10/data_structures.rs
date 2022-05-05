@@ -440,10 +440,6 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     fn has_degree_bound(&self) -> bool {
         false
     }
-
-    fn size_in_bytes(&self) -> usize {
-        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
-    }
 }
 
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
@@ -597,16 +593,7 @@ pub struct Proof<E: PairingEngine> {
     pub random_v: Option<E::Fr>,
 }
 
-impl<E: PairingEngine> PCProof for Proof<E> {
-    fn size_in_bytes(&self) -> usize {
-        let hiding_size = if self.random_v.is_some() {
-            ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
-        } else {
-            0
-        };
-        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2 + hiding_size
-    }
-}
+impl<E: PairingEngine> PCProof for Proof<E> {}
 
 impl<E: PairingEngine> ToBytes for Proof<E> {
     #[inline]
