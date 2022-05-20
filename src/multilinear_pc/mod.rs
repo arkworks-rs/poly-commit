@@ -194,17 +194,11 @@ impl<E: PairingEngine> MultilinearPC<E> {
         value: E::Fr,
         proof: &Proof<E>,
     ) -> bool {
-
         let scalar_size = E::Fr::MODULUS_BIT_SIZE as usize;
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
-        let g_table = FixedBase::get_window_table(
-            scalar_size,
-            window_size,
-            vk.g.into_projective(),
-        );
-        let g_mul: Vec<E::G1Projective> =
-            FixedBase::msm(scalar_size, window_size, &g_table, point);
+        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());
+        let g_mul: Vec<E::G1Projective> = FixedBase::msm(scalar_size, window_size, &g_table, point);
 
         let mut g1_vec: Vec<_> = (0..vk.nv)
             .map(|i| vk.g_mask_random[i].into_projective() - g_mul[i])
@@ -221,10 +215,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
             .zip(proof.proofs.iter().map(|&x| E::G2Prepared::from(x)))
             .collect();
 
-        pairings.push((
-            E::G1Prepared::from(tmp),
-            E::G2Prepared::from(vk.h),
-        ));
+        pairings.push((E::G1Prepared::from(tmp), E::G2Prepared::from(vk.h)));
 
         E::product_of_pairings(pairings.iter()).is_one()
     }
