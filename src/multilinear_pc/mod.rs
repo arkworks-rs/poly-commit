@@ -194,39 +194,39 @@ impl<E: PairingEngine> MultilinearPC<E> {
         value: E::Fr,
         proof: &Proof<E>,
     ) -> bool {
-        let left = E::pairing(
-            commitment.g_product.into_projective() - &vk.g.mul(value),
-            vk.h,
-        );
 
         let scalar_size = E::Fr::MODULUS_BIT_SIZE as usize;
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
-        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());
-        let g_mul: Vec<E::G1Projective> = FixedBase::msm(scalar_size, window_size, &g_table, point);
+        let g_table = FixedBase::get_window_table(
+            scalar_size,
+            window_size,
+            vk.g.into_projective(),
+        );
+        let g_mul: Vec<E::G1Projective> =
+            FixedBase::msm(scalar_size, window_size, &g_table, point);
 
-        let pairing_lefts: Vec<_> = (0..vk.nv)
-            .map(|i| vk.g_mask_random[i].into_projective() - &g_mul[i])
+        let mut g1_vec: Vec<_> = (0..vk.nv)
+            .map(|i| vk.g_mask_random[i].into_projective() - g_mul[i])
             .collect();
-        let pairing_lefts: Vec<E::G1Affine> =
-            E::G1Projective::batch_normalization_into_affine(&pairing_lefts);
-        let pairing_lefts: Vec<E::G1Prepared> = pairing_lefts
+        g1_vec.push(vk.g.mul(value) - commitment.g_product.into_projective());
+
+        let g1_vec: Vec<E::G1Affine> = E::G1Projective::batch_normalization_into_affine(&g1_vec);
+        let tmp = g1_vec[vk.nv];
+
+        let mut pairings: Vec<_> = g1_vec
             .into_iter()
-            .map(|x| E::G1Prepared::from(x))
+            .take(vk.nv)
+            .map(E::G1Prepared::from)
+            .zip(proof.proofs.iter().map(|&x| E::G2Prepared::from(x)))
             .collect();
 
-        let pairing_rights: Vec<E::G2Prepared> = proof
-            .proofs
-            .iter()
-            .map(|x| E::G2Prepared::from(*x))
-            .collect();
+        pairings.push((
+            E::G1Prepared::from(tmp),
+            E::G2Prepared::from(vk.h),
+        ));
 
-        let pairings: Vec<_> = pairing_lefts
-            .into_iter()
-            .zip(pairing_rights.into_iter())
-            .collect();
-        let right = E::product_of_pairings(pairings.iter());
-        left == right
+        E::product_of_pairings(pairings.iter()) == E::Fqk::one()
     }
 }
 

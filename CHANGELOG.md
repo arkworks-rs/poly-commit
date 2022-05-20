@@ -2,6 +2,8 @@
 
 ## Pending
 
+- [\#98](https://github.com/arkworks-rs/poly-commit/pull/98) Use pairing-product to accelerate `KZG` and `multilinear_pc` verifications.
+
 ### Breaking changes
 
 - [\#82](https://github.com/arkworks-rs/poly-commit/pull/82) Function parameter `opening_challenge: F` for `open`,
