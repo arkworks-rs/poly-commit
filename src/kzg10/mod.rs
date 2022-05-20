@@ -297,7 +297,7 @@ where
             ((-inner).into_affine().into(), vk.h.into()),
             (proof.w.into(), inner2.into_affine().into()),
         ];
-        let res = E::product_of_pairings(pairing_prod_inputs.iter()) == E::Fqk::one();
+        let res = E::product_of_pairings(pairing_prod_inputs.iter()).is_one();
         end_timer!(check_time, || format!("Result: {}", res));
         Ok(res)
     }
