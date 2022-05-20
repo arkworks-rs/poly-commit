@@ -226,7 +226,7 @@ impl<E: PairingEngine> MultilinearPC<E> {
             E::G2Prepared::from(vk.h),
         ));
 
-        E::product_of_pairings(pairings.iter()) == E::Fqk::one()
+        E::product_of_pairings(pairings.iter()).is_one()
     }
 }
 
