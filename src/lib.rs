@@ -242,7 +242,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         evaluations: &Evaluations<P::Point, F>,
         proof: &Self::BatchProof,
         challenge_generator: &mut ChallengeGenerator<F, S>,
-        mut rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -289,7 +289,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                 values,
                 &proof,
                 challenge_generator,
-                rng.as_mut(),
+                Some(rng),
             )?;
             end_timer!(proof_time);
         }
@@ -341,7 +341,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         eqn_evaluations: &Evaluations<P::Point, F>,
         proof: &BatchLCProof<F, Self::BatchProof>,
         challenge_generator: &mut ChallengeGenerator<F, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -638,7 +638,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    Some(rng),
+                    rng,
                 )?;
                 assert!(result, "proof was incorrect, Query set: {:#?}", query_set);
             }
@@ -774,7 +774,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    Some(rng),
+                    rng,
                 )?;
                 if !result {
                     println!(
@@ -955,7 +955,7 @@ pub mod tests {
                     &values,
                     &proof,
                     &mut (challenge_gen.clone()),
-                    Some(rng),
+                    rng,
                 )?;
                 if !result {
                     println!(

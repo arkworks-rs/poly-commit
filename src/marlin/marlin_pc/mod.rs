@@ -382,7 +382,7 @@ where
         values: &Evaluations<E::Fr, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -446,7 +446,7 @@ where
         evaluations: &Evaluations<E::Fr, P::Point>,
         proof: &BatchLCProof<E::Fr, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

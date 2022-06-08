@@ -759,12 +759,11 @@ where
         values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
@@ -957,7 +956,7 @@ where
         eqn_evaluations: &Evaluations<P::Point, G::ScalarField>,
         proof: &BatchLCProof<G::ScalarField, Self::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,

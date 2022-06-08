@@ -5,6 +5,7 @@ use crate::{
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_std::borrow::Cow;
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
 use ark_std::rand::RngCore;
@@ -46,8 +47,8 @@ impl<E: PairingEngine> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
     pub fn powers<'a>(&self) -> kzg10::Powers<'a, E> {
         kzg10::Powers {
-            powers_of_g: ark_std::borrow::Cow::Owned(self.powers.clone()),
-            powers_of_gamma_g: ark_std::borrow::Cow::Owned(self.powers_of_gamma_g.clone()),
+            powers_of_g: Cow::Owned(self.powers.clone()),
+            powers_of_gamma_g: Cow::Owned(self.powers_of_gamma_g.clone()),
         }
     }
 

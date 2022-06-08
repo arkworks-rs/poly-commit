@@ -328,7 +328,7 @@ where
         evaluations: &Evaluations<P::Point, E::Fr>,
         proof: &BatchLCProof<E::Fr, PC::BatchProof>,
         opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        rng: Option<&mut R>,
+        rng: &mut R,
     ) -> Result<bool, Error>
     where
         R: RngCore,
