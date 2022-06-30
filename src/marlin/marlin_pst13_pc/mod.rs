@@ -12,7 +12,7 @@ use ark_ec::{
     AffineCurve, PairingEngine, ProjectiveCurve,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::{multivariate::Term, MVPolynomial};
+use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, vec};
 
@@ -33,13 +33,13 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinPST13<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
+impl<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -143,7 +143,7 @@ impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinPST13<E, P, S>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr> + Sync,
+    P: DenseMVPolynomial<E::Fr> + Sync,
     S: CryptographicSponge,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -717,7 +717,7 @@ mod tests {
     use ark_ff::UniformRand;
     use ark_poly::{
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
-        MVPolynomial,
+        DenseMVPolynomial,
     };
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;

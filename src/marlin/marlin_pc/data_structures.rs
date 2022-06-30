@@ -1,6 +1,6 @@
 use crate::{
     PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCVerifierKey, UVPolynomial, Vec,
+    PCVerifierKey, DenseUVPolynomial, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
@@ -329,7 +329,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+pub struct Randomness<F: PrimeField, P: DenseUVPolynomial<F>> {
     /// Commitment randomness for a KZG10 commitment.
     pub rand: kzg10::Randomness<F, P>,
     /// Commitment randomness for a KZG10 commitment to the shifted polynomial.
@@ -338,7 +338,7 @@ pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
     pub shifted_rand: Option<kzg10::Randomness<F, P>>,
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
     type Output = Self;
 
     fn add(mut self, other: &'a Self) -> Self {
@@ -347,7 +347,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Self> for Randomness<F, P> {
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Self> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<&'a Self> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.rand += &other.rand;
@@ -362,7 +362,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Self> for Randomness<F
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -372,7 +372,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for R
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
     for Randomness<F, P>
 {
     #[inline]
@@ -387,7 +387,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
     }
 }
 
-impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             rand: kzg10::Randomness::empty(),

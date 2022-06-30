@@ -9,7 +9,7 @@ use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
 use ark_ec::msm::{FixedBase, VariableBase};
 use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::UVPolynomial;
+use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, vec};
 
 use ark_std::rand::RngCore;
@@ -23,7 +23,7 @@ pub use data_structures::*;
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
 ///
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-pub struct KZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
+pub struct KZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
 }
@@ -31,7 +31,7 @@ pub struct KZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
 impl<E, P> KZG10<E, P>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
     /// Constructs public parameters when given as input the maximum degree `degree`
@@ -416,7 +416,7 @@ where
     }
 }
 
-fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
+fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: DenseUVPolynomial<F>>(
     p: &P,
 ) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
@@ -453,7 +453,7 @@ mod tests {
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
 
-    impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
+    impl<E: PairingEngine, P: DenseUVPolynomial<E::Fr>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
         /// `d` should be less that `pp.max_degree()`.
         pub(crate) fn trim(
@@ -514,7 +514,7 @@ mod tests {
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -545,7 +545,7 @@ mod tests {
     fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -573,7 +573,7 @@ mod tests {
     fn batch_check_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();

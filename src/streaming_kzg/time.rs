@@ -4,7 +4,7 @@ use ark_ec::msm::FixedBase;
 use ark_ec::PairingEngine;
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use ark_ff::{PrimeField, Zero};
-use ark_poly::{univariate::DensePolynomial, UVPolynomial};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::borrow::Borrow;
 use ark_std::ops::Div;
 use ark_std::rand::RngCore;

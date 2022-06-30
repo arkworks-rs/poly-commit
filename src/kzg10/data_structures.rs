@@ -501,13 +501,13 @@ impl<E: PairingEngine> PreparedCommitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+pub struct Randomness<F: PrimeField, P: DenseUVPolynomial<F>> {
     /// For KZG10, the commitment randomness is a random polynomial.
     pub blinding_polynomial: P,
     _field: PhantomData<F>,
 }
 
-impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> Randomness<F, P> {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
@@ -522,7 +522,7 @@ impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
     }
 }
 
-impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),
@@ -538,7 +538,7 @@ impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -548,7 +548,7 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Random
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -558,14 +558,14 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for R
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Randomness<F, P>> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<&'a Randomness<F, P>> for Randomness<F, P> {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
     for Randomness<F, P>
 {
     #[inline]

@@ -4,7 +4,7 @@ use crate::{
 };
 use ark_ec::PairingEngine;
 use ark_ff::{ToBytes, Zero};
-use ark_poly::MVPolynomial;
+use ark_poly::DenseMVPolynomial;
 use ark_std::{
     io::{Read, Write},
     marker::PhantomData,
@@ -20,7 +20,7 @@ use ark_std::rand::RngCore;
 pub struct UniversalParams<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     /// Contains group elements corresponding to all possible monomials with
@@ -51,7 +51,7 @@ where
 impl<E, P> CanonicalSerialize for UniversalParams<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
@@ -108,7 +108,7 @@ where
 impl<E, P> CanonicalDeserialize for UniversalParams<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
@@ -184,7 +184,7 @@ where
 impl<E, P> PCUniversalParams for UniversalParams<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     fn max_degree(&self) -> usize {
@@ -199,7 +199,7 @@ where
 pub struct CommitterKey<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     /// Contains group elements corresponding to all possible monomials with
@@ -223,7 +223,7 @@ where
 impl<E, P> PCCommitterKey for CommitterKey<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     fn max_degree(&self) -> usize {
@@ -419,7 +419,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
 pub struct Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     /// A multivariate polynomial where each monomial is univariate with random coefficient
@@ -430,7 +430,7 @@ where
 impl<E, P> Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     /// Does `self` provide any hiding properties to the corresponding commitment?
@@ -450,7 +450,7 @@ where
 impl<E, P> PCRandomness for Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     fn empty() -> Self {
@@ -474,10 +474,10 @@ where
     }
 }
 
-impl<'a, E: PairingEngine, P: MVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for Randomness<E, P>
+impl<'a, E: PairingEngine, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     type Output = Self;
@@ -492,7 +492,7 @@ where
 impl<'a, E, P> Add<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     type Output = Self;
@@ -507,7 +507,7 @@ where
 impl<'a, E, P> AddAssign<&'a Randomness<E, P>> for Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     #[inline]
@@ -519,7 +519,7 @@ where
 impl<'a, E, P> AddAssign<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr>,
+    P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
     #[inline]

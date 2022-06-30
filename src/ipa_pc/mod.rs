@@ -1,5 +1,5 @@
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec, CHALLENGE_SIZE};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
+use crate::{BatchLCProof, Error, Evaluations, QuerySet, DenseUVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
@@ -34,7 +34,7 @@ use digest::Digest;
 pub struct InnerProductArgPC<
     G: AffineCurve,
     D: Digest,
-    P: UVPolynomial<G::ScalarField>,
+    P: DenseUVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
 > {
     _projective: PhantomData<G>,
@@ -47,7 +47,7 @@ impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
     D: Digest,
-    P: UVPolynomial<G::ScalarField>,
+    P: DenseUVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
 {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
@@ -316,7 +316,7 @@ impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgP
 where
     G: AffineCurve,
     D: Digest,
-    P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
+    P: DenseUVPolynomial<G::ScalarField, Point = G::ScalarField>,
     S: CryptographicSponge,
 {
     type UniversalParams = UniversalParams<G>;
@@ -1042,7 +1042,7 @@ mod tests {
     use ark_ec::AffineCurve;
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
-    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use blake2::Blake2s;
     use rand_chacha::ChaCha20Rng;
