@@ -36,6 +36,20 @@ where
 {
     /// Constructs public parameters when given as input the maximum degree `degree`
     /// for the polynomial commitment scheme.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ark_poly_commit::kzg10::KZG10;
+    /// use ark_bls12_381::Bls12_381;
+    /// use ark_bls12_381::Fr;
+    /// use ark_poly::univariate::DensePolynomial;
+    /// use ark_ec::PairingEngine;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    /// use ark_std::test_rng;
+    /// let rng = &mut test_rng();
+    /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
+    /// ```
     pub fn setup<R: RngCore>(
         max_degree: usize,
         produce_g2_powers: bool,
