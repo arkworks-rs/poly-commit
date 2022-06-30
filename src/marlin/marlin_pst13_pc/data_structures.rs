@@ -474,7 +474,8 @@ where
     }
 }
 
-impl<'a, E: PairingEngine, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>> for Randomness<E, P>
+impl<'a, E: PairingEngine, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>>
+    for Randomness<E, P>
 where
     E: PairingEngine,
     P: DenseMVPolynomial<E::Fr>,

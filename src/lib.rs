@@ -17,7 +17,7 @@ extern crate derivative;
 extern crate ark_std;
 
 use ark_ff::{Field, PrimeField};
-pub use ark_poly::{Polynomial, DenseUVPolynomial};
+pub use ark_poly::{DenseUVPolynomial, Polynomial};
 use ark_std::rand::RngCore;
 
 use ark_std::{

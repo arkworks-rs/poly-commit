@@ -1,6 +1,6 @@
 use crate::{
-    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCVerifierKey, DenseUVPolynomial, Vec,
+    DenseUVPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
+    PCRandomness, PCVerifierKey, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
@@ -362,7 +362,9 @@ impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<&'a Self> for Randomn
     }
 }
 
-impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
+{
     type Output = Self;
 
     #[inline]
