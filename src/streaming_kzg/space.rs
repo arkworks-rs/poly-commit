@@ -7,7 +7,7 @@ use ark_std::collections::VecDeque;
 use ark_std::vec::Vec;
 
 use crate::streaming_kzg::{ceil_div, vanishing_polynomial, FoldedPolynomialTree};
-use ark_ec::msm::{ChunkedPippenger, HashMapPippenger, VariableBase};
+use ark_ec::msm::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
 use ark_std::iterable::{Iterable, Reverse};
 
 use super::{time::CommitterKey, VerifierKey};
@@ -135,7 +135,10 @@ where
     {
         assert!(self.powers_of_g.len() >= polynomial.len());
 
-        Commitment(VariableBase::msm_chunks(&self.powers_of_g, polynomial).into_affine())
+        Commitment(
+            <E::G1Projective as VariableBaseMSM>::msm_chunks(&self.powers_of_g, polynomial)
+                .into_affine(),
+        )
     }
 
     /// The batch commitment procedures, that takes as input a committer key and the streaming coefficients of a list of polynomials, and produces the desired commitments.

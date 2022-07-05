@@ -3,7 +3,7 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{msm::VariableBase, AffineCurve, ProjectiveCurve};
+use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
@@ -46,6 +46,7 @@ pub struct InnerProductArgPC<
 impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
+    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
     D: Digest,
     P: UVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
@@ -65,7 +66,7 @@ where
             .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
 
-        let mut comm = VariableBase::msm(comm_key, &scalars_bigint);
+        let mut comm = <G::Projective as VariableBaseMSM>::msm_bigint(comm_key, &scalars_bigint);
 
         if randomizer.is_some() {
             assert!(hiding_generator.is_some());
@@ -315,6 +316,7 @@ where
 impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
+    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
     D: Digest,
     P: UVPolynomial<G::ScalarField, Point = G::ScalarField>,
     S: CryptographicSponge,
