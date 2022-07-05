@@ -45,8 +45,9 @@ where
     /// use ark_bls12_381::Fr;
     /// use ark_poly::univariate::DensePolynomial;
     /// use ark_ec::PairingEngine;
-    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
     /// use ark_std::test_rng;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    ///
     /// let rng = &mut test_rng();
     /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
     /// ```
@@ -158,9 +159,10 @@ where
     /// use ark_poly::DenseUVPolynomial;
     /// use ark_poly::univariate::DensePolynomial;
     /// use ark_ec::PairingEngine;
-    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
     /// use ark_std::test_rng;
     /// use ark_std::Zero;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    ///
     /// let rng = &mut test_rng();
     /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
     /// let powers_of_g = params.powers_of_g[..=10].to_vec();
