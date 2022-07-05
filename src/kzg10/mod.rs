@@ -148,6 +148,34 @@ where
     }
 
     /// Outputs a commitment to `polynomial`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ark_poly_commit::kzg10::{KZG10, Powers};
+    /// use ark_bls12_381::Bls12_381;
+    /// use ark_bls12_381::Fr;
+    /// use ark_poly::DenseUVPolynomial;
+    /// use ark_poly::univariate::DensePolynomial;
+    /// use ark_ec::PairingEngine;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    /// use ark_std::test_rng;
+    /// use ark_std::Zero;
+    /// let rng = &mut test_rng();
+    /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
+    /// let powers_of_g = params.powers_of_g[..=10].to_vec();
+    /// let powers_of_gamma_g = (0..=10)
+    ///     .map(|i| params.powers_of_gamma_g[&i])
+    ///     .collect();
+    /// let powers = Powers {
+    ///     powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
+    ///     powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
+    /// };
+    /// let secret_poly = UniPoly_381::rand(10, rng);
+    /// let (comm, r) = KZG10::<Bls12_381, UniPoly_381>::commit(&powers, &secret_poly, None, None).expect("Commitment failed");
+    /// assert!(!comm.0.is_zero(), "Commitment should not be zero");
+    /// assert!(!r.is_hiding(), "Commitment should not be hiding");
+    /// ```
     pub fn commit(
         powers: &Powers<E>,
         polynomial: &P,
