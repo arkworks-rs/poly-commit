@@ -8,7 +8,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::{
-    msm::{FixedBase, VariableBase},
+    msm::{FixedBase, VariableBaseMSM},
     AffineCurve, PairingEngine, ProjectiveCurve,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
@@ -383,7 +383,8 @@ where
             end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-            let mut commitment = VariableBase::msm(&powers_of_g, &plain_ints);
+            let mut commitment =
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
             end_timer!(msm_time);
 
             // Sample random polynomial
@@ -419,7 +420,8 @@ where
 
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment =
-                VariableBase::msm(&powers_of_gamma_g, &random_ints).into_affine();
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_gamma_g, &random_ints)
+                    .into_affine();
             end_timer!(msm_time);
 
             // Mask commitment with random poly
@@ -487,7 +489,7 @@ where
                 // Convert coefficients to BigInt
                 let witness_ints = Self::convert_to_bigints(&w);
                 // Compute MSM
-                VariableBase::msm(&powers_of_g, &witness_ints)
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &witness_ints)
             })
             .collect::<Vec<_>>();
         end_timer!(witness_comm_time);
@@ -517,7 +519,10 @@ where
                     // Convert coefficients to BigInt
                     let hiding_witness_ints = Self::convert_to_bigints(hiding_witness);
                     // Compute MSM and add result to witness
-                    *witness += &VariableBase::msm(&powers_of_gamma_g, &hiding_witness_ints);
+                    *witness += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+                        &powers_of_gamma_g,
+                        &hiding_witness_ints,
+                    );
                 });
             end_timer!(witness_comm_time);
             Some(r.blinding_polynomial.evaluate(point))

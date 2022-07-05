@@ -1,7 +1,7 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
-use ark_ec::msm::{FixedBase, VariableBase};
+use ark_ec::msm::{FixedBase, VariableBaseMSM};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, PrimeField};
 use ark_ff::{One, Zero};
@@ -146,7 +146,11 @@ impl<E: PairingEngine> MultilinearPC<E> {
             .into_iter()
             .map(|x| x.into_bigint())
             .collect();
-        let g_product = VariableBase::msm(&ck.powers_of_g[0], scalars.as_slice()).into_affine();
+        let g_product = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &ck.powers_of_g[0],
+            scalars.as_slice(),
+        )
+        .into_affine();
         Commitment { nv, g_product }
     }
 
@@ -178,7 +182,9 @@ impl<E: PairingEngine> MultilinearPC<E> {
                 .map(|x| q[k][x >> 1].into_bigint()) // fine
                 .collect();
 
-            let pi_h = VariableBase::msm(&ck.powers_of_h[i], &scalars).into_affine(); // no need to move outside and partition
+            let pi_h =
+                <E::G2Projective as VariableBaseMSM>::msm_bigint(&ck.powers_of_h[i], &scalars)
+                    .into_affine(); // no need to move outside and partition
             proofs.push(pi_h);
         }
 

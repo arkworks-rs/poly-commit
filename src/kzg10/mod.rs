@@ -6,7 +6,7 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
-use ark_ec::msm::{FixedBase, VariableBase};
+use ark_ec::msm::{FixedBase, VariableBaseMSM};
 use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
@@ -152,8 +152,10 @@ where
             skip_leading_zeros_and_convert_to_bigints(polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment =
-            VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
+        let mut commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_g[num_leading_zeros..],
+            &plain_coeffs,
+        );
         end_timer!(msm_time);
 
         let mut randomness = Randomness::<E::Fr, P>::empty();
@@ -174,8 +176,11 @@ where
 
         let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
-        let random_commitment =
-            VariableBase::msm(&powers.powers_of_gamma_g, random_ints.as_slice()).into_affine();
+        let random_commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_gamma_g,
+            random_ints.as_slice(),
+        )
+        .into_affine();
         end_timer!(msm_time);
 
         commitment.add_assign_mixed(&random_commitment);
@@ -226,7 +231,10 @@ where
             skip_leading_zeros_and_convert_to_bigints(witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
+        let mut w = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_g[num_leading_zeros..],
+            &witness_coeffs,
+        );
         end_timer!(witness_comm_time);
 
         let random_v = if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
@@ -238,7 +246,10 @@ where
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs());
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBase::msm(&powers.powers_of_gamma_g, &random_witness_coeffs);
+            w += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+                &powers.powers_of_gamma_g,
+                &random_witness_coeffs,
+            );
             end_timer!(witness_comm_time);
             Some(blinding_evaluation)
         } else {
