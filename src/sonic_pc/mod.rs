@@ -5,9 +5,9 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, PrimeField, UniformRand, Zero};
+use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, vec};
+use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 mod data_structures;
 use crate::challenge::ChallengeGenerator;
@@ -66,7 +66,7 @@ where
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_bigint());
+                comm_with_challenge = comm_with_challenge.mul(&randomizer);
             }
 
             // Accumulate values in the BTreeMap
@@ -85,7 +85,7 @@ where
 
         if let Some(randomizer) = randomizer {
             witness = proof.w.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(&randomizer.into_bigint());
+            adjusted_witness = adjusted_witness.mul(&randomizer);
         }
 
         *combined_witness += &witness;

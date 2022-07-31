@@ -4,9 +4,10 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
-use ark_ff::{to_bytes, Field, One, PrimeField, UniformRand, Zero};
+use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
+use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, format, marker::PhantomData, vec};
+use ark_std::{convert::TryInto, format, marker::PhantomData, vec, ops::Mul};
 
 mod data_structures;
 pub use data_structures::*;
@@ -80,8 +81,10 @@ where
         let mut i = 0u64;
         let mut challenge = None;
         while challenge.is_none() {
-            let hash_input = ark_ff::to_bytes![bytes, i].unwrap();
-            let hash = D::digest(&hash_input);
+            // let hash_input = [bytes, &i.to_le_bytes()].concat().as_slice();
+            let mut hash_input = bytes.to_vec();
+            hash_input.extend(i.to_le_bytes());
+            let hash = D::digest(&hash_input.as_slice());
             challenge = <G::ScalarField as Field>::from_random_bytes(&hash);
 
             i += 1;
@@ -144,32 +147,44 @@ where
         if proof.hiding_comm.is_some() {
             let hiding_comm = proof.hiding_comm.unwrap();
             let rand = proof.rand.unwrap();
-
-            let hiding_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![combined_commitment, point, combined_v, hiding_comm].unwrap(),
-            );
+            let mut byte_vec = Vec::new();
+            combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+            // Self::print_byte_vec(&byte_vec);
+            point.serialize_uncompressed(&mut byte_vec).unwrap();
+            // Self::print_byte_vec(&byte_vec);
+            combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
+            hiding_comm.serialize_uncompressed(&mut byte_vec).unwrap();
+            let bytes = byte_vec.as_slice();
+            let hiding_challenge = Self::compute_random_oracle_challenge(bytes);
             combined_commitment_proj += &(hiding_comm.mul(hiding_challenge) - &vk.s.mul(rand));
             combined_commitment = combined_commitment_proj.into_affine();
         }
 
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
-        let mut round_challenge = Self::compute_random_oracle_challenge(
-            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
-        );
+        let mut byte_vec = Vec::new();
+        combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+        point.serialize_uncompressed(&mut byte_vec).unwrap();
+        combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
+        let bytes = byte_vec.as_slice();
+        let mut round_challenge = Self::compute_random_oracle_challenge(bytes);
 
         let h_prime = vk.h.mul(round_challenge);
 
         let mut round_commitment_proj =
-            combined_commitment_proj + &h_prime.mul(&combined_v.into_bigint());
+            combined_commitment_proj + &h_prime.mul(&combined_v);
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
 
         for (l, r) in l_iter.zip(r_iter) {
-            round_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![round_challenge, l, r].unwrap(),
-            );
+            let mut byte_vec = Vec::new();
+            round_challenge.serialize_uncompressed(&mut byte_vec).unwrap();
+            l.serialize_uncompressed(&mut byte_vec).unwrap();
+            r.serialize_uncompressed(&mut byte_vec).unwrap();
+            let bytes = byte_vec.as_slice();
+
+            round_challenge = Self::compute_random_oracle_challenge(bytes);
             round_challenges.push(round_challenge);
             round_commitment_proj +=
                 &(l.mul(round_challenge.inverse().unwrap()) + &r.mul(round_challenge));
@@ -296,11 +311,20 @@ where
         let generators: Vec<_> = ark_std::cfg_into_iter!(0..num_generators)
             .map(|i| {
                 let i = i as u64;
-                let mut hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i].unwrap());
+                let mut hash = D::digest(
+                    [Self::PROTOCOL_NAME, &i.to_le_bytes()]
+                        .concat()
+                        .as_slice(),
+                );
                 let mut g = G::from_random_bytes(&hash);
                 let mut j = 0u64;
                 while g.is_none() {
-                    hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i, j].unwrap());
+                    // PROTOCOL NAME, i, j
+                    let mut bytes = Self::PROTOCOL_NAME.to_vec();
+                    bytes.extend(i.to_le_bytes());
+                    bytes.extend(j.to_le_bytes());
+                    hash = D::digest(bytes.as_slice());
+                    // hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i, j].unwrap());
                     g = G::from_random_bytes(&hash);
                     j += 1;
                 }
@@ -563,10 +587,9 @@ where
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-            let mut hiding_polynomial = P::rand(d, &mut rng);
+            let mut hiding_polynomial = P::rand(0, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
-
-            let hiding_rand = G::ScalarField::rand(rng);
+            let hiding_rand = G::ScalarField::rand(&mut rng);
             let hiding_commitment_proj = Self::cm_commit(
                 ck.comm_key.as_slice(),
                 hiding_polynomial.coeffs(),
@@ -581,15 +604,13 @@ where
             hiding_commitment = Some(batch.pop().unwrap());
             combined_commitment = batch.pop().unwrap();
 
-            let hiding_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![
-                    combined_commitment,
-                    point,
-                    combined_v,
-                    hiding_commitment.unwrap()
-                ]
-                .unwrap(),
-            );
+            let mut byte_vec = Vec::new();
+            combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+            point.serialize_uncompressed(&mut byte_vec).unwrap();
+            combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
+            hiding_commitment.unwrap().serialize_uncompressed(&mut byte_vec).unwrap();
+            let bytes = byte_vec.as_slice();
+            let hiding_challenge = Self::compute_random_oracle_challenge(bytes);
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
             combined_rand += &(hiding_challenge * &hiding_rand);
             combined_commitment_proj +=
@@ -610,9 +631,12 @@ where
         combined_commitment = combined_commitment_proj.into_affine();
 
         // ith challenge
-        let mut round_challenge = Self::compute_random_oracle_challenge(
-            &ark_ff::to_bytes![combined_commitment, point, combined_v].unwrap(),
-        );
+        let mut byte_vec = Vec::new();
+        combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+        point.serialize_uncompressed(&mut byte_vec).unwrap();
+        combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
+        let bytes = byte_vec.as_slice();
+        let mut round_challenge = Self::compute_random_oracle_challenge(bytes);
 
         let h_prime = ck.h.mul(round_challenge).into_affine();
 
@@ -664,9 +688,12 @@ where
             l_vec.push(lr[0]);
             r_vec.push(lr[1]);
 
-            round_challenge = Self::compute_random_oracle_challenge(
-                &ark_ff::to_bytes![round_challenge, lr[0], lr[1]].unwrap(),
-            );
+            let mut byte_vec = Vec::new();
+            round_challenge.serialize_uncompressed(&mut byte_vec).unwrap();
+            lr[0].serialize_uncompressed(&mut byte_vec).unwrap();
+            lr[1].serialize_uncompressed(&mut byte_vec).unwrap();
+            let bytes = byte_vec.as_slice();
+            round_challenge = Self::compute_random_oracle_challenge(bytes);
             let round_challenge_inv = round_challenge.inverse().unwrap();
 
             ark_std::cfg_iter_mut!(coeffs_l)

@@ -3,7 +3,7 @@ use crate::{
     PCRandomness, PCVerifierKey, Vec,
 };
 use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_ff::{Field, PrimeField, ToBytes, ToConstraintField};
+use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
@@ -132,22 +132,6 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> ToBytes for VerifierKey<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.vk.write(&mut writer)?;
-        if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
-            writer.write_all(&degree_bounds_and_shift_powers.len().to_le_bytes())?;
-            for (degree_bound, shift_power) in degree_bounds_and_shift_powers {
-                writer.write_all(&degree_bound.to_le_bytes())?;
-                shift_power.write(&mut writer)?;
-            }
-        }
-        writer.write_all(&self.supported_degree.to_le_bytes())?;
-        writer.write_all(&self.max_degree.to_le_bytes())
-    }
-}
-
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -247,19 +231,6 @@ pub struct Commitment<E: PairingEngine> {
     /// This is `none` if the committed polynomial does not
     /// enforce a strict degree bound.
     pub shifted_comm: Option<kzg10::Commitment<E>>,
-}
-
-impl<E: PairingEngine> ToBytes for Commitment<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.comm.write(&mut writer)?;
-        let shifted_exists = self.shifted_comm.is_some();
-        shifted_exists.write(&mut writer)?;
-        self.shifted_comm
-            .as_ref()
-            .unwrap_or(&kzg10::Commitment::empty())
-            .write(&mut writer)
-    }
 }
 
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>

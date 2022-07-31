@@ -7,10 +7,10 @@
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
 use ark_ec::msm::{FixedBase, VariableBaseMSM};
-use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
-use ark_std::{format, marker::PhantomData, ops::Div, vec};
+use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
@@ -342,8 +342,8 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer.into_bigint());
-            total_w += &w.mul(randomizer.into_bigint());
+            total_c += &c.mul(randomizer);
+            total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();

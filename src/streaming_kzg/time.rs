@@ -2,11 +2,11 @@
 //! with optimization from [\[BDFG20\]](https://eprint.iacr.org/2020/081.pdf).
 use ark_ec::msm::FixedBase;
 use ark_ec::PairingEngine;
-use ark_ec::{AffineCurve, ProjectiveCurve};
+use ark_ec::ProjectiveCurve;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::borrow::Borrow;
-use ark_std::ops::Div;
+use ark_std::ops::{Mul, Div};
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
 use ark_std::UniformRand;
@@ -64,7 +64,7 @@ impl<E: PairingEngine> CommitterKey<E> {
         let powers_of_g2 = powers_of_tau
             .iter()
             .take(max_eval_points + 1)
-            .map(|t| g2.mul(t.into_bigint()).into_affine())
+            .map(|t| g2.mul(t).into_affine())
             .collect::<Vec<_>>();
 
         CommitterKey {

@@ -3,7 +3,7 @@ use crate::{
     PCCommitterKey, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,
 };
 use ark_ec::PairingEngine;
-use ark_ff::{ToBytes, Zero};
+use ark_ff::Zero;
 use ark_poly::DenseMVPolynomial;
 use ark_std::{
     io::{Read, Write},
@@ -550,24 +550,12 @@ pub struct Proof<E: PairingEngine> {
 impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
-            ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
+            E::Fr::zero().serialized_size()
+            //ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
         } else {
             0
         };
-        (self.w.len() * ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len()) / 2 + hiding_size
-    }
-}
-
-impl<E: PairingEngine> ToBytes for Proof<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.w
-            .iter()
-            .map(|e| e.write(&mut writer))
-            .collect::<Result<_, _>>()?;
-        self.random_v
-            .as_ref()
-            .unwrap_or(&E::Fr::zero())
-            .write(&mut writer)
+        (self.w.len() * E::G1Affine::zero().serialized_size()) / 2 + hiding_size
+        //(self.w.len() * ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len()) / 2 + hiding_size
     }
 }

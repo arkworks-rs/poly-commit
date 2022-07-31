@@ -66,7 +66,7 @@ ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves" }
 ark-ed-on-bls12-381 = { git = "https://github.com/arkworks-rs/curves" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
-ark-sponge = { git = "https://github.com/arkworks-rs/sponge" }
+ark-sponge = { git = "https://github.com/yuwen01/sponge" }
 
 [features]
 default = [ "std", "parallel" ]

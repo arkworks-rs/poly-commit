@@ -14,7 +14,7 @@ use ark_ec::{
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, ops::Index, vec};
+use ark_std::{marker::PhantomData, ops::Index, vec, ops::Mul};
 
 mod data_structures;
 pub use data_structures::*;
@@ -256,7 +256,7 @@ where
             .collect();
         let beta_h: Vec<_> = betas
             .iter()
-            .map(|b| h.mul(&(*b).into_bigint()).into_affine())
+            .map(|b| h.mul(b).into_affine())
             .collect();
         let h = h.into_affine();
         let prepared_h = h.into();
@@ -630,7 +630,7 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(&randomizer.into_bigint());
+            total_c += &c.mul(&randomizer);
             ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
@@ -638,8 +638,8 @@ where
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(&g_multiplier.into_bigint());
-        total_c -= &gamma_g.mul(&gamma_g_multiplier.into_bigint());
+        total_c -= &g.mul(&g_multiplier);
+        total_c -= &gamma_g.mul(&gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");

@@ -1,7 +1,7 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
 use ark_ec::AffineCurve;
-use ark_ff::{Field, ToBytes, UniformRand, Zero};
+use ark_ff::{Field, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::rand::RngCore;
 use ark_std::{
@@ -121,19 +121,6 @@ impl<G: AffineCurve> PCCommitment for Commitment<G> {
     }
 }
 
-impl<G: AffineCurve> ToBytes for Commitment<G> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.comm.write(&mut writer)?;
-        let shifted_exists = self.shifted_comm.is_some();
-        shifted_exists.write(&mut writer)?;
-        self.shifted_comm
-            .as_ref()
-            .unwrap_or(&G::zero())
-            .write(&mut writer)
-    }
-}
-
 /// Nothing to do to prepare this commitment (for now).
 pub type PreparedCommitment<E> = Commitment<E>;
 
@@ -213,24 +200,6 @@ pub struct Proof<G: AffineCurve> {
 }
 
 impl<G: AffineCurve> PCProof for Proof<G> {}
-
-impl<G: AffineCurve> ToBytes for Proof<G> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.l_vec.write(&mut writer)?;
-        self.r_vec.write(&mut writer)?;
-        self.final_comm_key.write(&mut writer)?;
-        self.c.write(&mut writer)?;
-        self.hiding_comm
-            .as_ref()
-            .unwrap_or(&G::zero())
-            .write(&mut writer)?;
-        self.rand
-            .as_ref()
-            .unwrap_or(&G::ScalarField::zero())
-            .write(&mut writer)
-    }
-}
 
 /// `SuccinctCheckPolynomial` is a succinctly-representated polynomial
 /// generated from the `log_d` random oracle challenges generated in `open`.

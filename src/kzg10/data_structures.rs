@@ -1,6 +1,6 @@
 use crate::*;
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes, ToConstraintField, Zero};
+use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ff::{PrimeField, ToConstraintField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Cow,
@@ -346,18 +346,6 @@ impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> ToBytes for VerifierKey<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.g.write(&mut writer)?;
-        self.gamma_g.write(&mut writer)?;
-        self.h.write(&mut writer)?;
-        self.beta_h.write(&mut writer)?;
-        self.prepared_h.write(&mut writer)?;
-        self.prepared_beta_h.write(&mut writer)
-    }
-}
-
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -424,13 +412,6 @@ pub struct Commitment<E: PairingEngine>(
     pub E::G1Affine,
 );
 
-impl<E: PairingEngine> ToBytes for Commitment<E> {
-    #[inline]
-    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
-        self.0.write(writer)
-    }
-}
-
 impl<E: PairingEngine> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
@@ -454,7 +435,7 @@ where
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
-        let mut other = other.0.mul(f.into_bigint());
+        let mut other = other.0 * f;
         other.add_assign_mixed(&self.0);
         self.0 = other.into();
     }
@@ -598,14 +579,3 @@ pub struct Proof<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> PCProof for Proof<E> {}
-
-impl<E: PairingEngine> ToBytes for Proof<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.w.write(&mut writer)?;
-        self.random_v
-            .as_ref()
-            .unwrap_or(&E::Fr::zero())
-            .write(&mut writer)
-    }
-}
