@@ -56,9 +56,7 @@ pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment:
-    Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize
-{
+pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -100,7 +98,7 @@ pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
 
 /// Defines the minimal interface of evaluation proofs for any polynomial
 /// commitment scheme.
-pub trait PCProof: Clone + ark_ff::ToBytes + CanonicalSerialize + CanonicalDeserialize {
+pub trait PCProof: Clone + CanonicalSerialize + CanonicalDeserialize {
     /// Size in bytes
     #[deprecated(since = "0.4.0", note = "Please use `.serialized_size()` instead.")]
     fn size_in_bytes(&self) -> usize {
@@ -229,13 +227,6 @@ impl<C: PCCommitment> LabeledCommitment<C> {
     /// Retrieve the degree bound in `self`.
     pub fn degree_bound(&self) -> Option<usize> {
         self.degree_bound
-    }
-}
-
-impl<C: PCCommitment> ark_ff::ToBytes for LabeledCommitment<C> {
-    #[inline]
-    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
-        self.commitment.write(writer)
     }
 }
 

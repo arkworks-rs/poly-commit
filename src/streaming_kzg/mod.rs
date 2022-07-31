@@ -87,6 +87,7 @@ mod space;
 mod time;
 
 use ark_ec::ProjectiveCurve;
+use ark_serialize::CanonicalSerialize;
 use ark_std::vec::Vec;
 pub use data_structures::*;
 pub use space::CommitterKeyStream;
@@ -112,7 +113,8 @@ pub struct Commitment<E: PairingEngine>(pub(crate) E::G1Affine);
 impl<E: PairingEngine> Commitment<E> {
     /// Return the size of Commitment in bytes.
     pub fn size_in_bytes(&self) -> usize {
-        ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+        // ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
+        E::G1Affine::zero().serialized_size() / 2
     }
 }
 
@@ -121,13 +123,6 @@ fn msm<E: PairingEngine>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affin
     let scalars = scalars.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
     let sp = VariableBase::msm(bases, &scalars);
     sp.into_affine()
-}
-
-impl<E: PairingEngine> ark_ff::ToBytes for Commitment<E> {
-    #[inline]
-    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
-        self.0.write(writer)
-    }
 }
 
 /// Polynomial evaluation proof, represented as a single \\(\GG_1\\) element.
