@@ -81,7 +81,6 @@ where
         let mut i = 0u64;
         let mut challenge = None;
         while challenge.is_none() {
-            // let hash_input = [bytes, &i.to_le_bytes()].concat().as_slice();
             let mut hash_input = bytes.to_vec();
             hash_input.extend(i.to_le_bytes());
             let hash = D::digest(&hash_input.as_slice());
