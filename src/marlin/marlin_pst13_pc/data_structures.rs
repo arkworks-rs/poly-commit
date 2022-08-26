@@ -551,11 +551,9 @@ impl<E: PairingEngine> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
             E::Fr::zero().serialized_size()
-            //ark_ff::to_bytes![E::Fr::zero()].unwrap().len()
         } else {
             0
         };
         (self.w.len() * E::G1Affine::zero().serialized_size()) / 2 + hiding_size
-        //(self.w.len() * ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len()) / 2 + hiding_size
     }
 }

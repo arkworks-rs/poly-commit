@@ -148,9 +148,7 @@ where
             let rand = proof.rand.unwrap();
             let mut byte_vec = Vec::new();
             combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
-            // Self::print_byte_vec(&byte_vec);
             point.serialize_uncompressed(&mut byte_vec).unwrap();
-            // Self::print_byte_vec(&byte_vec);
             combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
             hiding_comm.serialize_uncompressed(&mut byte_vec).unwrap();
             let bytes = byte_vec.as_slice();
@@ -323,7 +321,6 @@ where
                     bytes.extend(i.to_le_bytes());
                     bytes.extend(j.to_le_bytes());
                     hash = D::digest(bytes.as_slice());
-                    // hash = D::digest(&to_bytes![&Self::PROTOCOL_NAME, i, j].unwrap());
                     g = G::from_random_bytes(&hash);
                     j += 1;
                 }
