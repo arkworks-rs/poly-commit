@@ -8,13 +8,13 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::{
-    msm::{FixedBase, VariableBase},
+    msm::{FixedBase, VariableBaseMSM},
     AffineCurve, PairingEngine, ProjectiveCurve,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::{multivariate::Term, MVPolynomial};
+use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, ops::Index, vec};
+use ark_std::{marker::PhantomData, ops::Index, ops::Mul, vec};
 
 mod data_structures;
 pub use data_structures::*;
@@ -33,13 +33,13 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinPST13<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
+impl<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -143,7 +143,7 @@ impl<E: PairingEngine, P: MVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinPST13<E, P, S>
 where
     E: PairingEngine,
-    P: MVPolynomial<E::Fr> + Sync,
+    P: DenseMVPolynomial<E::Fr> + Sync,
     S: CryptographicSponge,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -254,10 +254,7 @@ where
             .into_iter()
             .map(|v| E::G1Projective::batch_normalization_into_affine(&v))
             .collect();
-        let beta_h: Vec<_> = betas
-            .iter()
-            .map(|b| h.mul(&(*b).into_bigint()).into_affine())
-            .collect();
+        let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
         let prepared_h = h.into();
         let prepared_beta_h = beta_h.iter().map(|bh| (*bh).into()).collect();
@@ -383,7 +380,8 @@ where
             end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-            let mut commitment = VariableBase::msm(&powers_of_g, &plain_ints);
+            let mut commitment =
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
             end_timer!(msm_time);
 
             // Sample random polynomial
@@ -419,7 +417,8 @@ where
 
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment =
-                VariableBase::msm(&powers_of_gamma_g, &random_ints).into_affine();
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_gamma_g, &random_ints)
+                    .into_affine();
             end_timer!(msm_time);
 
             // Mask commitment with random poly
@@ -487,7 +486,7 @@ where
                 // Convert coefficients to BigInt
                 let witness_ints = Self::convert_to_bigints(&w);
                 // Compute MSM
-                VariableBase::msm(&powers_of_g, &witness_ints)
+                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &witness_ints)
             })
             .collect::<Vec<_>>();
         end_timer!(witness_comm_time);
@@ -517,7 +516,10 @@ where
                     // Convert coefficients to BigInt
                     let hiding_witness_ints = Self::convert_to_bigints(hiding_witness);
                     // Compute MSM and add result to witness
-                    *witness += &VariableBase::msm(&powers_of_gamma_g, &hiding_witness_ints);
+                    *witness += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+                        &powers_of_gamma_g,
+                        &hiding_witness_ints,
+                    );
                 });
             end_timer!(witness_comm_time);
             Some(r.blinding_polynomial.evaluate(point))
@@ -625,7 +627,7 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(&randomizer.into_bigint());
+            total_c += &c.mul(&randomizer);
             ark_std::cfg_iter_mut!(total_w)
                 .enumerate()
                 .for_each(|(i, w_i)| *w_i += &w[i].mul(randomizer));
@@ -633,8 +635,8 @@ where
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
         }
-        total_c -= &g.mul(&g_multiplier.into_bigint());
-        total_c -= &gamma_g.mul(&gamma_g_multiplier.into_bigint());
+        total_c -= &g.mul(&g_multiplier);
+        total_c -= &gamma_g.mul(&gamma_g_multiplier);
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
@@ -717,7 +719,7 @@ mod tests {
     use ark_ff::UniformRand;
     use ark_poly::{
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
-        MVPolynomial,
+        DenseMVPolynomial,
     };
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;

@@ -5,7 +5,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
-use ark_poly::UVPolynomial;
+use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
 
@@ -26,13 +26,13 @@ pub use data_structures::*;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinKZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-pub(crate) fn shift_polynomial<E: PairingEngine, P: UVPolynomial<E::Fr>>(
+pub(crate) fn shift_polynomial<E: PairingEngine, P: DenseUVPolynomial<E::Fr>>(
     ck: &CommitterKey<E>,
     p: &P,
     degree_bound: usize,
@@ -56,7 +56,7 @@ pub(crate) fn shift_polynomial<E: PairingEngine, P: UVPolynomial<E::Fr>>(
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinKZG10<E, P, S>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
@@ -540,7 +540,7 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_ec::PairingEngine;
     use ark_ff::UniformRand;
-    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 

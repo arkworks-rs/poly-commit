@@ -1,13 +1,13 @@
 use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet, UVPolynomial};
+use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, PrimeField, UniformRand, Zero};
+use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, vec};
+use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 mod data_structures;
 use crate::challenge::ChallengeGenerator;
@@ -24,7 +24,7 @@ pub use data_structures::*;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct SonicKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct SonicKZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
@@ -33,7 +33,7 @@ pub struct SonicKZG10<E: PairingEngine, P: UVPolynomial<E::Fr>, S: Cryptographic
 impl<E, P, S> SonicKZG10<E, P, S>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr>,
+    P: DenseUVPolynomial<E::Fr>,
     S: CryptographicSponge,
 {
     fn accumulate_elems<'a>(
@@ -66,7 +66,7 @@ where
             let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
-                comm_with_challenge = comm_with_challenge.mul(&randomizer.into_bigint());
+                comm_with_challenge = comm_with_challenge.mul(&randomizer);
             }
 
             // Accumulate values in the BTreeMap
@@ -85,7 +85,7 @@ where
 
         if let Some(randomizer) = randomizer {
             witness = proof.w.mul(randomizer);
-            adjusted_witness = adjusted_witness.mul(&randomizer.into_bigint());
+            adjusted_witness = adjusted_witness.mul(&randomizer);
         }
 
         *combined_witness += &witness;
@@ -137,7 +137,7 @@ where
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for SonicKZG10<E, P, S>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
@@ -683,7 +683,7 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_ec::PairingEngine;
     use ark_ff::UniformRand;
-    use ark_poly::{univariate::DensePolynomial as DensePoly, UVPolynomial};
+    use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 

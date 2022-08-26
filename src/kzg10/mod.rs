@@ -6,11 +6,11 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
-use ark_ec::msm::{FixedBase, VariableBase};
-use ark_ec::{group::Group, AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::msm::{FixedBase, VariableBaseMSM};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::UVPolynomial;
-use ark_std::{format, marker::PhantomData, ops::Div, vec};
+use ark_poly::DenseUVPolynomial;
+use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
@@ -23,7 +23,7 @@ pub use data_structures::*;
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
 ///
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-pub struct KZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
+pub struct KZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
 }
@@ -31,7 +31,7 @@ pub struct KZG10<E: PairingEngine, P: UVPolynomial<E::Fr>> {
 impl<E, P> KZG10<E, P>
 where
     E: PairingEngine,
-    P: UVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
     /// Constructs public parameters when given as input the maximum degree `degree`
@@ -152,8 +152,10 @@ where
             skip_leading_zeros_and_convert_to_bigints(polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment =
-            VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &plain_coeffs);
+        let mut commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_g[num_leading_zeros..],
+            &plain_coeffs,
+        );
         end_timer!(msm_time);
 
         let mut randomness = Randomness::<E::Fr, P>::empty();
@@ -174,8 +176,11 @@ where
 
         let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
-        let random_commitment =
-            VariableBase::msm(&powers.powers_of_gamma_g, random_ints.as_slice()).into_affine();
+        let random_commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_gamma_g,
+            random_ints.as_slice(),
+        )
+        .into_affine();
         end_timer!(msm_time);
 
         commitment.add_assign_mixed(&random_commitment);
@@ -226,7 +231,10 @@ where
             skip_leading_zeros_and_convert_to_bigints(witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = VariableBase::msm(&powers.powers_of_g[num_leading_zeros..], &witness_coeffs);
+        let mut w = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+            &powers.powers_of_g[num_leading_zeros..],
+            &witness_coeffs,
+        );
         end_timer!(witness_comm_time);
 
         let random_v = if let Some(hiding_witness_polynomial) = hiding_witness_polynomial {
@@ -238,7 +246,10 @@ where
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs());
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &VariableBase::msm(&powers.powers_of_gamma_g, &random_witness_coeffs);
+            w += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+                &powers.powers_of_gamma_g,
+                &random_witness_coeffs,
+            );
             end_timer!(witness_comm_time);
             Some(blinding_evaluation)
         } else {
@@ -331,8 +342,8 @@ where
             if let Some(random_v) = proof.random_v {
                 gamma_g_multiplier += &(randomizer * &random_v);
             }
-            total_c += &c.mul(randomizer.into_bigint());
-            total_w += &w.mul(randomizer.into_bigint());
+            total_c += &c.mul(randomizer);
+            total_w += &w.mul(randomizer);
             // We don't need to sample randomizers from the full field,
             // only from 128-bit strings.
             randomizer = u128::rand(rng).into();
@@ -416,7 +427,7 @@ where
     }
 }
 
-fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: UVPolynomial<F>>(
+fn skip_leading_zeros_and_convert_to_bigints<F: PrimeField, P: DenseUVPolynomial<F>>(
     p: &P,
 ) -> (usize, Vec<F::BigInt>) {
     let mut num_leading_zeros = 0;
@@ -453,7 +464,7 @@ mod tests {
     type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
 
-    impl<E: PairingEngine, P: UVPolynomial<E::Fr>> KZG10<E, P> {
+    impl<E: PairingEngine, P: DenseUVPolynomial<E::Fr>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
         /// `d` should be less that `pp.max_degree()`.
         pub(crate) fn trim(
@@ -514,7 +525,7 @@ mod tests {
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -545,7 +556,7 @@ mod tests {
     fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -573,7 +584,7 @@ mod tests {
     fn batch_check_test_template<E, P>() -> Result<(), Error>
     where
         E: PairingEngine,
-        P: UVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
