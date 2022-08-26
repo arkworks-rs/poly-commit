@@ -585,7 +585,7 @@ where
         if has_hiding {
             let mut rng = rng.expect("hiding commitments require randomness");
             let hiding_time = start_timer!(|| "Applying hiding.");
-            let mut hiding_polynomial = P::rand(0, &mut rng);
+            let mut hiding_polynomial = P::rand(d, &mut rng);
             hiding_polynomial -= &P::from_coefficients_slice(&[hiding_polynomial.evaluate(point)]);
             let hiding_rand = G::ScalarField::rand(&mut rng);
             let hiding_commitment_proj = Self::cm_commit(
