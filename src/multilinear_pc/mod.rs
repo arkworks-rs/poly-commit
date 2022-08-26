@@ -9,9 +9,9 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_std::collections::LinkedList;
 use ark_std::iter::FromIterator;
 use ark_std::marker::PhantomData;
+use ark_std::ops::Mul;
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
-use ark_std::ops::Mul;
 use ark_std::UniformRand;
 
 /// data structures used by multilinear extension commitment scheme

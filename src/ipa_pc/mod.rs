@@ -7,7 +7,7 @@ use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, format, marker::PhantomData, vec, ops::Mul};
+use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul, vec};
 
 mod data_structures;
 pub use data_structures::*;
@@ -147,7 +147,9 @@ where
             let hiding_comm = proof.hiding_comm.unwrap();
             let rand = proof.rand.unwrap();
             let mut byte_vec = Vec::new();
-            combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+            combined_commitment
+                .serialize_uncompressed(&mut byte_vec)
+                .unwrap();
             point.serialize_uncompressed(&mut byte_vec).unwrap();
             combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
             hiding_comm.serialize_uncompressed(&mut byte_vec).unwrap();
@@ -160,7 +162,9 @@ where
         // Challenge for each round
         let mut round_challenges = Vec::with_capacity(log_d);
         let mut byte_vec = Vec::new();
-        combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+        combined_commitment
+            .serialize_uncompressed(&mut byte_vec)
+            .unwrap();
         point.serialize_uncompressed(&mut byte_vec).unwrap();
         combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
         let bytes = byte_vec.as_slice();
@@ -168,15 +172,16 @@ where
 
         let h_prime = vk.h.mul(round_challenge);
 
-        let mut round_commitment_proj =
-            combined_commitment_proj + &h_prime.mul(&combined_v);
+        let mut round_commitment_proj = combined_commitment_proj + &h_prime.mul(&combined_v);
 
         let l_iter = proof.l_vec.iter();
         let r_iter = proof.r_vec.iter();
 
         for (l, r) in l_iter.zip(r_iter) {
             let mut byte_vec = Vec::new();
-            round_challenge.serialize_uncompressed(&mut byte_vec).unwrap();
+            round_challenge
+                .serialize_uncompressed(&mut byte_vec)
+                .unwrap();
             l.serialize_uncompressed(&mut byte_vec).unwrap();
             r.serialize_uncompressed(&mut byte_vec).unwrap();
             let bytes = byte_vec.as_slice();
@@ -308,11 +313,8 @@ where
         let generators: Vec<_> = ark_std::cfg_into_iter!(0..num_generators)
             .map(|i| {
                 let i = i as u64;
-                let mut hash = D::digest(
-                    [Self::PROTOCOL_NAME, &i.to_le_bytes()]
-                        .concat()
-                        .as_slice(),
-                );
+                let mut hash =
+                    D::digest([Self::PROTOCOL_NAME, &i.to_le_bytes()].concat().as_slice());
                 let mut g = G::from_random_bytes(&hash);
                 let mut j = 0u64;
                 while g.is_none() {
@@ -601,10 +603,15 @@ where
             combined_commitment = batch.pop().unwrap();
 
             let mut byte_vec = Vec::new();
-            combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+            combined_commitment
+                .serialize_uncompressed(&mut byte_vec)
+                .unwrap();
             point.serialize_uncompressed(&mut byte_vec).unwrap();
             combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
-            hiding_commitment.unwrap().serialize_uncompressed(&mut byte_vec).unwrap();
+            hiding_commitment
+                .unwrap()
+                .serialize_uncompressed(&mut byte_vec)
+                .unwrap();
             let bytes = byte_vec.as_slice();
             let hiding_challenge = Self::compute_random_oracle_challenge(bytes);
             combined_polynomial += (hiding_challenge, &hiding_polynomial);
@@ -628,7 +635,9 @@ where
 
         // ith challenge
         let mut byte_vec = Vec::new();
-        combined_commitment.serialize_uncompressed(&mut byte_vec).unwrap();
+        combined_commitment
+            .serialize_uncompressed(&mut byte_vec)
+            .unwrap();
         point.serialize_uncompressed(&mut byte_vec).unwrap();
         combined_v.serialize_uncompressed(&mut byte_vec).unwrap();
         let bytes = byte_vec.as_slice();
@@ -685,7 +694,9 @@ where
             r_vec.push(lr[1]);
 
             let mut byte_vec = Vec::new();
-            round_challenge.serialize_uncompressed(&mut byte_vec).unwrap();
+            round_challenge
+                .serialize_uncompressed(&mut byte_vec)
+                .unwrap();
             lr[0].serialize_uncompressed(&mut byte_vec).unwrap();
             lr[1].serialize_uncompressed(&mut byte_vec).unwrap();
             let bytes = byte_vec.as_slice();

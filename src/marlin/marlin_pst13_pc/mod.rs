@@ -14,7 +14,7 @@ use ark_ec::{
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, ops::Index, vec, ops::Mul};
+use ark_std::{marker::PhantomData, ops::Index, ops::Mul, vec};
 
 mod data_structures;
 pub use data_structures::*;
@@ -254,10 +254,7 @@ where
             .into_iter()
             .map(|v| E::G1Projective::batch_normalization_into_affine(&v))
             .collect();
-        let beta_h: Vec<_> = betas
-            .iter()
-            .map(|b| h.mul(b).into_affine())
-            .collect();
+        let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
         let prepared_h = h.into();
         let prepared_beta_h = beta_h.iter().map(|bh| (*bh).into()).collect();

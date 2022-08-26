@@ -6,7 +6,7 @@ use ark_ec::ProjectiveCurve;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::borrow::Borrow;
-use ark_std::ops::{Mul, Div};
+use ark_std::ops::{Div, Mul};
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
 use ark_std::UniformRand;
