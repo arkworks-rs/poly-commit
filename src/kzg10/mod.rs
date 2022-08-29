@@ -302,13 +302,15 @@ where
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
-        let lhs = E::pairing(inner, vk.h);
+        let inner2 = vk.beta_h.into_projective() - &vk.h.mul(point);
 
-        let inner = vk.beta_h.into_projective() - &vk.h.mul(point);
-        let rhs = E::pairing(proof.w, inner);
-
-        end_timer!(check_time, || format!("Result: {}", lhs == rhs));
-        Ok(lhs == rhs)
+        let pairing_prod_inputs: [(E::G1Prepared, E::G2Prepared); 2] = [
+            ((-inner).into_affine().into(), vk.h.into()),
+            (proof.w.into(), inner2.into_affine().into()),
+        ];
+        let res = E::product_of_pairings(pairing_prod_inputs.iter()).is_one();
+        end_timer!(check_time, || format!("Result: {}", res));
+        Ok(res)
     }
 
     /// Check that each `proof_i` in `proofs` is a valid proof of evaluation for
