@@ -7,7 +7,7 @@ use crate::{PCRandomness, Polynomial, PolynomialCommitment};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, Zero};
 use ark_sponge::CryptographicSponge;
-use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign};
+use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by

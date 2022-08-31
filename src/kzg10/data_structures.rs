@@ -1,6 +1,6 @@
 use crate::*;
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{PrimeField, ToBytes, ToConstraintField, Zero};
+use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ff::{PrimeField, ToConstraintField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
     borrow::Cow,
@@ -346,18 +346,6 @@ impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> ToBytes for VerifierKey<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.g.write(&mut writer)?;
-        self.gamma_g.write(&mut writer)?;
-        self.h.write(&mut writer)?;
-        self.beta_h.write(&mut writer)?;
-        self.prepared_h.write(&mut writer)?;
-        self.prepared_beta_h.write(&mut writer)
-    }
-}
-
 impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -424,13 +412,6 @@ pub struct Commitment<E: PairingEngine>(
     pub E::G1Affine,
 );
 
-impl<E: PairingEngine> ToBytes for Commitment<E> {
-    #[inline]
-    fn write<W: Write>(&self, writer: W) -> ark_std::io::Result<()> {
-        self.0.write(writer)
-    }
-}
-
 impl<E: PairingEngine> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
@@ -454,7 +435,7 @@ where
 impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
-        let mut other = other.0.mul(f.into_bigint());
+        let mut other = other.0 * f;
         other.add_assign_mixed(&self.0);
         self.0 = other.into();
     }
@@ -501,13 +482,13 @@ impl<E: PairingEngine> PreparedCommitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Randomness<F: PrimeField, P: UVPolynomial<F>> {
+pub struct Randomness<F: PrimeField, P: DenseUVPolynomial<F>> {
     /// For KZG10, the commitment randomness is a random polynomial.
     pub blinding_polynomial: P,
     _field: PhantomData<F>,
 }
 
-impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> Randomness<F, P> {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
     #[inline]
@@ -522,7 +503,7 @@ impl<F: PrimeField, P: UVPolynomial<F>> Randomness<F, P> {
     }
 }
 
-impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> PCRandomness for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),
@@ -538,7 +519,7 @@ impl<F: PrimeField, P: UVPolynomial<F>> PCRandomness for Randomness<F, P> {
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<&'a Randomness<F, P>> for Randomness<F, P> {
     type Output = Self;
 
     #[inline]
@@ -548,7 +529,9 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<&'a Randomness<F, P>> for Random
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> Add<(F, &'a Randomness<F, P>)>
+    for Randomness<F, P>
+{
     type Output = Self;
 
     #[inline]
@@ -558,14 +541,16 @@ impl<'a, F: PrimeField, P: UVPolynomial<F>> Add<(F, &'a Randomness<F, P>)> for R
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<&'a Randomness<F, P>> for Randomness<F, P> {
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<&'a Randomness<F, P>>
+    for Randomness<F, P>
+{
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
         self.blinding_polynomial += &other.blinding_polynomial;
     }
 }
 
-impl<'a, F: PrimeField, P: UVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
+impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<(F, &'a Randomness<F, P>)>
     for Randomness<F, P>
 {
     #[inline]
@@ -594,14 +579,3 @@ pub struct Proof<E: PairingEngine> {
 }
 
 impl<E: PairingEngine> PCProof for Proof<E> {}
-
-impl<E: PairingEngine> ToBytes for Proof<E> {
-    #[inline]
-    fn write<W: Write>(&self, mut writer: W) -> ark_std::io::Result<()> {
-        self.w.write(&mut writer)?;
-        self.random_v
-            .as_ref()
-            .unwrap_or(&E::Fr::zero())
-            .write(&mut writer)
-    }
-}

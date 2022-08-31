@@ -1,6 +1,6 @@
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::UVPolynomial;
+use ark_poly::DenseUVPolynomial;
 use ark_std::vec::Vec;
 use ark_std::{UniformRand, Zero};
 
@@ -153,7 +153,7 @@ fn test_trivial_commitment() {
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_poly::univariate::DensePolynomial;
-    use ark_poly::UVPolynomial;
+    use ark_poly::DenseUVPolynomial;
     use ark_std::One;
 
     let rng = &mut ark_std::test_rng();
@@ -173,8 +173,8 @@ fn test_commitment() {
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_poly::univariate::DensePolynomial;
+    use ark_poly::DenseUVPolynomial;
     use ark_poly::Polynomial;
-    use ark_poly::UVPolynomial;
 
     let rng = &mut ark_std::test_rng();
     let ck = CommitterKey::<Bls12_381>::new(100, 3, rng);
@@ -195,7 +195,7 @@ fn test_open_multi_points() {
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ff::Field;
     use ark_poly::univariate::DensePolynomial;
-    use ark_poly::UVPolynomial;
+    use ark_poly::DenseUVPolynomial;
     use ark_std::test_rng;
 
     let max_msm_buffer = 1 << 20;

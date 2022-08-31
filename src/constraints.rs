@@ -100,13 +100,13 @@ pub trait PCCheckVar<
 >: Clone
 {
     /// An allocated version of `PC::VerifierKey`.
-    type VerifierKeyVar: AllocVar<PC::VerifierKey, ConstraintF> + Clone + ToBytesGadget<ConstraintF>;
+    type VerifierKeyVar: AllocVar<PC::VerifierKey, ConstraintF> + Clone;
     /// An allocated version of `PC::PreparedVerifierKey`.
     type PreparedVerifierKeyVar: AllocVar<PC::PreparedVerifierKey, ConstraintF>
         + Clone
         + PrepareGadget<Self::VerifierKeyVar, ConstraintF>;
     /// An allocated version of `PC::Commitment`.
-    type CommitmentVar: AllocVar<PC::Commitment, ConstraintF> + Clone + ToBytesGadget<ConstraintF>;
+    type CommitmentVar: AllocVar<PC::Commitment, ConstraintF> + Clone;
     /// An allocated version of `PC::PreparedCommitment`.
     type PreparedCommitmentVar: AllocVar<PC::PreparedCommitment, ConstraintF>
         + PrepareGadget<Self::CommitmentVar, ConstraintF>
