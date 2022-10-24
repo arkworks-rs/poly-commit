@@ -53,12 +53,12 @@ impl<E: Pairing> CommitterKey<E> {
         let tau = E::ScalarField::rand(rng);
         let powers_of_tau = powers(tau, max_degree + 1);
 
-        let g = E::G1Projective::rand(rng);
+        let g = E::G1::rand(rng);
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
         let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let powers_of_g_proj = FixedBase::msm(scalar_bits, window_size, &g_table, &powers_of_tau);
-        let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g_proj);
+        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g_proj);
 
         let g2 = E::G2Projective::rand(rng).into_affine();
         let powers_of_g2 = powers_of_tau

@@ -49,8 +49,8 @@ where
     /// MSM for `commitments` and `coeffs`
     fn combine_commitments<'a>(
         coeffs_and_comms: impl IntoIterator<Item = (E::ScalarField, &'a marlin_pc::Commitment<E>)>,
-    ) -> (E::G1Projective, Option<E::G1Projective>) {
-        let mut combined_comm = E::G1Projective::zero();
+    ) -> (E::G1, Option<E::G1>) {
+        let mut combined_comm = E::G1::zero();
         let mut combined_shifted_comm = None;
         for (coeff, comm) in coeffs_and_comms {
             if coeff.is_one() {
@@ -69,7 +69,7 @@ where
 
     /// Normalize a list of commitments
     fn normalize_commitments<'a>(
-        commitments: Vec<(E::G1Projective, Option<E::G1Projective>)>,
+        commitments: Vec<(E::G1, Option<E::G1>)>,
     ) -> Vec<marlin_pc::Commitment<E>> {
         let mut comms = Vec::with_capacity(commitments.len());
         let mut s_comms = Vec::with_capacity(commitments.len());
@@ -80,12 +80,12 @@ where
                 s_comms.push(c);
                 s_flags.push(true);
             } else {
-                s_comms.push(E::G1Projective::zero());
+                s_comms.push(E::G1::zero());
                 s_flags.push(false);
             }
         }
-        let comms = E::G1Projective::batch_normalization_into_affine(&comms);
-        let s_comms = E::G1Projective::batch_normalization_into_affine(&mut s_comms);
+        let comms = E::G1::batch_normalization_into_affine(&comms);
+        let s_comms = E::G1::batch_normalization_into_affine(&mut s_comms);
         comms
             .into_iter()
             .zip(s_comms)
@@ -110,9 +110,9 @@ where
         values: impl IntoIterator<Item = E::ScalarField>,
         challenge_gen: &mut ChallengeGenerator<E::ScalarField, S>,
         vk: Option<&marlin_pc::VerifierKey<E>>,
-    ) -> Result<(E::G1Projective, E::ScalarField), Error> {
+    ) -> Result<(E::G1, E::ScalarField), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
-        let mut combined_comm = E::G1Projective::zero();
+        let mut combined_comm = E::G1::zero();
         let mut combined_value = E::ScalarField::zero();
         for (labeled_commitment, value) in commitments.into_iter().zip(values) {
             let degree_bound = labeled_commitment.degree_bound();
@@ -212,7 +212,7 @@ where
             combined_evals.push(v);
         }
         let norm_time = start_timer!(|| "Normalizing combined commitments");
-        E::G1Projective::batch_normalization(&mut combined_comms);
+        E::G1::batch_normalization(&mut combined_comms);
         let combined_comms = combined_comms
             .into_iter()
             .map(|c| kzg10::Commitment(c.into()))

@@ -120,7 +120,7 @@ impl<E: Pairing> Commitment<E> {
 #[inline]
 fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::ScalarField]) -> E::G1Affine {
     let scalars = scalars.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
-    let sp = <E::G1Projective as VariableBaseMSM>::msm_bigint(bases, &scalars);
+    let sp = <E::G1 as VariableBaseMSM>::msm_bigint(bases, &scalars);
     sp.into_affine()
 }
 
@@ -250,7 +250,7 @@ impl<E: Pairing> VerifierKey<E> {
         // Gathering commitments
         let comm_vec = commitments.iter().map(|x| x.0).collect::<Vec<_>>();
         let etas_repr = etas.iter().map(|e| e.into_bigint()).collect::<Vec<_>>();
-        let f_comm = <E::G1Projective as VariableBaseMSM>::msm_bigint(&comm_vec, &etas_repr);
+        let f_comm = <E::G1 as VariableBaseMSM>::msm_bigint(&comm_vec, &etas_repr);
 
         let g2 = self.powers_of_g2[0];
 

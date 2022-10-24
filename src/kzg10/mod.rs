@@ -47,8 +47,8 @@ where
         }
         let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", max_degree));
         let beta = E::ScalarField::rand(rng);
-        let g = E::G1Projective::rand(rng);
-        let gamma_g = E::G1Projective::rand(rng);
+        let g = E::G1::rand(rng);
+        let gamma_g = E::G1::rand(rng);
         let h = E::G2Projective::rand(rng);
 
         let mut powers_of_beta = vec![E::ScalarField::one()];
@@ -65,11 +65,11 @@ where
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let powers_of_g =
-            FixedBase::msm::<E::G1Projective>(scalar_bits, window_size, &g_table, &powers_of_beta);
+            FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
         end_timer!(g_time);
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
         let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
-        let mut powers_of_gamma_g = FixedBase::msm::<E::G1Projective>(
+        let mut powers_of_gamma_g = FixedBase::msm::<E::G1>(
             scalar_bits,
             window_size,
             &gamma_g_table,
@@ -80,9 +80,9 @@ where
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
         let powers_of_gamma_g =
-            E::G1Projective::batch_normalization_into_affine(&powers_of_gamma_g)
+            E::G1::batch_normalization_into_affine(&powers_of_gamma_g)
                 .into_iter()
                 .enumerate()
                 .collect();
@@ -153,7 +153,7 @@ where
             skip_leading_zeros_and_convert_to_bigints(polynomial);
 
         let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-        let mut commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+        let mut commitment = <E::G1 as VariableBaseMSM>::msm_bigint(
             &powers.powers_of_g[num_leading_zeros..],
             &plain_coeffs,
         );
@@ -177,7 +177,7 @@ where
 
         let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
         let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
-        let random_commitment = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+        let random_commitment = <E::G1 as VariableBaseMSM>::msm_bigint(
             &powers.powers_of_gamma_g,
             random_ints.as_slice(),
         )
@@ -232,7 +232,7 @@ where
             skip_leading_zeros_and_convert_to_bigints(witness_polynomial);
 
         let witness_comm_time = start_timer!(|| "Computing commitment to witness polynomial");
-        let mut w = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+        let mut w = <E::G1 as VariableBaseMSM>::msm_bigint(
             &powers.powers_of_g[num_leading_zeros..],
             &witness_coeffs,
         );
@@ -247,7 +247,7 @@ where
             let random_witness_coeffs = convert_to_bigints(&hiding_witness_polynomial.coeffs());
             let witness_comm_time =
                 start_timer!(|| "Computing commitment to random witness polynomial");
-            w += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+            w += &<E::G1 as VariableBaseMSM>::msm_bigint(
                 &powers.powers_of_gamma_g,
                 &random_witness_coeffs,
             );
@@ -325,8 +325,8 @@ where
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", commitments.len()));
 
-        let mut total_c = <E::G1Projective>::zero();
-        let mut total_w = <E::G1Projective>::zero();
+        let mut total_c = <E::G1>::zero();
+        let mut total_w = <E::G1>::zero();
 
         let combination_time = start_timer!(|| "Combining commitments and proofs");
         let mut randomizer = E::ScalarField::one();
@@ -354,7 +354,7 @@ where
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let affine_points = E::G1Projective::batch_normalization_into_affine(&[-total_w, total_c]);
+        let affine_points = E::G1::batch_normalization_into_affine(&[-total_w, total_c]);
         let (total_w, total_c) = (affine_points[0], affine_points[1]);
         end_timer!(to_affine_time);
 

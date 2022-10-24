@@ -22,7 +22,7 @@ impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
-        let mut cur = E::G1Projective::from(comm.0.clone());
+        let mut cur = E::G1::from(comm.0.clone());
         for _ in 0..128 {
             prepared_comm.push(cur.clone().into());
             cur.double_in_place();

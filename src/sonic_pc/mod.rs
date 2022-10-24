@@ -37,9 +37,9 @@ where
     S: CryptographicSponge,
 {
     fn accumulate_elems<'a>(
-        combined_comms: &mut BTreeMap<Option<usize>, E::G1Projective>,
-        combined_witness: &mut E::G1Projective,
-        combined_adjusted_witness: &mut E::G1Projective,
+        combined_comms: &mut BTreeMap<Option<usize>, E::G1>,
+        combined_witness: &mut E::G1,
+        combined_adjusted_witness: &mut E::G1,
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: P::Point,
@@ -63,7 +63,7 @@ where
             let degree_bound = labeled_comm.degree_bound();
 
             // Applying opening challenge and randomness (used in batch_checking)
-            let mut comm_with_challenge: E::G1Projective = comm.0.mul(curr_challenge);
+            let mut comm_with_challenge: E::G1 = comm.0.mul(curr_challenge);
 
             if let Some(randomizer) = randomizer {
                 comm_with_challenge = comm_with_challenge.mul(&randomizer);
@@ -72,12 +72,12 @@ where
             // Accumulate values in the BTreeMap
             *combined_comms
                 .entry(degree_bound)
-                .or_insert(E::G1Projective::zero()) += &comm_with_challenge;
+                .or_insert(E::G1::zero()) += &comm_with_challenge;
             curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
-        let mut witness: E::G1Projective = proof.w.into_projective();
+        let mut witness: E::G1 = proof.w.into_projective();
         let mut adjusted_witness = vk.g.mul(combined_values) - &proof.w.mul(point);
         if let Some(random_v) = proof.random_v {
             adjusted_witness += &vk.gamma_g.mul(random_v);
@@ -94,13 +94,13 @@ where
     }
 
     fn check_elems(
-        combined_comms: BTreeMap<Option<usize>, E::G1Projective>,
-        combined_witness: E::G1Projective,
-        combined_adjusted_witness: E::G1Projective,
+        combined_comms: BTreeMap<Option<usize>, E::G1>,
+        combined_witness: E::G1,
+        combined_adjusted_witness: E::G1,
         vk: &VerifierKey<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking elems");
-        let mut g1_projective_elems: Vec<E::G1Projective> = Vec::new();
+        let mut g1_projective_elems: Vec<E::G1> = Vec::new();
         let mut g2_prepared_elems: Vec<E::G2Prepared> = Vec::new();
 
         for (degree_bound, comm) in combined_comms.into_iter() {
@@ -122,7 +122,7 @@ where
         g2_prepared_elems.push(vk.prepared_beta_h.clone());
 
         let g1_prepared_elems_iter =
-            E::G1Projective::batch_normalization_into_affine(g1_projective_elems.as_slice())
+            E::G1::batch_normalization_into_affine(g1_projective_elems.as_slice())
                 .into_iter()
                 .map(|a| a.into());
 
@@ -398,9 +398,9 @@ where
         Self::Commitment: 'a,
     {
         let check_time = start_timer!(|| "Checking evaluations");
-        let mut combined_comms: BTreeMap<Option<usize>, E::G1Projective> = BTreeMap::new();
-        let mut combined_witness: E::G1Projective = E::G1Projective::zero();
-        let mut combined_adjusted_witness: E::G1Projective = E::G1Projective::zero();
+        let mut combined_comms: BTreeMap<Option<usize>, E::G1> = BTreeMap::new();
+        let mut combined_witness: E::G1 = E::G1::zero();
+        let mut combined_adjusted_witness: E::G1 = E::G1::zero();
 
         Self::accumulate_elems(
             &mut combined_comms,
@@ -451,9 +451,9 @@ where
 
         let mut randomizer = E::ScalarField::one();
 
-        let mut combined_comms: BTreeMap<Option<usize>, E::G1Projective> = BTreeMap::new();
-        let mut combined_witness: E::G1Projective = E::G1Projective::zero();
-        let mut combined_adjusted_witness: E::G1Projective = E::G1Projective::zero();
+        let mut combined_comms: BTreeMap<Option<usize>, E::G1> = BTreeMap::new();
+        let mut combined_witness: E::G1 = E::G1::zero();
+        let mut combined_adjusted_witness: E::G1 = E::G1::zero();
 
         for ((_point_label, (point, labels)), p) in query_to_labels_map.into_iter().zip(proof) {
             let mut comms_to_combine: Vec<&'_ LabeledCommitment<_>> = Vec::new();
@@ -530,7 +530,7 @@ where
             let mut degree_bound = None;
             let mut hiding_bound = None;
             let mut randomness = Self::Randomness::empty();
-            let mut comm = E::G1Projective::zero();
+            let mut comm = E::G1::zero();
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
@@ -567,7 +567,7 @@ where
         }
 
         let comms: Vec<Self::Commitment> =
-            E::G1Projective::batch_normalization_into_affine(&lc_commitments)
+            E::G1::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
                 .map(|c| kzg10::Commitment::<E>(c))
                 .collect();
@@ -619,7 +619,7 @@ where
             let num_polys = lc.len();
 
             let mut degree_bound = None;
-            let mut combined_comm = E::G1Projective::zero();
+            let mut combined_comm = E::G1::zero();
 
             for (coeff, label) in lc.iter() {
                 if label.is_one() {
@@ -652,7 +652,7 @@ where
         }
 
         let comms: Vec<Self::Commitment> =
-            E::G1Projective::batch_normalization_into_affine(&lc_commitments)
+            E::G1::batch_normalization_into_affine(&lc_commitments)
                 .into_iter()
                 .map(|c| kzg10::Commitment(c))
                 .collect();

@@ -27,7 +27,7 @@ impl<E: Pairing> MultilinearPC<E> {
     /// setup
     pub fn setup<R: RngCore>(num_vars: usize, rng: &mut R) -> UniversalParams<E> {
         assert!(num_vars > 0, "constant polynomial not supported");
-        let g: E::G1Projective = E::G1Projective::rand(rng);
+        let g: E::G1 = E::G1::rand(rng);
         let h: E::G2Projective = E::G2Projective::rand(rng);
         let g = g.into_affine();
         let h = h.into_affine();
@@ -65,7 +65,7 @@ impl<E: Pairing> MultilinearPC<E> {
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
         let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_projective());
 
-        let pp_g = E::G1Projective::batch_normalization_into_affine(&FixedBase::msm(
+        let pp_g = E::G1::batch_normalization_into_affine(&FixedBase::msm(
             scalar_bits,
             window_size,
             &g_table,
@@ -93,7 +93,7 @@ impl<E: Pairing> MultilinearPC<E> {
             let window_size = FixedBase::get_mul_window_size(num_vars);
             let g_table =
                 FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
-            E::G1Projective::batch_normalization_into_affine(&FixedBase::msm(
+            E::G1::batch_normalization_into_affine(&FixedBase::msm(
                 scalar_bits,
                 window_size,
                 &g_table,
@@ -148,7 +148,7 @@ impl<E: Pairing> MultilinearPC<E> {
             .into_iter()
             .map(|x| x.into_bigint())
             .collect();
-        let g_product = <E::G1Projective as VariableBaseMSM>::msm_bigint(
+        let g_product = <E::G1 as VariableBaseMSM>::msm_bigint(
             &ck.powers_of_g[0],
             scalars.as_slice(),
         )
@@ -211,13 +211,13 @@ impl<E: Pairing> MultilinearPC<E> {
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
         let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());
-        let g_mul: Vec<E::G1Projective> = FixedBase::msm(scalar_size, window_size, &g_table, point);
+        let g_mul: Vec<E::G1> = FixedBase::msm(scalar_size, window_size, &g_table, point);
 
         let pairing_lefts: Vec<_> = (0..vk.nv)
             .map(|i| vk.g_mask_random[i].into_projective() - &g_mul[i])
             .collect();
         let pairing_lefts: Vec<E::G1Affine> =
-            E::G1Projective::batch_normalization_into_affine(&pairing_lefts);
+            E::G1::batch_normalization_into_affine(&pairing_lefts);
         let pairing_lefts: Vec<E::G1Prepared> = pairing_lefts
             .into_iter()
             .map(|x| E::G1Prepared::from(x))

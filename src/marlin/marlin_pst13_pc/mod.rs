@@ -183,8 +183,8 @@ where
             betas.push(E::ScalarField::rand(rng));
         }
         // Generators
-        let g = E::G1Projective::rand(rng);
-        let gamma_g = E::G1Projective::rand(rng);
+        let g = E::G1::rand(rng);
+        let gamma_g = E::G1::rand(rng);
         let h = E::G2Projective::rand(rng);
 
         // A list of all variable numbers of multiplicity `max_degree`
@@ -219,7 +219,7 @@ where
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let mut powers_of_g =
-            FixedBase::msm::<E::G1Projective>(scalar_bits, window_size, &g_table, &powers_of_beta);
+            FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
         powers_of_g.push(g);
         powers_of_beta_terms.push(P::Term::new(vec![]));
         end_timer!(g_time);
@@ -240,7 +240,7 @@ where
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = FixedBase::msm::<E::G1Projective>(
+                *v = FixedBase::msm::<E::G1>(
                     scalar_bits,
                     window_size,
                     &gamma_g_table,
@@ -249,11 +249,11 @@ where
             });
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
         let gamma_g = gamma_g.into_affine();
         let powers_of_gamma_g = powers_of_gamma_g
             .into_iter()
-            .map(|v| E::G1Projective::batch_normalization_into_affine(&v))
+            .map(|v| E::G1::batch_normalization_into_affine(&v))
             .collect();
         let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
@@ -382,7 +382,7 @@ where
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
             let mut commitment =
-                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
+                <E::G1 as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
             end_timer!(msm_time);
 
             // Sample random polynomial
@@ -418,7 +418,7 @@ where
 
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment =
-                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_gamma_g, &random_ints)
+                <E::G1 as VariableBaseMSM>::msm_bigint(&powers_of_gamma_g, &random_ints)
                     .into_affine();
             end_timer!(msm_time);
 
@@ -487,7 +487,7 @@ where
                 // Convert coefficients to BigInt
                 let witness_ints = Self::convert_to_bigints(&w);
                 // Compute MSM
-                <E::G1Projective as VariableBaseMSM>::msm_bigint(&powers_of_g, &witness_ints)
+                <E::G1 as VariableBaseMSM>::msm_bigint(&powers_of_g, &witness_ints)
             })
             .collect::<Vec<_>>();
         end_timer!(witness_comm_time);
@@ -517,7 +517,7 @@ where
                     // Convert coefficients to BigInt
                     let hiding_witness_ints = Self::convert_to_bigints(hiding_witness);
                     // Compute MSM and add result to witness
-                    *witness += &<E::G1Projective as VariableBaseMSM>::msm_bigint(
+                    *witness += &<E::G1 as VariableBaseMSM>::msm_bigint(
                         &powers_of_gamma_g,
                         &hiding_witness_ints,
                     );
@@ -603,8 +603,8 @@ where
             start_timer!(|| format!("Checking {} evaluation proofs", combined_comms.len()));
         let g = vk.g.into_projective();
         let gamma_g = vk.gamma_g.into_projective();
-        let mut total_c = <E::G1Projective>::zero();
-        let mut total_w = vec![<E::G1Projective>::zero(); vk.num_vars];
+        let mut total_c = <E::G1>::zero();
+        let mut total_w = vec![<E::G1>::zero(); vk.num_vars];
         let combination_time = start_timer!(|| "Combining commitments and proofs");
         let mut randomizer = E::ScalarField::one();
         // Instead of multiplying g and gamma_g in each turn, we simply accumulate
@@ -618,7 +618,7 @@ where
             .zip(proof)
         {
             let w = &proof.w;
-            let mut temp: E::G1Projective = ark_std::cfg_iter!(w)
+            let mut temp: E::G1 = ark_std::cfg_iter!(w)
                 .enumerate()
                 .map(|(j, w_j)| w_j.mul(z[j]))
                 .sum();

@@ -136,7 +136,7 @@ where
         assert!(self.powers_of_g.len() >= polynomial.len());
 
         Commitment(
-            <E::G1Projective as VariableBaseMSM>::msm_chunks(&self.powers_of_g, polynomial)
+            <E::G1 as VariableBaseMSM>::msm_chunks(&self.powers_of_g, polynomial)
                 .into_affine(),
         )
     }

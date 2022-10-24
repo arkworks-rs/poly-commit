@@ -189,7 +189,7 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
                 for (d, shift_power) in degree_bounds_and_shift_powers {
                     let mut prepared_shift_power = Vec::<E::G1Affine>::new();
 
-                    let mut cur = E::G1Projective::from(shift_power.clone());
+                    let mut cur = E::G1::from(shift_power.clone());
                     for _ in 0..supported_bits {
                         prepared_shift_power.push(cur.clone().into());
                         cur.double_in_place();
