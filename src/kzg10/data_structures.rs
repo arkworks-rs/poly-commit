@@ -1,5 +1,5 @@
 use crate::*;
-use ark_ec::{pairing::Pairing, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, ProjectiveCurve, AffineRepr};
 use ark_ff::{PrimeField, ToConstraintField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
@@ -346,12 +346,12 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: Pairing> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+impl<E: Pairing> ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField> for VerifierKey<E>
 where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
-    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
 
         res.extend_from_slice(&self.g.to_field_elements().unwrap());
@@ -423,11 +423,11 @@ impl<E: Pairing> PCCommitment for Commitment<E> {
     }
 }
 
-impl<E: Pairing> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+impl<E: Pairing> ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField> for Commitment<E>
 where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>> {
         self.0.to_field_elements()
     }
 }
