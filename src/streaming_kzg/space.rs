@@ -57,12 +57,12 @@ where
     pub fn open<SF>(
         &self,
         polynomial: &SF,
-        alpha: &E::Fr,
+        alpha: &E::ScalarField,
         max_msm_buffer: usize,
-    ) -> (E::Fr, EvaluationProof<E>)
+    ) -> (E::ScalarField, EvaluationProof<E>)
     where
         SF: Iterable,
-        SF::Item: Borrow<E::Fr>,
+        SF::Item: Borrow<E::ScalarField>,
     {
         let mut quotient = ChunkedPippenger::new(max_msm_buffer);
 
@@ -74,7 +74,7 @@ where
         // See <https://github.com/rust-lang/rust/issues/77404>
         let bases = bases_init.skip(self.powers_of_g.len() - polynomial.len());
 
-        let mut previous = E::Fr::zero();
+        let mut previous = E::ScalarField::zero();
         for (scalar, base) in scalars.zip(bases) {
             quotient.add(base, previous.into_bigint());
             let coefficient = previous * alpha + scalar.borrow();
@@ -90,12 +90,12 @@ where
     pub fn open_multi_points<SF>(
         &self,
         polynomial: &SF,
-        points: &[E::Fr],
+        points: &[E::ScalarField],
         max_msm_buffer: usize,
-    ) -> (Vec<E::Fr>, EvaluationProof<E>)
+    ) -> (Vec<E::ScalarField>, EvaluationProof<E>)
     where
         SF: Iterable,
-        SF::Item: Borrow<E::Fr>,
+        SF::Item: Borrow<E::ScalarField>,
     {
         let zeros = vanishing_polynomial(points);
         let mut quotient = ChunkedPippenger::new(max_msm_buffer);
@@ -104,7 +104,7 @@ where
         // See <https://github.com/rust-lang/rust/issues/77404>
         let mut bases = bases_init.skip(self.powers_of_g.len() - polynomial.len() + zeros.degree());
 
-        let mut state = VecDeque::<E::Fr>::with_capacity(points.len());
+        let mut state = VecDeque::<E::ScalarField>::with_capacity(points.len());
 
         let mut polynomial_iterator = polynomial.iter();
 
@@ -131,7 +131,7 @@ where
     pub fn commit<SF: ?Sized>(&self, polynomial: &SF) -> Commitment<E>
     where
         SF: Iterable,
-        SF::Item: Borrow<E::Fr>,
+        SF::Item: Borrow<E::ScalarField>,
     {
         assert!(self.powers_of_g.len() >= polynomial.len());
 
@@ -147,7 +147,7 @@ where
         polynomials: &[&'a dyn Iterable<Item = F, Iter = &mut dyn Iterator<Item = F>>],
     ) -> Vec<Commitment<E>>
     where
-        F: Borrow<E::Fr>,
+        F: Borrow<E::ScalarField>,
     {
         polynomials.iter().map(|&p| self.commit(p)).collect()
     }
@@ -157,12 +157,12 @@ where
     /// The function takes as input a committer key and the tree structure of all the folding polynomials, and produces the desired commitment for each polynomial.
     pub fn commit_folding<SF>(
         &self,
-        polynomials: &FoldedPolynomialTree<E::Fr, SF>,
+        polynomials: &FoldedPolynomialTree<E::ScalarField, SF>,
         max_msm_buffer: usize,
     ) -> Vec<Commitment<E>>
     where
         SF: Iterable,
-        SF::Item: Borrow<E::Fr>,
+        SF::Item: Borrow<E::ScalarField>,
     {
         let n = polynomials.depth();
         let mut pippengers: Vec<ChunkedPippenger<E::G1Affine>> = Vec::new();
@@ -196,17 +196,17 @@ where
     /// `eta` is the random challenge for batching folding polynomials.
     pub fn open_folding<'a, SF>(
         &self,
-        polynomials: FoldedPolynomialTree<'a, E::Fr, SF>,
-        points: &[E::Fr],
-        etas: &[E::Fr],
+        polynomials: FoldedPolynomialTree<'a, E::ScalarField, SF>,
+        points: &[E::ScalarField],
+        etas: &[E::ScalarField],
         max_msm_buffer: usize,
-    ) -> (Vec<Vec<E::Fr>>, EvaluationProof<E>)
+    ) -> (Vec<Vec<E::ScalarField>>, EvaluationProof<E>)
     where
         SG: Iterable,
         SF: Iterable,
         E: Pairing,
         SG::Item: Borrow<E::G1Affine>,
-        SF::Item: Borrow<E::Fr> + Copy,
+        SF::Item: Borrow<E::ScalarField> + Copy,
     {
         let n = polynomials.depth();
         let mut pippenger = HashMapPippenger::<E::G1Affine>::new(max_msm_buffer);
@@ -222,7 +222,7 @@ where
             let bases = bases_init.skip(delta);
 
             (0..points.len()).for_each(|_| {
-                remainders[i - 1].push_back(E::Fr::zero());
+                remainders[i - 1].push_back(E::ScalarField::zero());
             });
 
             folded_bases.push(bases);

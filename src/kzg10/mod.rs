@@ -23,7 +23,7 @@ pub use data_structures::*;
 /// [Kate, Zaverucha and Goldbgerg][kzg10]
 ///
 /// [kzg10]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-pub struct KZG10<E: Pairing, P: DenseUVPolynomial<E::Fr>> {
+pub struct KZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
 }
@@ -31,7 +31,7 @@ pub struct KZG10<E: Pairing, P: DenseUVPolynomial<E::Fr>> {
 impl<E, P> KZG10<E, P>
 where
     E: Pairing,
-    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
     /// Constructs public parameters when given as input the maximum degree `degree`
@@ -45,12 +45,12 @@ where
             return Err(Error::DegreeIsZero);
         }
         let setup_time = start_timer!(|| format!("KZG10::Setup with degree {}", max_degree));
-        let beta = E::Fr::rand(rng);
+        let beta = E::ScalarField::rand(rng);
         let g = E::G1Projective::rand(rng);
         let gamma_g = E::G1Projective::rand(rng);
         let h = E::G2Projective::rand(rng);
 
-        let mut powers_of_beta = vec![E::Fr::one()];
+        let mut powers_of_beta = vec![E::ScalarField::one()];
 
         let mut cur = beta;
         for _ in 0..max_degree {
@@ -60,7 +60,7 @@ where
 
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
 
-        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let powers_of_g =
@@ -88,8 +88,8 @@ where
 
         let neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
         let neg_powers_of_h = if produce_g2_powers {
-            let mut neg_powers_of_beta = vec![E::Fr::one()];
-            let mut cur = E::Fr::one() / &beta;
+            let mut neg_powers_of_beta = vec![E::ScalarField::one()];
+            let mut cur = E::ScalarField::one() / &beta;
             for _ in 0..max_degree {
                 neg_powers_of_beta.push(cur);
                 cur /= &beta;
@@ -139,7 +139,7 @@ where
         polynomial: &P,
         hiding_bound: Option<usize>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<(Commitment<E>, Randomness<E::Fr, P>), Error> {
+    ) -> Result<(Commitment<E>, Randomness<E::ScalarField, P>), Error> {
         Self::check_degree_is_too_large(polynomial.degree(), powers.size())?;
 
         let commit_time = start_timer!(|| format!(
@@ -158,7 +158,7 @@ where
         );
         end_timer!(msm_time);
 
-        let mut randomness = Randomness::<E::Fr, P>::empty();
+        let mut randomness = Randomness::<E::ScalarField, P>::empty();
         if let Some(hiding_degree) = hiding_bound {
             let mut rng = rng.ok_or(Error::MissingRng)?;
             let sample_random_poly_time = start_timer!(|| format!(
@@ -197,9 +197,9 @@ where
     pub fn compute_witness_polynomial(
         p: &P,
         point: P::Point,
-        randomness: &Randomness<E::Fr, P>,
+        randomness: &Randomness<E::ScalarField, P>,
     ) -> Result<(P, Option<P>), Error> {
-        let divisor = P::from_coefficients_vec(vec![-point, E::Fr::one()]);
+        let divisor = P::from_coefficients_vec(vec![-point, E::ScalarField::one()]);
 
         let witness_time = start_timer!(|| "Computing witness polynomial");
         let witness_polynomial = p / &divisor;
@@ -222,7 +222,7 @@ where
     pub(crate) fn open_with_witness_polynomial<'a>(
         powers: &Powers<E>,
         point: P::Point,
-        randomness: &Randomness<E::Fr, P>,
+        randomness: &Randomness<E::ScalarField, P>,
         witness_polynomial: &P,
         hiding_witness_polynomial: Option<&P>,
     ) -> Result<Proof<E>, Error> {
@@ -267,7 +267,7 @@ where
         powers: &Powers<E>,
         p: &P,
         point: P::Point,
-        rand: &Randomness<E::Fr, P>,
+        rand: &Randomness<E::ScalarField, P>,
     ) -> Result<Proof<E>, Error> {
         Self::check_degree_is_too_large(p.degree(), powers.size())?;
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
@@ -293,8 +293,8 @@ where
     pub fn check(
         vk: &VerifierKey<E>,
         comm: &Commitment<E>,
-        point: E::Fr,
-        value: E::Fr,
+        point: E::ScalarField,
+        value: E::ScalarField,
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
@@ -316,8 +316,8 @@ where
     pub fn batch_check<R: RngCore>(
         vk: &VerifierKey<E>,
         commitments: &[Commitment<E>],
-        points: &[E::Fr],
-        values: &[E::Fr],
+        points: &[E::ScalarField],
+        values: &[E::ScalarField],
         proofs: &[Proof<E>],
         rng: &mut R,
     ) -> Result<bool, Error> {
@@ -328,11 +328,11 @@ where
         let mut total_w = <E::G1Projective>::zero();
 
         let combination_time = start_timer!(|| "Combining commitments and proofs");
-        let mut randomizer = E::Fr::one();
+        let mut randomizer = E::ScalarField::one();
         // Instead of multiplying g and gamma_g in each turn, we simply accumulate
         // their coefficients and perform a final multiplication at the end.
-        let mut g_multiplier = E::Fr::zero();
-        let mut gamma_g_multiplier = E::Fr::zero();
+        let mut g_multiplier = E::ScalarField::zero();
+        let mut gamma_g_multiplier = E::ScalarField::zero();
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
             let w = proof.w;
             let mut temp = w.mul(*z);
@@ -403,7 +403,7 @@ where
         supported_degree: usize,
         max_degree: usize,
         enforced_degree_bounds: Option<&[usize]>,
-        p: &'a LabeledPolynomial<E::Fr, P>,
+        p: &'a LabeledPolynomial<E::ScalarField, P>,
     ) -> Result<(), Error> {
         if let Some(bound) = p.degree_bound() {
             let enforced_degree_bounds =
@@ -464,7 +464,7 @@ mod tests {
     type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::Fr>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
 
-    impl<E: Pairing, P: DenseUVPolynomial<E::Fr>> KZG10<E, P> {
+    impl<E: Pairing, P: DenseUVPolynomial<E::ScalarField>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
         /// `d` should be less that `pp.max_degree()`.
         pub(crate) fn trim(
@@ -525,7 +525,7 @@ mod tests {
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
-        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -539,7 +539,7 @@ mod tests {
             let p = P::rand(degree, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = E::Fr::rand(rng);
+            let point = E::ScalarField::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -556,7 +556,7 @@ mod tests {
     fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
-        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -567,7 +567,7 @@ mod tests {
             let p = P::rand(1, rng);
             let hiding_bound = Some(1);
             let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-            let point = E::Fr::rand(rng);
+            let point = E::ScalarField::rand(rng);
             let value = p.evaluate(&point);
             let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
             assert!(
@@ -584,7 +584,7 @@ mod tests {
     fn batch_check_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
-        P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+        P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
         let rng = &mut test_rng();
@@ -603,7 +603,7 @@ mod tests {
                 let p = P::rand(degree, rng);
                 let hiding_bound = Some(1);
                 let (comm, rand) = KZG10::<E, P>::commit(&ck, &p, hiding_bound, Some(rng))?;
-                let point = E::Fr::rand(rng);
+                let point = E::ScalarField::rand(rng);
                 let value = p.evaluate(&point);
                 let proof = KZG10::<E, P>::open(&ck, &p, point, &rand)?;
 

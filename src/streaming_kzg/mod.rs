@@ -118,7 +118,7 @@ impl<E: Pairing> Commitment<E> {
 }
 
 #[inline]
-fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affine {
+fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::ScalarField]) -> E::G1Affine {
     let scalars = scalars.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
     let sp = <E::G1Projective as VariableBaseMSM>::msm_bigint(bases, &scalars);
     sp.into_affine()
@@ -173,11 +173,11 @@ impl<E: Pairing> VerifierKey<E> {
     pub fn verify(
         &self,
         commitment: &Commitment<E>,
-        &alpha: &E::Fr,
-        evaluation: &E::Fr,
+        &alpha: &E::ScalarField,
+        evaluation: &E::ScalarField,
         proof: &EvaluationProof<E>,
     ) -> VerificationResult {
-        let scalars = [(-alpha).into_bigint(), E::Fr::one().into_bigint()];
+        let scalars = [(-alpha).into_bigint(), E::ScalarField::one().into_bigint()];
         let ep = <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
         let lhs = commitment.0.into_projective() - self.powers_of_g[0].mul(evaluation);
         let g2 = self.powers_of_g2[0];
@@ -198,10 +198,10 @@ impl<E: Pairing> VerifierKey<E> {
     pub fn verify_multi_points(
         &self,
         commitments: &[Commitment<E>],
-        eval_points: &[E::Fr],
-        evaluations: &[Vec<E::Fr>],
+        eval_points: &[E::ScalarField],
+        evaluations: &[Vec<E::ScalarField>],
         proof: &EvaluationProof<E>,
-        open_chal: &E::Fr,
+        open_chal: &E::ScalarField,
     ) -> VerificationResult {
         // Computing the vanishing polynomial over eval_points
         let zeros = vanishing_polynomial(eval_points);
@@ -212,7 +212,7 @@ impl<E: Pairing> VerifierKey<E> {
         // Computing the inverse for the interpolation
         let mut sca_inverse = Vec::new();
         for (j, x_j) in eval_points.iter().enumerate() {
-            let mut sca = E::Fr::one();
+            let mut sca = E::ScalarField::one();
             for (k, x_k) in eval_points.iter().enumerate() {
                 if j == k {
                     continue;
@@ -226,12 +226,12 @@ impl<E: Pairing> VerifierKey<E> {
         // Computing the lagrange polynomial for the interpolation
         let mut lang = Vec::new();
         for (j, _x_j) in eval_points.iter().enumerate() {
-            let mut l_poly = DensePolynomial::from_coefficients_vec(vec![E::Fr::one()]);
+            let mut l_poly = DensePolynomial::from_coefficients_vec(vec![E::ScalarField::one()]);
             for (k, x_k) in eval_points.iter().enumerate() {
                 if j == k {
                     continue;
                 }
-                let tmp_poly = DensePolynomial::from_coefficients_vec(vec![-(*x_k), E::Fr::one()]);
+                let tmp_poly = DensePolynomial::from_coefficients_vec(vec![-(*x_k), E::ScalarField::one()]);
                 l_poly = l_poly.mul(&tmp_poly);
             }
             lang.push(l_poly);
@@ -263,12 +263,12 @@ impl<E: Pairing> VerifierKey<E> {
 }
 
 fn interpolate_poly<E: Pairing>(
-    eval_points: &[E::Fr],
-    evals: &[E::Fr],
-    sca_inverse: &[E::Fr],
-    lang: &[DensePolynomial<E::Fr>],
-) -> DensePolynomial<E::Fr> {
-    let mut res = DensePolynomial::from_coefficients_vec(vec![E::Fr::zero()]);
+    eval_points: &[E::ScalarField],
+    evals: &[E::ScalarField],
+    sca_inverse: &[E::ScalarField],
+    lang: &[DensePolynomial<E::ScalarField>],
+) -> DensePolynomial<E::ScalarField> {
+    let mut res = DensePolynomial::from_coefficients_vec(vec![E::ScalarField::zero()]);
     for (j, (_x_j, y_j)) in eval_points.iter().zip(evals.iter()).enumerate() {
         let l_poly = lang[j].mul(sca_inverse[j] * y_j);
         res = (&res).add(&l_poly);

@@ -30,8 +30,8 @@ struct Marlin<E, S, P, PC>
 where
     E: Pairing,
     S: CryptographicSponge,
-    P: Polynomial<E::Fr>,
-    PC: PolynomialCommitment<E::Fr, P, S>,
+    P: Polynomial<E::ScalarField>,
+    PC: PolynomialCommitment<E::ScalarField, P, S>,
 {
     _engine: core::marker::PhantomData<E>,
     _sponge: core::marker::PhantomData<S>,
@@ -43,12 +43,12 @@ impl<E, S, P, PC> Marlin<E, S, P, PC>
 where
     E: Pairing,
     S: CryptographicSponge,
-    P: Polynomial<E::Fr>,
-    PC: PolynomialCommitment<E::Fr, P, S>,
+    P: Polynomial<E::ScalarField>,
+    PC: PolynomialCommitment<E::ScalarField, P, S>,
 {
     /// MSM for `commitments` and `coeffs`
     fn combine_commitments<'a>(
-        coeffs_and_comms: impl IntoIterator<Item = (E::Fr, &'a marlin_pc::Commitment<E>)>,
+        coeffs_and_comms: impl IntoIterator<Item = (E::ScalarField, &'a marlin_pc::Commitment<E>)>,
     ) -> (E::G1Projective, Option<E::G1Projective>) {
         let mut combined_comm = E::G1Projective::zero();
         let mut combined_shifted_comm = None;
@@ -107,13 +107,13 @@ where
     /// Accumulate `commitments` and `values` according to the challenges produces by `challenge_gen`.
     fn accumulate_commitments_and_values<'a>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
-        values: impl IntoIterator<Item = E::Fr>,
-        challenge_gen: &mut ChallengeGenerator<E::Fr, S>,
+        values: impl IntoIterator<Item = E::ScalarField>,
+        challenge_gen: &mut ChallengeGenerator<E::ScalarField, S>,
         vk: Option<&marlin_pc::VerifierKey<E>>,
-    ) -> Result<(E::G1Projective, E::Fr), Error> {
+    ) -> Result<(E::G1Projective, E::ScalarField), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
         let mut combined_comm = E::G1Projective::zero();
-        let mut combined_value = E::Fr::zero();
+        let mut combined_value = E::ScalarField::zero();
         for (labeled_commitment, value) in commitments.into_iter().zip(values) {
             let degree_bound = labeled_commitment.degree_bound();
             let commitment = labeled_commitment.commitment();
@@ -154,10 +154,10 @@ where
     fn combine_and_normalize<'a, D: Clone + Ord + Sync>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         query_set: &QuerySet<D>,
-        evaluations: &Evaluations<D, E::Fr>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        evaluations: &Evaluations<D, E::ScalarField>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         vk: Option<&marlin_pc::VerifierKey<E>>,
-    ) -> Result<(Vec<kzg10::Commitment<E>>, Vec<D>, Vec<E::Fr>), Error>
+    ) -> Result<(Vec<kzg10::Commitment<E>>, Vec<D>, Vec<E::ScalarField>), Error>
     where
         marlin_pc::Commitment<E>: 'a,
     {
@@ -226,26 +226,26 @@ where
     /// the combinations at the points in the query set.
     fn open_combinations<'a, D>(
         ck: &PC::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<D>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a PC::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, PC::BatchProof>, Error>
+    ) -> Result<BatchLCProof<E::ScalarField, PC::BatchProof>, Error>
     where
-        P: 'a + Polynomial<E::Fr, Point = D>,
+        P: 'a + Polynomial<E::ScalarField, Point = D>,
         D: Debug + Clone + Hash + Ord + Sync,
         PC: PolynomialCommitment<
-            E::Fr,
+            E::ScalarField,
             P,
             S,
             Commitment = marlin_pc::Commitment<E>,
             PreparedCommitment = marlin_pc::PreparedCommitment<E>,
             Error = Error,
         >,
-        PC::Randomness: 'a + AddAssign<(E::Fr, &'a PC::Randomness)>,
+        PC::Randomness: 'a + AddAssign<(E::ScalarField, &'a PC::Randomness)>,
         PC::Commitment: 'a,
     {
         let label_map = polynomials
@@ -322,20 +322,20 @@ where
 
     fn check_combinations<'a, R, D>(
         vk: &PC::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, PC::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        evaluations: &Evaluations<P::Point, E::ScalarField>,
+        proof: &BatchLCProof<E::ScalarField, PC::BatchProof>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
         R: RngCore,
-        P: Polynomial<E::Fr, Point = D>,
+        P: Polynomial<E::ScalarField, Point = D>,
         D: Debug + Clone + Hash + Ord + Sync,
         PC: PolynomialCommitment<
-            E::Fr,
+            E::ScalarField,
             P,
             S,
             Commitment = marlin_pc::Commitment<E>,

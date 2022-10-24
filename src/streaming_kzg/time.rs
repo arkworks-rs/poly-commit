@@ -50,12 +50,12 @@ impl<E: Pairing> CommitterKey<E> {
     /// construct the committer key.
     pub fn new(max_degree: usize, max_eval_points: usize, rng: &mut impl RngCore) -> Self {
         // Compute the consecutive powers of an element.
-        let tau = E::Fr::rand(rng);
+        let tau = E::ScalarField::rand(rng);
         let powers_of_tau = powers(tau, max_degree + 1);
 
         let g = E::G1Projective::rand(rng);
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
         let powers_of_g_proj = FixedBase::msm(scalar_bits, window_size, &g_table, &powers_of_tau);
         let powers_of_g = E::G1Projective::batch_normalization_into_affine(&powers_of_g_proj);
@@ -80,7 +80,7 @@ impl<E: Pairing> CommitterKey<E> {
     }
 
     /// Given a polynomial `polynomial` of degree less than `max_degree`, return a commitment to `polynomial`.
-    pub fn commit(&self, polynomial: &[E::Fr]) -> Commitment<E> {
+    pub fn commit(&self, polynomial: &[E::ScalarField]) -> Commitment<E> {
         Commitment(msm::<E>(&self.powers_of_g, polynomial))
     }
 
@@ -101,7 +101,7 @@ impl<E: Pairing> CommitterKey<E> {
     pub fn batch_commit<J>(&self, polynomials: J) -> Vec<Commitment<E>>
     where
         J: IntoIterator,
-        J::Item: Borrow<Vec<E::Fr>>,
+        J::Item: Borrow<Vec<E::ScalarField>>,
     {
         polynomials
             .into_iter()
@@ -114,19 +114,19 @@ impl<E: Pairing> CommitterKey<E> {
     /// together with an evaluation proof.
     pub fn open(
         &self,
-        polynomial: &[E::Fr],
-        evalualtion_point: &E::Fr,
-    ) -> (E::Fr, EvaluationProof<E>) {
+        polynomial: &[E::ScalarField],
+        evalualtion_point: &E::ScalarField,
+    ) -> (E::ScalarField, EvaluationProof<E>) {
         let mut quotient = Vec::new();
 
-        let mut previous = E::Fr::zero();
+        let mut previous = E::ScalarField::zero();
         for &c in polynomial.iter().rev() {
             let coefficient = c + previous * evalualtion_point;
             quotient.insert(0, coefficient);
             previous = coefficient;
         }
 
-        let (&evaluation, quotient) = quotient.split_first().unwrap_or((&E::Fr::zero(), &[]));
+        let (&evaluation, quotient) = quotient.split_first().unwrap_or((&E::ScalarField::zero(), &[]));
         let evaluation_proof = msm::<E>(&self.powers_of_g, quotient);
         (evaluation, EvaluationProof(evaluation_proof))
     }
@@ -134,8 +134,8 @@ impl<E: Pairing> CommitterKey<E> {
     /// Evaluate a single polynomial at a set of points `eval_points`, and provide a single evaluation proof.
     pub fn open_multi_points(
         &self,
-        polynomial: &[E::Fr],
-        eval_points: &[E::Fr],
+        polynomial: &[E::ScalarField],
+        eval_points: &[E::ScalarField],
     ) -> EvaluationProof<E> {
         // Computing the vanishing polynomial over eval_points
         let z_poly = vanishing_polynomial(eval_points);
@@ -149,14 +149,14 @@ impl<E: Pairing> CommitterKey<E> {
     /// `eval_chal` is the random challenge for batching evaluation proofs across different polynomials.
     pub fn batch_open_multi_points(
         &self,
-        polynomials: &[&Vec<E::Fr>],
-        eval_points: &[E::Fr],
-        eval_chal: &E::Fr,
+        polynomials: &[&Vec<E::ScalarField>],
+        eval_points: &[E::ScalarField],
+        eval_chal: &E::ScalarField,
     ) -> EvaluationProof<E> {
         assert!(eval_points.len() < self.powers_of_g2.len());
         let etas = powers(*eval_chal, polynomials.len());
         let batched_polynomial =
-            linear_combination(polynomials, &etas).unwrap_or_else(|| vec![E::Fr::zero()]);
+            linear_combination(polynomials, &etas).unwrap_or_else(|| vec![E::ScalarField::zero()]);
         self.open_multi_points(&batched_polynomial, eval_points)
     }
 }

@@ -33,13 +33,13 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinPST13<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
+impl<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge> MarlinPST13<E, P, S> {
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -47,7 +47,7 @@ impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST1
     /// These quotients can always be found with no remainder.
     fn divide_at_point(p: &P, point: &P::Point) -> Vec<P>
     where
-        P::Point: Index<usize, Output = E::Fr>,
+        P::Point: Index<usize, Output = E::ScalarField>,
     {
         let num_vars = p.num_vars();
         if p.is_zero() {
@@ -115,7 +115,7 @@ impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST1
     /// Check that a given polynomial is supported by parameters
     fn check_degrees_and_bounds<'a>(
         supported_degree: usize,
-        p: &'a LabeledPolynomial<E::Fr, P>,
+        p: &'a LabeledPolynomial<E::ScalarField, P>,
     ) -> Result<(), Error>
     where
         P: 'a,
@@ -132,7 +132,7 @@ impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST1
     }
 
     /// Convert polynomial coefficients to `BigInt`
-    fn convert_to_bigints(p: &P) -> Vec<<E::Fr as PrimeField>::BigInt> {
+    fn convert_to_bigints(p: &P) -> Vec<<E::ScalarField as PrimeField>::BigInt> {
         let plain_coeffs = ark_std::cfg_into_iter!(p.terms())
             .map(|(coeff, _)| coeff.into_bigint())
             .collect();
@@ -140,12 +140,12 @@ impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST1
     }
 }
 
-impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinPST13<E, P, S>
+impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for MarlinPST13<E, P, S>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr> + Sync,
+    P: DenseMVPolynomial<E::ScalarField> + Sync,
     S: CryptographicSponge,
-    P::Point: Index<usize, Output = E::Fr>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     type UniversalParams = UniversalParams<E, P>;
     type CommitterKey = CommitterKey<E, P>;
@@ -179,7 +179,7 @@ where
         // Trapdoor evaluation points
         let mut betas = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {
-            betas.push(E::Fr::rand(rng));
+            betas.push(E::ScalarField::rand(rng));
         }
         // Generators
         let g = E::G1Projective::rand(rng);
@@ -203,7 +203,7 @@ where
                 // trapdoor and generate a `P::Term` object to index it
                 ark_std::cfg_into_iter!(terms)
                     .map(|term| {
-                        let value: E::Fr = term.iter().map(|e| betas[*e]).product();
+                        let value: E::ScalarField = term.iter().map(|e| betas[*e]).product();
                         let term = (0..num_vars)
                             .map(|var| (var, term.iter().filter(|e| **e == var).count()))
                             .collect();
@@ -213,7 +213,7 @@ where
             })
             .unzip();
 
-        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
         let window_size = FixedBase::get_mul_window_size(max_degree + 1);
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
@@ -234,7 +234,7 @@ where
             .enumerate()
             .for_each(|(i, v)| {
                 let mut powers_of_beta = Vec::with_capacity(max_degree);
-                let mut cur = E::Fr::one();
+                let mut cur = E::ScalarField::one();
                 for _ in 0..=max_degree {
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
@@ -340,7 +340,7 @@ where
     /// Outputs a commitments to `polynomials`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -440,10 +440,10 @@ where
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -539,9 +539,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        values: impl IntoIterator<Item = E::Fr>,
+        values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -582,9 +582,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        values: &Evaluations<P::Point, E::Fr>,
+        values: &Evaluations<P::Point, E::ScalarField>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -605,11 +605,11 @@ where
         let mut total_c = <E::G1Projective>::zero();
         let mut total_w = vec![<E::G1Projective>::zero(); vk.num_vars];
         let combination_time = start_timer!(|| "Combining commitments and proofs");
-        let mut randomizer = E::Fr::one();
+        let mut randomizer = E::ScalarField::one();
         // Instead of multiplying g and gamma_g in each turn, we simply accumulate
         // their coefficients and perform a final multiplication at the end.
-        let mut g_multiplier = E::Fr::zero();
-        let mut gamma_g_multiplier = E::Fr::zero();
+        let mut g_multiplier = E::ScalarField::zero();
+        let mut gamma_g_multiplier = E::ScalarField::zero();
         for (((c, z), v), proof) in combined_comms
             .iter()
             .zip(combined_queries)
@@ -656,14 +656,14 @@ where
 
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self::BatchProof>, Self::Error>
+    ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
@@ -685,12 +685,12 @@ where
     /// committed in `labeled_commitments`.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         eqn_query_set: &QuerySet<P::Point>,
-        eqn_evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        eqn_evaluations: &Evaluations<P::Point, E::ScalarField>,
+        proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -739,15 +739,15 @@ mod tests {
         degree: usize,
         num_vars: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> SparsePoly<E::Fr, SparseTerm> {
-        SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
+    ) -> SparsePoly<E::ScalarField, SparseTerm> {
+        SparsePoly::<E::ScalarField, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: Pairing>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::Fr> {
+    fn rand_point<E: Pairing>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::ScalarField> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {
-            point.push(E::Fr::rand(rng));
+            point.push(E::ScalarField::rand(rng));
         }
         point
     }

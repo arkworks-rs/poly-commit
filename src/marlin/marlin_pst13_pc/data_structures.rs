@@ -20,8 +20,8 @@ use ark_std::rand::RngCore;
 pub struct UniversalParams<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `max_degree` evaluated at `\beta`
@@ -51,8 +51,8 @@ where
 impl<E, P> CanonicalSerialize for UniversalParams<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.powers_of_g.serialize(&mut writer)?;
@@ -108,8 +108,8 @@ where
 impl<E, P> CanonicalDeserialize for UniversalParams<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let powers_of_g = BTreeMap::<P::Term, E::G1Affine>::deserialize(&mut reader)?;
@@ -184,8 +184,8 @@ where
 impl<E, P> PCUniversalParams for UniversalParams<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn max_degree(&self) -> usize {
         self.max_degree
@@ -199,8 +199,8 @@ where
 pub struct CommitterKey<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     /// Contains group elements corresponding to all possible monomials with
     /// `num_vars` and maximum degree `supported_degree` evaluated at `\beta`
@@ -223,8 +223,8 @@ where
 impl<E, P> PCCommitterKey for CommitterKey<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn max_degree(&self) -> usize {
         self.max_degree
@@ -419,8 +419,8 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
 pub struct Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     /// A multivariate polynomial where each monomial is univariate with random coefficient
     pub blinding_polynomial: P,
@@ -430,8 +430,8 @@ where
 impl<E, P> Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     /// Does `self` provide any hiding properties to the corresponding commitment?
     /// `self.is_hiding() == true` only if the underlying polynomial is non-zero.
@@ -450,8 +450,8 @@ where
 impl<E, P> PCRandomness for Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn empty() -> Self {
         Self {
@@ -474,12 +474,12 @@ where
     }
 }
 
-impl<'a, E: Pairing, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>>
+impl<'a, E: Pairing, P: DenseMVPolynomial<E::ScalarField>> Add<&'a Randomness<E, P>>
     for Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     type Output = Self;
 
@@ -490,16 +490,16 @@ where
     }
 }
 
-impl<'a, E, P> Add<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
+impl<'a, E, P> Add<(E::ScalarField, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     type Output = Self;
 
     #[inline]
-    fn add(mut self, other: (E::Fr, &'a Randomness<E, P>)) -> Self {
+    fn add(mut self, other: (E::ScalarField, &'a Randomness<E, P>)) -> Self {
         self += other;
         self
     }
@@ -508,8 +508,8 @@ where
 impl<'a, E, P> AddAssign<&'a Randomness<E, P>> for Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     #[inline]
     fn add_assign(&mut self, other: &'a Self) {
@@ -517,14 +517,14 @@ where
     }
 }
 
-impl<'a, E, P> AddAssign<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
+impl<'a, E, P> AddAssign<(E::ScalarField, &'a Randomness<E, P>)> for Randomness<E, P>
 where
     E: Pairing,
-    P: DenseMVPolynomial<E::Fr>,
-    P::Point: Index<usize, Output = E::Fr>,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
 {
     #[inline]
-    fn add_assign(&mut self, (f, other): (E::Fr, &'a Randomness<E, P>)) {
+    fn add_assign(&mut self, (f, other): (E::ScalarField, &'a Randomness<E, P>)) {
         self.blinding_polynomial += (f, &other.blinding_polynomial);
     }
 }
@@ -544,13 +544,13 @@ pub struct Proof<E: Pairing> {
     pub w: Vec<E::G1Affine>,
     /// Evaluation of the random polynomial at the point for which
     /// the evaluation proof was produced.
-    pub random_v: Option<E::Fr>,
+    pub random_v: Option<E::ScalarField>,
 }
 
 impl<E: Pairing> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
-            E::Fr::zero().serialized_size()
+            E::ScalarField::zero().serialized_size()
         } else {
             0
         };

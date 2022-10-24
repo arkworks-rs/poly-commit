@@ -177,7 +177,7 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
     fn prepare(vk: &VerifierKey<E>) -> Self {
         let prepared_vk = kzg10::PreparedVerifierKey::<E>::prepare(&vk.vk);
 
-        let supported_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let supported_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let prepared_degree_bounds_and_shift_powers: Option<Vec<(usize, Vec<E::G1Affine>)>> =
             if vk.degree_bounds_and_shift_powers.is_some() {

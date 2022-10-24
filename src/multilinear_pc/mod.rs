@@ -32,10 +32,10 @@ impl<E: Pairing> MultilinearPC<E> {
         let h = h.into_affine();
         let mut powers_of_g = Vec::new();
         let mut powers_of_h = Vec::new();
-        let t: Vec<_> = (0..num_vars).map(|_| E::Fr::rand(rng)).collect();
-        let scalar_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let t: Vec<_> = (0..num_vars).map(|_| E::ScalarField::rand(rng)).collect();
+        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
-        let mut eq: LinkedList<DenseMultilinearExtension<E::Fr>> =
+        let mut eq: LinkedList<DenseMultilinearExtension<E::ScalarField>> =
             LinkedList::from_iter(eq_extension(&t).into_iter());
         let mut eq_arr = LinkedList::new();
         let mut base = eq.pop_back().unwrap().evaluations;
@@ -139,7 +139,7 @@ impl<E: Pairing> MultilinearPC<E> {
     /// commit
     pub fn commit(
         ck: &CommitterKey<E>,
-        polynomial: &impl MultilinearExtension<E::Fr>,
+        polynomial: &impl MultilinearExtension<E::ScalarField>,
     ) -> Commitment<E> {
         let nv = polynomial.num_vars();
         let scalars: Vec<_> = polynomial
@@ -158,13 +158,13 @@ impl<E: Pairing> MultilinearPC<E> {
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     pub fn open(
         ck: &CommitterKey<E>,
-        polynomial: &impl MultilinearExtension<E::Fr>,
-        point: &[E::Fr],
+        polynomial: &impl MultilinearExtension<E::ScalarField>,
+        point: &[E::ScalarField],
     ) -> Proof<E> {
         assert_eq!(polynomial.num_vars(), ck.nv, "Invalid size of polynomial");
         let nv = polynomial.num_vars();
-        let mut r: Vec<Vec<E::Fr>> = (0..nv + 1).map(|_| Vec::new()).collect();
-        let mut q: Vec<Vec<E::Fr>> = (0..nv + 1).map(|_| Vec::new()).collect();
+        let mut r: Vec<Vec<E::ScalarField>> = (0..nv + 1).map(|_| Vec::new()).collect();
+        let mut q: Vec<Vec<E::ScalarField>> = (0..nv + 1).map(|_| Vec::new()).collect();
 
         r[nv] = polynomial.to_evaluations();
 
@@ -172,11 +172,11 @@ impl<E: Pairing> MultilinearPC<E> {
         for i in 0..nv {
             let k = nv - i;
             let point_at_k = point[i];
-            q[k] = (0..(1 << (k - 1))).map(|_| E::Fr::zero()).collect();
-            r[k - 1] = (0..(1 << (k - 1))).map(|_| E::Fr::zero()).collect();
+            q[k] = (0..(1 << (k - 1))).map(|_| E::ScalarField::zero()).collect();
+            r[k - 1] = (0..(1 << (k - 1))).map(|_| E::ScalarField::zero()).collect();
             for b in 0..(1 << (k - 1)) {
                 q[k][b] = r[k][(b << 1) + 1] - &r[k][b << 1];
-                r[k - 1][b] = r[k][b << 1] * &(E::Fr::one() - &point_at_k)
+                r[k - 1][b] = r[k][b << 1] * &(E::ScalarField::one() - &point_at_k)
                     + &(r[k][(b << 1) + 1] * &point_at_k);
             }
             let scalars: Vec<_> = (0..(1 << k))
@@ -197,8 +197,8 @@ impl<E: Pairing> MultilinearPC<E> {
     pub fn check<'a>(
         vk: &VerifierKey<E>,
         commitment: &Commitment<E>,
-        point: &[E::Fr],
-        value: E::Fr,
+        point: &[E::ScalarField],
+        value: E::ScalarField,
         proof: &Proof<E>,
     ) -> bool {
         let left = E::pairing(
@@ -206,7 +206,7 @@ impl<E: Pairing> MultilinearPC<E> {
             vk.h,
         );
 
-        let scalar_size = E::Fr::MODULUS_BIT_SIZE as usize;
+        let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
         let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());

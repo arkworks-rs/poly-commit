@@ -24,7 +24,7 @@ pub use data_structures::*;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct SonicKZG10<E: Pairing, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct SonicKZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
@@ -33,7 +33,7 @@ pub struct SonicKZG10<E: Pairing, P: DenseUVPolynomial<E::Fr>, S: CryptographicS
 impl<E, P, S> SonicKZG10<E, P, S>
 where
     E: Pairing,
-    P: DenseUVPolynomial<E::Fr>,
+    P: DenseUVPolynomial<E::ScalarField>,
     S: CryptographicSponge,
 {
     fn accumulate_elems<'a>(
@@ -43,17 +43,17 @@ where
         vk: &VerifierKey<E>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         point: P::Point,
-        values: impl IntoIterator<Item = E::Fr>,
+        values: impl IntoIterator<Item = E::ScalarField>,
         proof: &kzg10::Proof<E>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
-        randomizer: Option<E::Fr>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        randomizer: Option<E::ScalarField>,
     ) {
         let acc_time = start_timer!(|| "Accumulating elements");
 
         let mut curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
         // Keeps track of running combination of values
-        let mut combined_values = E::Fr::zero();
+        let mut combined_values = E::ScalarField::zero();
 
         // Iterates through all of the commitments and accumulates common degree_bound elements in a BTreeMap
         for (labeled_comm, value) in commitments.into_iter().zip(values) {
@@ -134,10 +134,10 @@ where
     }
 }
 
-impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for SonicKZG10<E, P, S>
+impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for SonicKZG10<E, P, S>
 where
     E: Pairing,
-    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+    P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
@@ -147,7 +147,7 @@ where
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E::Fr, P>;
+    type Randomness = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -277,7 +277,7 @@ where
     /// Outputs a commitment to `polynomial`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -343,10 +343,10 @@ where
 
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -389,9 +389,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        values: impl IntoIterator<Item = E::Fr>,
+        values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -429,9 +429,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        values: &Evaluations<E::Fr, P::Point>,
+        values: &Evaluations<E::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -449,7 +449,7 @@ where
 
         assert_eq!(proof.len(), query_to_labels_map.len());
 
-        let mut randomizer = E::Fr::one();
+        let mut randomizer = E::ScalarField::one();
 
         let mut combined_comms: BTreeMap<Option<usize>, E::G1Projective> = BTreeMap::new();
         let mut combined_witness: E::G1Projective = E::G1Projective::zero();
@@ -499,14 +499,14 @@ where
 
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self::BatchProof>, Self::Error>
+    ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
@@ -594,12 +594,12 @@ where
     /// committed in `labeled_commitments`.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        linear_combinations: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         eqn_query_set: &QuerySet<P::Point>,
-        eqn_evaluations: &Evaluations<P::Point, E::Fr>,
-        proof: &BatchLCProof<E::Fr, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        eqn_evaluations: &Evaluations<P::Point, E::ScalarField>,
+        proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -700,12 +700,12 @@ mod tests {
         degree: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePoly<E::Fr> {
-        DensePoly::<E::Fr>::rand(degree, rng)
+    ) -> DensePoly<E::ScalarField> {
+        DensePoly::<E::ScalarField>::rand(degree, rng)
     }
 
-    fn rand_point<E: Pairing>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::Fr {
-        E::Fr::rand(rng)
+    fn rand_point<E: Pairing>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::ScalarField {
+        E::ScalarField::rand(rng)
     }
 
     #[test]
