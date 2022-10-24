@@ -6,7 +6,8 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
-use ark_ec::msm::{FixedBase, VariableBaseMSM};
+use ark_ec::scalar_mul::fixed_base::FixedBase;
+use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
 use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;

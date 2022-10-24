@@ -7,7 +7,7 @@ use ark_std::collections::VecDeque;
 use ark_std::vec::Vec;
 
 use crate::streaming_kzg::{ceil_div, vanishing_polynomial, FoldedPolynomialTree};
-use ark_ec::msm::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
+use ark_ec::scalar_mul::variable_base::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
 use ark_std::iterable::{Iterable, Reverse};
 
 use super::{time::CommitterKey, VerifierKey};
