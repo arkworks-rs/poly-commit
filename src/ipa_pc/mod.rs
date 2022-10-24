@@ -47,7 +47,7 @@ pub struct InnerProductArgPC<
 impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
-    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
+    G::Projective: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
@@ -338,7 +338,7 @@ where
 impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgPC<G, D, P, S>
 where
     G: AffineCurve,
-    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
+    G::Projective: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField, Point = G::ScalarField>,
     S: CryptographicSponge,
