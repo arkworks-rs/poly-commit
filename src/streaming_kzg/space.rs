@@ -1,5 +1,5 @@
 //! Space-efficient implementation of the polynomial commitment of Kate et al.
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, ProjectiveCurve};
 use ark_ff::{PrimeField, Zero};
 use ark_poly::Polynomial;
 use ark_std::borrow::Borrow;
@@ -20,7 +20,7 @@ const LENGTH_MISMATCH_MSG: &str = "Expecting at least one element in the committ
 #[derive(Clone)]
 pub struct CommitterKeyStream<E, SG>
 where
-    E: PairingEngine,
+    E: Pairing,
     SG: Iterable,
     SG::Item: Borrow<E::G1Affine>,
 {
@@ -32,7 +32,7 @@ where
 
 impl<E, SG> CommitterKeyStream<E, SG>
 where
-    E: PairingEngine,
+    E: Pairing,
     SG: Iterable,
     SG::Item: Borrow<E::G1Affine>,
 {
@@ -204,7 +204,7 @@ where
     where
         SG: Iterable,
         SF: Iterable,
-        E: PairingEngine,
+        E: Pairing,
         SG::Item: Borrow<E::G1Affine>,
         SF::Item: Borrow<E::Fr> + Copy,
     {
@@ -255,7 +255,7 @@ where
     }
 }
 
-impl<'a, E: PairingEngine> From<&'a CommitterKey<E>>
+impl<'a, E: Pairing> From<&'a CommitterKey<E>>
     for CommitterKeyStream<E, Reverse<&'a [E::G1Affine]>>
 {
     fn from(ck: &'a CommitterKey<E>) -> Self {
@@ -268,7 +268,7 @@ impl<'a, E: PairingEngine> From<&'a CommitterKey<E>>
 
 impl<E, SG> From<&CommitterKeyStream<E, SG>> for VerifierKey<E>
 where
-    E: PairingEngine,
+    E: Pairing,
     SG: Iterable,
     SG::Item: Borrow<E::G1Affine>,
 {

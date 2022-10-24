@@ -9,7 +9,7 @@ use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::{
     msm::{FixedBase, VariableBaseMSM},
-    AffineCurve, PairingEngine, ProjectiveCurve,
+    AffineCurve, pairing::Pairing, ProjectiveCurve,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
@@ -33,13 +33,13 @@ use rayon::prelude::*;
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinPST13<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinPST13<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-impl<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
+impl<E: Pairing, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> MarlinPST13<E, P, S> {
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -142,7 +142,7 @@ impl<E: PairingEngine, P: DenseMVPolynomial<E::Fr>, S: CryptographicSponge> Marl
 
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinPST13<E, P, S>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr> + Sync,
     S: CryptographicSponge,
     P::Point: Index<usize, Output = E::Fr>,
@@ -715,7 +715,7 @@ mod tests {
     use super::MarlinPST13;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
-    use ark_ec::PairingEngine;
+    use ark_ec::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
@@ -724,18 +724,18 @@ mod tests {
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
-    type MVPoly_381 = SparsePoly<<Bls12_381 as PairingEngine>::Fr, SparseTerm>;
-    type MVPoly_377 = SparsePoly<<Bls12_377 as PairingEngine>::Fr, SparseTerm>;
+    type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::Fr, SparseTerm>;
+    type MVPoly_377 = SparsePoly<<Bls12_377 as Pairing>::Fr, SparseTerm>;
 
     type PC<E, P, S> = MarlinPST13<E, P, S>;
 
-    type Sponge_bls12_381 = PoseidonSponge<<Bls12_381 as PairingEngine>::Fr>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as PairingEngine>::Fr>;
+    type Sponge_bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::Fr>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::Fr>;
 
     type PC_Bls12_381 = PC<Bls12_381, MVPoly_381, Sponge_bls12_381>;
     type PC_Bls12_377 = PC<Bls12_377, MVPoly_377, Sponge_Bls12_377>;
 
-    fn rand_poly<E: PairingEngine>(
+    fn rand_poly<E: Pairing>(
         degree: usize,
         num_vars: Option<usize>,
         rng: &mut ChaCha20Rng,
@@ -743,7 +743,7 @@ mod tests {
         SparsePoly::<E::Fr, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: PairingEngine>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::Fr> {
+    fn rand_point<E: Pairing>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::Fr> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {

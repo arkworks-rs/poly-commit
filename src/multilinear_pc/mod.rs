@@ -2,7 +2,7 @@ use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
 use ark_ec::msm::{FixedBase, VariableBaseMSM};
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{Field, PrimeField};
 use ark_ff::{One, Zero};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
@@ -18,11 +18,11 @@ use ark_std::UniformRand;
 pub mod data_structures;
 
 /// Polynomial Commitment Scheme on multilinear extensions.
-pub struct MultilinearPC<E: PairingEngine> {
+pub struct MultilinearPC<E: Pairing> {
     _engine: PhantomData<E>,
 }
 
-impl<E: PairingEngine> MultilinearPC<E> {
+impl<E: Pairing> MultilinearPC<E> {
     /// setup
     pub fn setup<R: RngCore>(num_vars: usize, rng: &mut R) -> UniversalParams<E> {
         assert!(num_vars > 0, "constant polynomial not supported");
@@ -275,13 +275,13 @@ mod tests {
     use crate::multilinear_pc::data_structures::UniversalParams;
     use crate::multilinear_pc::MultilinearPC;
     use ark_bls12_381::Bls12_381;
-    use ark_ec::PairingEngine;
+    use ark_ec::Pairing;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
     use ark_std::rand::RngCore;
     use ark_std::vec::Vec;
     use ark_std::{test_rng, UniformRand};
     type E = Bls12_381;
-    type Fr = <E as PairingEngine>::Fr;
+    type Fr = <E as Pairing>::Fr;
 
     fn test_polynomial<R: RngCore>(
         uni_params: &UniversalParams<E>,

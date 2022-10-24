@@ -1,7 +1,7 @@
 //! An impementation of a time-efficient version of Kate et al's polynomial commitment,
 //! with optimization from [\[BDFG20\]](https://eprint.iacr.org/2020/081.pdf).
 use ark_ec::msm::FixedBase;
-use ark_ec::PairingEngine;
+use ark_ec::pairing::Pairing;
 use ark_ec::ProjectiveCurve;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
@@ -23,12 +23,12 @@ use super::vanishing_polynomial;
 /// plus the `max_eval_degree` powers over \\(\GG_2\\),
 /// where `max_degree` is the max polynomial degree to commit to,
 /// and `max_eval_degree` is the max number of different points to open simultaneously.
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E: Pairing> {
     pub(crate) powers_of_g: Vec<E::G1Affine>,
     pub(crate) powers_of_g2: Vec<E::G2Affine>,
 }
 
-impl<E: PairingEngine> From<&CommitterKey<E>> for VerifierKey<E> {
+impl<E: Pairing> From<&CommitterKey<E>> for VerifierKey<E> {
     fn from(ck: &CommitterKey<E>) -> VerifierKey<E> {
         let max_eval_points = ck.max_eval_points();
         let powers_of_g2 = ck.powers_of_g2[..max_eval_points + 1].to_vec();
@@ -41,7 +41,7 @@ impl<E: PairingEngine> From<&CommitterKey<E>> for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CommitterKey<E> {
+impl<E: Pairing> CommitterKey<E> {
     /// The setup algorithm for the commitment scheme.
     ///
     /// Given a degree bound `max_degree`,

@@ -4,7 +4,7 @@ use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
@@ -24,7 +24,7 @@ pub use data_structures::*;
 /// [sonic]: https://eprint.iacr.org/2019/099
 /// [al]: https://eprint.iacr.org/2019/601
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct SonicKZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct SonicKZG10<E: Pairing, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
@@ -32,7 +32,7 @@ pub struct SonicKZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>, S: Cryptogr
 
 impl<E, P, S> SonicKZG10<E, P, S>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseUVPolynomial<E::Fr>,
     S: CryptographicSponge,
 {
@@ -136,7 +136,7 @@ where
 
 impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for SonicKZG10<E, P, S>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
@@ -681,22 +681,22 @@ mod tests {
     use super::SonicKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
-    use ark_ec::PairingEngine;
+    use ark_ec::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
-    type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
-    type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
+    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::Fr>;
 
     type PC<E, P, S> = SonicKZG10<E, P, S>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as PairingEngine>::Fr>;
-    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as PairingEngine>::Fr>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::Fr>;
+    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::Fr>;
     type PC_Bls12_377 = PC<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
     type PC_Bls12_381 = PC<Bls12_381, UniPoly_381, Sponge_Bls12_381>;
 
-    fn rand_poly<E: PairingEngine>(
+    fn rand_poly<E: Pairing>(
         degree: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
@@ -704,7 +704,7 @@ mod tests {
         DensePoly::<E::Fr>::rand(degree, rng)
     }
 
-    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::Fr {
+    fn rand_point<E: Pairing>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::Fr {
         E::Fr::rand(rng)
     }
 

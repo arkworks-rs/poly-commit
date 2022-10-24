@@ -1,5 +1,5 @@
 use crate::*;
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, ProjectiveCurve};
 use ark_ff::{PrimeField, ToConstraintField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::{
@@ -17,7 +17,7 @@ use ark_std::{
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct UniversalParams<E: PairingEngine> {
+pub struct UniversalParams<E: Pairing> {
     /// Group elements of the form `{ \beta^i G }`, where `i` ranges from 0 to `degree`.
     pub powers_of_g: Vec<E::G1Affine>,
     /// Group elements of the form `{ \beta^i \gamma G }`, where `i` ranges from 0 to `degree`.
@@ -36,13 +36,13 @@ pub struct UniversalParams<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
-impl<E: PairingEngine> PCUniversalParams for UniversalParams<E> {
+impl<E: Pairing> PCUniversalParams for UniversalParams<E> {
     fn max_degree(&self) -> usize {
         self.powers_of_g.len() - 1
     }
 }
 
-impl<E: PairingEngine> CanonicalSerialize for UniversalParams<E> {
+impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.powers_of_g.serialize(&mut writer)?;
         self.powers_of_gamma_g.serialize(&mut writer)?;
@@ -84,7 +84,7 @@ impl<E: PairingEngine> CanonicalSerialize for UniversalParams<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
+impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let powers_of_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
         let powers_of_gamma_g = BTreeMap::<usize, E::G1Affine>::deserialize(&mut reader)?;
@@ -161,21 +161,21 @@ impl<E: PairingEngine> CanonicalDeserialize for UniversalParams<E> {
     Debug(bound = ""),
     PartialEq
 )]
-pub struct Powers<'a, E: PairingEngine> {
+pub struct Powers<'a, E: Pairing> {
     /// Group elements of the form `β^i G`, for different values of `i`.
     pub powers_of_g: Cow<'a, [E::G1Affine]>,
     /// Group elements of the form `β^i γG`, for different values of `i`.
     pub powers_of_gamma_g: Cow<'a, [E::G1Affine]>,
 }
 
-impl<E: PairingEngine> Powers<'_, E> {
+impl<E: Pairing> Powers<'_, E> {
     /// The number of powers in `self`.
     pub fn size(&self) -> usize {
         self.powers_of_g.len()
     }
 }
 
-impl<'a, E: PairingEngine> CanonicalSerialize for Powers<'a, E> {
+impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.powers_of_g.serialize(&mut writer)?;
         self.powers_of_gamma_g.serialize(&mut writer)
@@ -196,7 +196,7 @@ impl<'a, E: PairingEngine> CanonicalSerialize for Powers<'a, E> {
     }
 }
 
-impl<'a, E: PairingEngine> CanonicalDeserialize for Powers<'a, E> {
+impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let powers_of_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
         let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
@@ -233,7 +233,7 @@ impl<'a, E: PairingEngine> CanonicalDeserialize for Powers<'a, E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of G1.
     pub g: E::G1Affine,
     /// The generator of G1 that is used for making a commitment hiding.
@@ -250,7 +250,7 @@ pub struct VerifierKey<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
-impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.g.serialize(&mut writer)?;
         self.gamma_g.serialize(&mut writer)?;
@@ -287,7 +287,7 @@ impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let g = E::G1Affine::deserialize(&mut reader)?;
         let gamma_g = E::G1Affine::deserialize(&mut reader)?;
@@ -346,7 +346,7 @@ impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+impl<E: Pairing> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
     E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
@@ -367,7 +367,7 @@ where
 /// We omit gamma here for simplicity.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct PreparedVerifierKey<E: PairingEngine> {
+pub struct PreparedVerifierKey<E: Pairing> {
     /// The generator of G1, prepared for power series.
     pub prepared_g: Vec<E::G1Affine>,
     /// The generator of G2, prepared for use in pairings.
@@ -376,7 +376,7 @@ pub struct PreparedVerifierKey<E: PairingEngine> {
     pub prepared_beta_h: E::G2Prepared,
 }
 
-impl<E: PairingEngine> PreparedVerifierKey<E> {
+impl<E: Pairing> PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     pub fn prepare(vk: &VerifierKey<E>) -> Self {
         let supported_bits = E::Fr::MODULUS_BIT_SIZE as usize;
@@ -407,12 +407,12 @@ impl<E: PairingEngine> PreparedVerifierKey<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Commitment<E: PairingEngine>(
+pub struct Commitment<E: Pairing>(
     /// The commitment is a group element.
     pub E::G1Affine,
 );
 
-impl<E: PairingEngine> PCCommitment for Commitment<E> {
+impl<E: Pairing> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
         Commitment(E::G1Affine::zero())
@@ -423,7 +423,7 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     }
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+impl<E: Pairing> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
 where
     E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
 {
@@ -432,7 +432,7 @@ where
     }
 }
 
-impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
+impl<'a, E: Pairing> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<E> {
     #[inline]
     fn add_assign(&mut self, (f, other): (E::Fr, &'a Commitment<E>)) {
         let mut other = other.0 * f;
@@ -451,12 +451,12 @@ impl<'a, E: PairingEngine> AddAssign<(E::Fr, &'a Commitment<E>)> for Commitment<
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct PreparedCommitment<E: PairingEngine>(
+pub struct PreparedCommitment<E: Pairing>(
     /// The commitment is a group element.
     pub Vec<E::G1Affine>,
 );
 
-impl<E: PairingEngine> PreparedCommitment<E> {
+impl<E: Pairing> PreparedCommitment<E> {
     /// prepare `PreparedCommitment` from `Commitment`
     pub fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
@@ -570,7 +570,7 @@ impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<(F, &'a Randomness<F,
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Proof<E: PairingEngine> {
+pub struct Proof<E: Pairing> {
     /// This is a commitment to the witness polynomial; see [KZG10] for more details.
     pub w: E::G1Affine,
     /// This is the evaluation of the random polynomial at the point for which
@@ -578,4 +578,4 @@ pub struct Proof<E: PairingEngine> {
     pub random_v: Option<E::Fr>,
 }
 
-impl<E: PairingEngine> PCProof for Proof<E> {}
+impl<E: Pairing> PCProof for Proof<E> {}

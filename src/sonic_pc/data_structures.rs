@@ -2,7 +2,7 @@ use crate::kzg10;
 use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, ProjectiveCurve};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 
@@ -18,7 +18,7 @@ pub type Commitment<E> = kzg10::Commitment<E>;
 /// `PreparedCommitment` is the prepared commitment for the KZG10 scheme.
 pub type PreparedCommitment<E> = kzg10::PreparedCommitment<E>;
 
-impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
@@ -41,7 +41,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E: Pairing> {
     /// The key used to commit to polynomials.
     pub powers_of_g: Vec<E::G1Affine>,
 
@@ -65,7 +65,7 @@ pub struct CommitterKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> CommitterKey<E> {
+impl<E: Pairing> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
     pub fn powers(&self) -> kzg10::Powers<E> {
         kzg10::Powers {
@@ -111,7 +111,7 @@ impl<E: PairingEngine> CommitterKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
+impl<E: Pairing> PCCommitterKey for CommitterKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -124,7 +124,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of G1.
     pub g: E::G1Affine,
 
@@ -156,7 +156,7 @@ pub struct VerifierKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> VerifierKey<E> {
+impl<E: Pairing> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
         self.degree_bounds_and_neg_powers_of_h
@@ -169,7 +169,7 @@ impl<E: PairingEngine> VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.g.serialize(&mut writer)?;
         self.gamma_g.serialize(&mut writer)?;
@@ -224,7 +224,7 @@ impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let g = E::G1Affine::deserialize(&mut reader)?;
         let gamma_g = E::G1Affine::deserialize(&mut reader)?;
@@ -304,7 +304,7 @@ impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
+impl<E: Pairing> PCVerifierKey for VerifierKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -317,7 +317,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 /// Nothing to do to prepare this verifier key (for now).
 pub type PreparedVerifierKey<E> = VerifierKey<E>;
 
-impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
+impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     fn prepare(vk: &VerifierKey<E>) -> Self {
         vk.clone()
@@ -334,4 +334,4 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct BatchProof<E: PairingEngine>(pub(crate) Vec<kzg10::Proof<E>>);
+pub struct BatchProof<E: Pairing>(pub(crate) Vec<kzg10::Proof<E>>);

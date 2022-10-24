@@ -4,7 +4,7 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{One, Zero};
 use ark_sponge::CryptographicSponge;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
@@ -28,7 +28,7 @@ pub mod marlin_pst13_pc;
 /// Common functionalities between `marlin_pc` and `marlin_pst13_pc`
 struct Marlin<E, S, P, PC>
 where
-    E: PairingEngine,
+    E: Pairing,
     S: CryptographicSponge,
     P: Polynomial<E::Fr>,
     PC: PolynomialCommitment<E::Fr, P, S>,
@@ -41,7 +41,7 @@ where
 
 impl<E, S, P, PC> Marlin<E, S, P, PC>
 where
-    E: PairingEngine,
+    E: Pairing,
     S: CryptographicSponge,
     P: Polynomial<E::Fr>,
     PC: PolynomialCommitment<E::Fr, P, S>,

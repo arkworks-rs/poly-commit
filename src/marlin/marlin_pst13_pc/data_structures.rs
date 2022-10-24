@@ -2,7 +2,7 @@ use crate::{BTreeMap, Vec};
 use crate::{
     PCCommitterKey, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,
 };
-use ark_ec::PairingEngine;
+use ark_ec::pairing::Pairing;
 use ark_ff::Zero;
 use ark_poly::DenseMVPolynomial;
 use ark_std::{
@@ -19,7 +19,7 @@ use ark_std::rand::RngCore;
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct UniversalParams<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -50,7 +50,7 @@ where
 
 impl<E, P> CanonicalSerialize for UniversalParams<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -107,7 +107,7 @@ where
 
 impl<E, P> CanonicalDeserialize for UniversalParams<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -183,7 +183,7 @@ where
 
 impl<E, P> PCUniversalParams for UniversalParams<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -198,7 +198,7 @@ where
 #[derivative(Hash(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct CommitterKey<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -222,7 +222,7 @@ where
 
 impl<E, P> PCCommitterKey for CommitterKey<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -238,7 +238,7 @@ where
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of G1.
     pub g: E::G1Affine,
     /// The generator of G1 that is used for making a commitment hiding.
@@ -264,7 +264,7 @@ pub struct VerifierKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
         self.g.serialize(&mut writer)?;
         self.gamma_g.serialize(&mut writer)?;
@@ -316,7 +316,7 @@ impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
+impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         let g = E::G1Affine::deserialize(&mut reader)?;
         let gamma_g = E::G1Affine::deserialize(&mut reader)?;
@@ -387,7 +387,7 @@ impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
+impl<E: Pairing> PCVerifierKey for VerifierKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -400,7 +400,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 /// Nothing to do to prepare this verifier key (for now).
 pub type PreparedVerifierKey<E> = VerifierKey<E>;
 
-impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
+impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     fn prepare(vk: &VerifierKey<E>) -> Self {
         vk.clone()
@@ -418,7 +418,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
 )]
 pub struct Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -429,7 +429,7 @@ where
 
 impl<E, P> Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -449,7 +449,7 @@ where
 
 impl<E, P> PCRandomness for Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -474,10 +474,10 @@ where
     }
 }
 
-impl<'a, E: PairingEngine, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>>
+impl<'a, E: Pairing, P: DenseMVPolynomial<E::Fr>> Add<&'a Randomness<E, P>>
     for Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -492,7 +492,7 @@ where
 
 impl<'a, E, P> Add<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -507,7 +507,7 @@ where
 
 impl<'a, E, P> AddAssign<&'a Randomness<E, P>> for Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -519,7 +519,7 @@ where
 
 impl<'a, E, P> AddAssign<(E::Fr, &'a Randomness<E, P>)> for Randomness<E, P>
 where
-    E: PairingEngine,
+    E: Pairing,
     P: DenseMVPolynomial<E::Fr>,
     P::Point: Index<usize, Output = E::Fr>,
 {
@@ -539,7 +539,7 @@ where
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Proof<E: PairingEngine> {
+pub struct Proof<E: Pairing> {
     /// Commitments to the witness polynomials
     pub w: Vec<E::G1Affine>,
     /// Evaluation of the random polynomial at the point for which
@@ -547,7 +547,7 @@ pub struct Proof<E: PairingEngine> {
     pub random_v: Option<E::Fr>,
 }
 
-impl<E: PairingEngine> PCProof for Proof<E> {
+impl<E: Pairing> PCProof for Proof<E> {
     fn size_in_bytes(&self) -> usize {
         let hiding_size = if self.random_v.is_some() {
             E::Fr::zero().serialized_size()

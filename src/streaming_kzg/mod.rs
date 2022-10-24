@@ -103,13 +103,13 @@ use ark_std::ops::{Add, Mul};
 use ark_std::borrow::Borrow;
 use ark_std::fmt;
 
-use ark_ec::{msm::VariableBaseMSM, AffineCurve, PairingEngine};
+use ark_ec::{msm::VariableBaseMSM, AffineCurve, pairing::Pairing};
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Commitment<E: PairingEngine>(pub(crate) E::G1Affine);
+pub struct Commitment<E: Pairing>(pub(crate) E::G1Affine);
 
-impl<E: PairingEngine> Commitment<E> {
+impl<E: Pairing> Commitment<E> {
     /// Return the size of Commitment in bytes.
     pub fn size_in_bytes(&self) -> usize {
         // ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
@@ -118,7 +118,7 @@ impl<E: PairingEngine> Commitment<E> {
 }
 
 #[inline]
-fn msm<E: PairingEngine>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affine {
+fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affine {
     let scalars = scalars.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
     let sp = <E::G1Projective as VariableBaseMSM>::msm_bigint(bases, &scalars);
     sp.into_affine()
@@ -126,9 +126,9 @@ fn msm<E: PairingEngine>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affin
 
 /// Polynomial evaluation proof, represented as a single \\(\GG_1\\) element.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EvaluationProof<E: PairingEngine>(pub E::G1Affine);
+pub struct EvaluationProof<E: Pairing>(pub E::G1Affine);
 
-impl<E: PairingEngine> Add for EvaluationProof<E> {
+impl<E: Pairing> Add for EvaluationProof<E> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -136,7 +136,7 @@ impl<E: PairingEngine> Add for EvaluationProof<E> {
     }
 }
 
-impl<E: PairingEngine> core::iter::Sum for EvaluationProof<E> {
+impl<E: Pairing> core::iter::Sum for EvaluationProof<E> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let zero = EvaluationProof(E::G1Affine::zero());
         iter.fold(zero, |x, y| x + y)
@@ -159,14 +159,14 @@ pub(crate) type VerificationResult = Result<(), VerificationError>;
 /// The verification key for the polynomial commitment scheme.
 /// It also implements verification functions for the evaluation proof.
 #[derive(Debug, PartialEq, Eq)]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of  \\(\GG_1\\)
     powers_of_g: Vec<E::G1Affine>,
     /// The generator og \\(\GG_2\\), together with its multiplication by the trapdoor.
     powers_of_g2: Vec<E::G2Affine>,
 }
 
-impl<E: PairingEngine> VerifierKey<E> {
+impl<E: Pairing> VerifierKey<E> {
     /// The verification procedure for the EvaluationProof with a single polynomial evaluated at a single evaluation point.
     /// The polynomial are evaluated at the point ``alpha`` and is committed as ``commitment``.
     /// The evaluation proof can be obtained either in a space-efficient or a time-efficient flavour.
@@ -262,7 +262,7 @@ impl<E: PairingEngine> VerifierKey<E> {
     }
 }
 
-fn interpolate_poly<E: PairingEngine>(
+fn interpolate_poly<E: Pairing>(
     eval_points: &[E::Fr],
     evals: &[E::Fr],
     sca_inverse: &[E::Fr],
