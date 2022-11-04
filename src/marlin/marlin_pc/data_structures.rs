@@ -2,7 +2,6 @@ use crate::{
     DenseUVPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
     PCRandomness, PCVerifierKey, Vec,
 };
-use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, ProjectiveCurve};
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};

@@ -4,7 +4,7 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
-use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
+use ark_ec::{AffineRepr, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{One, Zero};
 use ark_sponge::CryptographicSponge;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};

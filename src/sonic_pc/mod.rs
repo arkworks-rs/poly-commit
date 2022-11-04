@@ -4,7 +4,7 @@ use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{AffineCurve, pairing::Pairing, ProjectiveCurve};
+use ark_ec::{AffineRepr, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};

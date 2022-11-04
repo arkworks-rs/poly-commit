@@ -8,7 +8,7 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::{
-    AffineCurve, pairing::Pairing, ProjectiveCurve,
+    AffineRepr, pairing::Pairing, ProjectiveCurve,
 };
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::scalar_mul::variable_base::VariableBaseMSM;

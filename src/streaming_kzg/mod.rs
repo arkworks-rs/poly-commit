@@ -103,7 +103,7 @@ use ark_std::ops::{Add, Mul};
 use ark_std::borrow::Borrow;
 use ark_std::fmt;
 
-use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, AffineCurve, pairing::Pairing};
+use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, AffineRepr, pairing::Pairing};
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
