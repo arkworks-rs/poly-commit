@@ -341,7 +341,7 @@ impl<'a, E: Pairing> AddAssign<(E::ScalarField, &'a Commitment<E>)> for Commitme
     #[inline]
     fn add_assign(&mut self, (f, other): (E::ScalarField, &'a Commitment<E>)) {
         let mut other = other.0 * f;
-        other.add_assign_mixed(&self.0);
+        other + &self.0;
         self.0 = other.into();
     }
 }

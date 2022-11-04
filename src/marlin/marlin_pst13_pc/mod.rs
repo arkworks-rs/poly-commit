@@ -423,7 +423,7 @@ where
             end_timer!(msm_time);
 
             // Mask commitment with random poly
-            commitment.add_assign_mixed(&random_commitment);
+            commitment + &random_commitment;
 
             let comm = Self::Commitment {
                 comm: kzg10::Commitment(commitment.into()),
@@ -622,7 +622,7 @@ where
                 .enumerate()
                 .map(|(j, w_j)| w_j.mul(z[j]))
                 .sum();
-            temp.add_assign_mixed(&c.0);
+            temp + &c.0;
             let c = temp;
             g_multiplier += &(randomizer * &v);
             if let Some(random_v) = proof.random_v {

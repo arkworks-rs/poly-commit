@@ -184,7 +184,7 @@ where
         .into_affine();
         end_timer!(msm_time);
 
-        commitment.add_assign_mixed(&random_commitment);
+        commitment + &random_commitment;
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
@@ -337,7 +337,7 @@ where
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
             let w = proof.w;
             let mut temp = w.mul(*z);
-            temp.add_assign_mixed(&c.0);
+            temp + &c.0;
             let c = temp;
             g_multiplier += &(randomizer * v);
             if let Some(random_v) = proof.random_v {

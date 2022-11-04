@@ -54,7 +54,7 @@ where
         let mut combined_shifted_comm = None;
         for (coeff, comm) in coeffs_and_comms {
             if coeff.is_one() {
-                combined_comm.add_assign_mixed(&comm.comm.0);
+                combined_comm + &comm.comm.0;
             } else {
                 combined_comm += &comm.comm.0.mul(coeff);
             }
