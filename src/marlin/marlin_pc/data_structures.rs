@@ -133,18 +133,18 @@ impl<E: Pairing> PCVerifierKey for VerifierKey<E> {
     }
 }
 
-impl<E: Pairing> ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField> for VerifierKey<E>
+impl<E: Pairing> ToConstraintField<<E::BaseField as Field>::BasePrimeField> for VerifierKey<E>
 where
-    E::G1Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
-    E::G2Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::BaseField as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::BaseField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<E::BaseField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
         res.extend_from_slice(&self.vk.to_field_elements().unwrap());
 
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
             for (d, shift_power) in degree_bounds_and_shift_powers.iter() {
-                let d_elem: <<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField = (*d as u64).into();
+                let d_elem: <E::BaseField as Field>::BasePrimeField = (*d as u64).into();
 
                 res.push(d_elem);
                 res.extend_from_slice(&shift_power.to_field_elements().unwrap());
@@ -234,11 +234,11 @@ pub struct Commitment<E: Pairing> {
     pub shifted_comm: Option<kzg10::Commitment<E>>,
 }
 
-impl<E: Pairing> ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField> for Commitment<E>
+impl<E: Pairing> ToConstraintField<<E::BaseField as Field>::BasePrimeField> for Commitment<E>
 where
-    E::G1Affine: ToConstraintField<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::BaseField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<<E::G1Affine as AffineRepr>::BaseField as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<E::BaseField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
         res.extend_from_slice(&self.comm.to_field_elements().unwrap());
 
