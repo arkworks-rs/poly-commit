@@ -121,14 +121,13 @@ where
         g1_projective_elems.push(-combined_witness);
         g2_prepared_elems.push(vk.prepared_beta_h.clone());
 
-        let g1_prepared_elems_iter =
-            E::G1::normalize_batch(g1_projective_elems.as_slice())
-                .into_iter()
-                .map(|a| a.into());
+        let g1_prepared_elems_iter = E::G1::normalize_batch(g1_projective_elems.as_slice())
+            .into_iter()
+            .map(|a| <<E as Pairing>::G1Affine as Into<E::G1Prepared>>::into(a));
 
-        let g1_g2_prepared: Vec<(E::G1Prepared, E::G2Prepared)> =
-            g1_prepared_elems_iter.zip(g2_prepared_elems).collect();
-        let is_one: bool = E::product_of_pairings(g1_g2_prepared.iter()).is_one();
+        let is_one: bool = E::multi_pairing(g1_prepared_elems_iter, g2_prepared_elems)
+            .0
+            .is_one();
         end_timer!(check_time);
         Ok(is_one)
     }

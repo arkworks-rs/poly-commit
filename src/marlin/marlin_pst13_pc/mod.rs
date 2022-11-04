@@ -573,7 +573,7 @@ where
                 ((*w_j).into(), beta_minus_z.into())
             })
             .collect();
-        let rhs = E::product_of_pairings(&rhs_product);
+        let rhs = E::multi_pairing(rhs_product.0, rhs_product.1);
         end_timer!(check_time);
 
         Ok(lhs == rhs)
@@ -641,15 +641,18 @@ where
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let mut pairings = Vec::new();
+        let mut a: Vec<<E as Pairing>::G1Prepared> = Vec::new();
+        let mut b: Vec<<E as Pairing>::G2Prepared> = Vec::new();
         total_w.into_iter().enumerate().for_each(|(j, w_j)| {
-            pairings.push(((-w_j).into_affine().into(), vk.prepared_beta_h[j].clone()))
+            a.push((-w_j).into_affine().into());
+            b.push(vk.prepared_beta_h[j].clone());
         });
-        pairings.push((total_c.into_affine().into(), vk.prepared_h.clone()));
+        a.push(total_c.into_affine().into());
+        b.push(vk.prepared_h.clone());
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
-        let result = E::product_of_pairings(&pairings).is_one();
+        let result = E::multi_pairing(a, b).0.is_one();
         end_timer!(pairing_time);
         end_timer!(check_time);
         Ok(result)

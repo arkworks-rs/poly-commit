@@ -230,11 +230,7 @@ impl<E: Pairing> MultilinearPC<E> {
             .map(|x| E::G2Prepared::from(*x))
             .collect();
 
-        let pairings: Vec<_> = pairing_lefts
-            .into_iter()
-            .zip(pairing_rights.into_iter())
-            .collect();
-        let right = E::product_of_pairings(pairings.iter());
+        let right = E::multi_pairing(pairing_lefts, pairing_rights);
         left == right
     }
 }
