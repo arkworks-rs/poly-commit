@@ -1,5 +1,5 @@
 //! Space-efficient implementation of the polynomial commitment of Kate et al.
-use ark_ec::{pairing::Pairing};
+use ark_ec::pairing::Pairing;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::Polynomial;
 use ark_std::borrow::Borrow;
@@ -136,8 +136,7 @@ where
         assert!(self.powers_of_g.len() >= polynomial.len());
 
         Commitment(
-            <E::G1 as VariableBaseMSM>::msm_chunks(&self.powers_of_g, polynomial)
-                .into_affine(),
+            <E::G1 as VariableBaseMSM>::msm_chunks(&self.powers_of_g, polynomial).into_affine(),
         )
     }
 

@@ -1,7 +1,7 @@
 use crate::*;
 use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::{PrimeField, ToConstraintField, Zero};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError};
 use ark_std::{
     borrow::Cow,
     io::{Read, Write},
@@ -43,44 +43,26 @@ impl<E: Pairing> PCUniversalParams for UniversalParams<E> {
 }
 
 impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize(&mut writer)?;
-        self.powers_of_gamma_g.serialize(&mut writer)?;
-        self.h.serialize(&mut writer)?;
-        self.beta_h.serialize(&mut writer)?;
-        self.neg_powers_of_h.serialize(&mut writer)
-    }
-
-    fn serialized_size(&self) -> usize {
-        self.powers_of_g.serialized_size()
-            + self.powers_of_gamma_g.serialized_size()
-            + self.h.serialized_size()
-            + self.beta_h.serialized_size()
-            + self.neg_powers_of_h.serialized_size()
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_unchecked(&mut writer)?;
-        self.powers_of_gamma_g.serialize_unchecked(&mut writer)?;
-        self.h.serialize_unchecked(&mut writer)?;
-        self.beta_h.serialize_unchecked(&mut writer)?;
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.powers_of_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.powers_of_gamma_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)?;
         self.neg_powers_of_h.serialize_unchecked(&mut writer)
     }
 
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_uncompressed(&mut writer)?;
-        self.powers_of_gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)?;
-        self.neg_powers_of_h.serialize_uncompressed(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.powers_of_g.uncompressed_size()
-            + self.powers_of_gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.neg_powers_of_h.uncompressed_size()
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.powers_of_g.serialized_size(compress)
+            + self.powers_of_gamma_g.serialized_size(compress)
+            + self.h.serialized_size(compress)
+            + self.beta_h.serialized_size(compress)
+            + self.neg_powers_of_h.serialized_size(compress)
     }
 }
 
@@ -176,18 +158,20 @@ impl<E: Pairing> Powers<'_, E> {
 }
 
 impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize(&mut writer)?;
-        self.powers_of_gamma_g.serialize(&mut writer)
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.powers_of_g.serialized_size(compress)
+            + self.powers_of_gamma_g.serialized_size(compress)
     }
 
-    fn serialized_size(&self) -> usize {
-        self.powers_of_g.serialized_size() + self.powers_of_gamma_g.serialized_size()
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_unchecked(&mut writer)?;
-        self.powers_of_gamma_g.serialize_unchecked(&mut writer)
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.powers_of_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.powers_of_gamma_g
+            .serialize_with_mode(&mut writer, compress)
     }
 
     fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
@@ -251,39 +235,22 @@ pub struct VerifierKey<E: Pairing> {
 }
 
 impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize(&mut writer)?;
-        self.gamma_g.serialize(&mut writer)?;
-        self.h.serialize(&mut writer)?;
-        self.beta_h.serialize(&mut writer)
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.g.serialize_with_mode(&mut writer, compress)?;
+        self.gamma_g.serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)
     }
 
-    fn serialized_size(&self) -> usize {
-        self.g.serialized_size()
-            + self.gamma_g.serialized_size()
-            + self.h.serialized_size()
-            + self.beta_h.serialized_size()
-    }
-
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_uncompressed(&mut writer)?;
-        self.gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_unchecked(&mut writer)?;
-        self.gamma_g.serialize_unchecked(&mut writer)?;
-        self.h.serialize_unchecked(&mut writer)?;
-        self.beta_h.serialize_unchecked(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.g.uncompressed_size()
-            + self.gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.g.serialized_size(compress)
+            + self.gamma_g.serialized_size(compress)
+            + self.h.serialized_size(compress)
+            + self.beta_h.serialized_size(compress)
     }
 }
 

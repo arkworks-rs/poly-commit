@@ -11,7 +11,7 @@ use ark_std::{
     ops::{Add, AddAssign, Index},
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError};
 use ark_std::rand::RngCore;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
@@ -54,54 +54,30 @@ where
     P: DenseMVPolynomial<E::ScalarField>,
     P::Point: Index<usize, Output = E::ScalarField>,
 {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize(&mut writer)?;
-        self.gamma_g.serialize(&mut writer)?;
-        self.powers_of_gamma_g.serialize(&mut writer)?;
-        self.h.serialize(&mut writer)?;
-        self.beta_h.serialize(&mut writer)?;
-        self.num_vars.serialize(&mut writer)?;
-        self.max_degree.serialize(&mut writer)
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.powers_of_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.gamma_g.serialize_with_mode(&mut writer, compress)?;
+        self.powers_of_gamma_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)?;
+        self.num_vars.serialize_with_mode(&mut writer, compress)?;
+        self.max_degree.serialize_with_mode(&mut writer, compress)
     }
 
-    fn serialized_size(&self) -> usize {
-        self.powers_of_g.serialized_size()
-            + self.gamma_g.serialized_size()
-            + self.powers_of_gamma_g.serialized_size()
-            + self.h.serialized_size()
-            + self.beta_h.serialized_size()
-            + self.num_vars.serialized_size()
-            + self.max_degree.serialized_size()
-    }
-
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_uncompressed(&mut writer)?;
-        self.gamma_g.serialize_uncompressed(&mut writer)?;
-        self.powers_of_gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)?;
-        self.num_vars.serialize_uncompressed(&mut writer)?;
-        self.max_degree.serialize_uncompressed(&mut writer)
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_unchecked(&mut writer)?;
-        self.gamma_g.serialize_unchecked(&mut writer)?;
-        self.powers_of_gamma_g.serialize_unchecked(&mut writer)?;
-        self.h.serialize_unchecked(&mut writer)?;
-        self.beta_h.serialize_unchecked(&mut writer)?;
-        self.num_vars.serialize_unchecked(&mut writer)?;
-        self.max_degree.serialize_unchecked(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.powers_of_g.uncompressed_size()
-            + self.gamma_g.uncompressed_size()
-            + self.powers_of_gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.num_vars.uncompressed_size()
-            + self.max_degree.uncompressed_size()
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.powers_of_g.serialized_size(compress)
+            + self.gamma_g.serialized_size(compress)
+            + self.powers_of_gamma_g.serialized_size(compress)
+            + self.h.serialized_size(compress)
+            + self.beta_h.serialized_size(compress)
+            + self.num_vars.serialized_size(compress)
+            + self.max_degree.serialized_size(compress)
     }
 }
 
@@ -265,54 +241,29 @@ pub struct VerifierKey<E: Pairing> {
 }
 
 impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize(&mut writer)?;
-        self.gamma_g.serialize(&mut writer)?;
-        self.h.serialize(&mut writer)?;
-        self.beta_h.serialize(&mut writer)?;
-        self.num_vars.serialize(&mut writer)?;
-        self.supported_degree.serialize(&mut writer)?;
-        self.max_degree.serialize(&mut writer)
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.g.serialize_with_mode(&mut writer, compress)?;
+        self.gamma_g.serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)?;
+        self.num_vars.serialize_with_mode(&mut writer, compress)?;
+        self.supported_degree
+            .serialize_with_mode(&mut writer, compress)?;
+        self.max_degree.serialize_with_mode(&mut writer, compress)
     }
 
-    fn serialized_size(&self) -> usize {
-        self.g.serialized_size()
-            + self.gamma_g.serialized_size()
-            + self.h.serialized_size()
-            + self.beta_h.serialized_size()
-            + self.num_vars.serialized_size()
-            + self.supported_degree.serialized_size()
-            + self.max_degree.serialized_size()
-    }
-
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_uncompressed(&mut writer)?;
-        self.gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)?;
-        self.num_vars.serialize_uncompressed(&mut writer)?;
-        self.supported_degree.serialize_uncompressed(&mut writer)?;
-        self.max_degree.serialize_uncompressed(&mut writer)
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_unchecked(&mut writer)?;
-        self.gamma_g.serialize_unchecked(&mut writer)?;
-        self.h.serialize_unchecked(&mut writer)?;
-        self.beta_h.serialize_unchecked(&mut writer)?;
-        self.num_vars.serialize_unchecked(&mut writer)?;
-        self.supported_degree.serialize_unchecked(&mut writer)?;
-        self.max_degree.serialize_unchecked(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.g.uncompressed_size()
-            + self.gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.num_vars.uncompressed_size()
-            + self.supported_degree.uncompressed_size()
-            + self.max_degree.uncompressed_size()
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.g.serialized_size(compress)
+            + self.gamma_g.serialized_size(compress)
+            + self.h.serialized_size(compress)
+            + self.beta_h.serialized_size(compress)
+            + self.num_vars.serialized_size(compress)
+            + self.supported_degree.serialized_size(compress)
+            + self.max_degree.serialized_size(compress)
     }
 }
 
