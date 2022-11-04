@@ -28,7 +28,7 @@ impl<E: Pairing> MultilinearPC<E> {
     pub fn setup<R: RngCore>(num_vars: usize, rng: &mut R) -> UniversalParams<E> {
         assert!(num_vars > 0, "constant polynomial not supported");
         let g: E::G1 = E::G1::rand(rng);
-        let h: E::G2Projective = E::G2Projective::rand(rng);
+        let h: E::G2 = E::G2::rand(rng);
         let g = g.into_affine();
         let h = h.into_affine();
         let mut powers_of_g = Vec::new();
@@ -71,7 +71,7 @@ impl<E: Pairing> MultilinearPC<E> {
             &g_table,
             &pp_powers,
         ));
-        let pp_h = E::G2Projective::batch_normalization_into_affine(&FixedBase::msm(
+        let pp_h = E::G2::batch_normalization_into_affine(&FixedBase::msm(
             scalar_bits,
             window_size,
             &h_table,
@@ -185,7 +185,7 @@ impl<E: Pairing> MultilinearPC<E> {
                 .collect();
 
             let pi_h =
-                <E::G2Projective as VariableBaseMSM>::msm_bigint(&ck.powers_of_h[i], &scalars)
+                <E::G2 as VariableBaseMSM>::msm_bigint(&ck.powers_of_h[i], &scalars)
                     .into_affine(); // no need to move outside and partition
             proofs.push(pi_h);
         }

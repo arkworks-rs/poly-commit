@@ -59,7 +59,7 @@ impl<E: Pairing> CommitterKey<E> {
         let powers_of_g_proj = FixedBase::msm(scalar_bits, window_size, &g_table, &powers_of_tau);
         let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g_proj);
 
-        let g2 = E::G2Projective::rand(rng).into_affine();
+        let g2 = E::G2::rand(rng).into_affine();
         let powers_of_g2 = powers_of_tau
             .iter()
             .take(max_eval_points + 1)

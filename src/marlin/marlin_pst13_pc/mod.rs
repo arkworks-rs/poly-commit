@@ -186,7 +186,7 @@ where
         // Generators
         let g = E::G1::rand(rng);
         let gamma_g = E::G1::rand(rng);
-        let h = E::G2Projective::rand(rng);
+        let h = E::G2::rand(rng);
 
         // A list of all variable numbers of multiplicity `max_degree`
         let variable_set: Vec<_> = (0..num_vars)

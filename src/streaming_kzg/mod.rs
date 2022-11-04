@@ -170,7 +170,7 @@ impl<E: Pairing> VerifierKey<E> {
         proof: &EvaluationProof<E>,
     ) -> VerificationResult {
         let scalars = [(-alpha).into_bigint(), E::ScalarField::one().into_bigint()];
-        let ep = <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
+        let ep = <E::G2 as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
         let lhs = commitment.0.into_group() - self.powers_of_g[0].mul(evaluation);
         let g2 = self.powers_of_g2[0];
 
@@ -199,7 +199,7 @@ impl<E: Pairing> VerifierKey<E> {
         let zeros = vanishing_polynomial(eval_points);
         let zeros_repr = zeros.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
         let zeros =
-            <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &zeros_repr);
+            <E::G2 as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &zeros_repr);
 
         // Computing the inverse for the interpolation
         let mut sca_inverse = Vec::new();

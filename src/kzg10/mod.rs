@@ -49,7 +49,7 @@ where
         let beta = E::ScalarField::rand(rng);
         let g = E::G1::rand(rng);
         let gamma_g = E::G1::rand(rng);
-        let h = E::G2Projective::rand(rng);
+        let h = E::G2::rand(rng);
 
         let mut powers_of_beta = vec![E::ScalarField::one()];
 
@@ -97,14 +97,14 @@ where
             }
 
             let neg_h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
-            let neg_powers_of_h = FixedBase::msm::<E::G2Projective>(
+            let neg_powers_of_h = FixedBase::msm::<E::G2>(
                 scalar_bits,
                 window_size,
                 &neg_h_table,
                 &neg_powers_of_beta,
             );
 
-            let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
+            let affines = E::G2::batch_normalization_into_affine(&neg_powers_of_h);
             let mut affines_map = BTreeMap::new();
             affines.into_iter().enumerate().for_each(|(i, a)| {
                 affines_map.insert(i, a);
