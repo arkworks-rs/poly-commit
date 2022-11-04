@@ -66,13 +66,13 @@ impl<E: Pairing> MultilinearPC<E> {
         let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
         let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_group());
 
-        let pp_g = E::G1::batch_normalization_into_affine(&FixedBase::msm(
+        let pp_g = E::G1::normalize_batch(&FixedBase::msm(
             scalar_bits,
             window_size,
             &g_table,
             &pp_powers,
         ));
-        let pp_h = E::G2::batch_normalization_into_affine(&FixedBase::msm(
+        let pp_h = E::G2::normalize_batch(&FixedBase::msm(
             scalar_bits,
             window_size,
             &h_table,
@@ -94,7 +94,7 @@ impl<E: Pairing> MultilinearPC<E> {
             let window_size = FixedBase::get_mul_window_size(num_vars);
             let g_table =
                 FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
-            E::G1::batch_normalization_into_affine(&FixedBase::msm(
+            E::G1::normalize_batch(&FixedBase::msm(
                 scalar_bits,
                 window_size,
                 &g_table,
@@ -218,7 +218,7 @@ impl<E: Pairing> MultilinearPC<E> {
             .map(|i| vk.g_mask_random[i].into_group() - &g_mul[i])
             .collect();
         let pairing_lefts: Vec<E::G1Affine> =
-            E::G1::batch_normalization_into_affine(&pairing_lefts);
+            E::G1::normalize_batch(&pairing_lefts);
         let pairing_lefts: Vec<E::G1Prepared> = pairing_lefts
             .into_iter()
             .map(|x| E::G1Prepared::from(x))

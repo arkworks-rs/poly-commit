@@ -80,9 +80,9 @@ where
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
         let powers_of_gamma_g =
-            E::G1::batch_normalization_into_affine(&powers_of_gamma_g)
+            E::G1::normalize_batch(&powers_of_gamma_g)
                 .into_iter()
                 .enumerate()
                 .collect();
@@ -104,7 +104,7 @@ where
                 &neg_powers_of_beta,
             );
 
-            let affines = E::G2::batch_normalization_into_affine(&neg_powers_of_h);
+            let affines = E::G2::normalize_batch(&neg_powers_of_h);
             let mut affines_map = BTreeMap::new();
             affines.into_iter().enumerate().for_each(|(i, a)| {
                 affines_map.insert(i, a);
@@ -354,7 +354,7 @@ where
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let affine_points = E::G1::batch_normalization_into_affine(&[-total_w, total_c]);
+        let affine_points = E::G1::normalize_batch(&[-total_w, total_c]);
         let (total_w, total_c) = (affine_points[0], affine_points[1]);
         end_timer!(to_affine_time);
 

@@ -250,11 +250,11 @@ where
             });
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
         let gamma_g = gamma_g.into_affine();
         let powers_of_gamma_g = powers_of_gamma_g
             .into_iter()
-            .map(|v| E::G1::batch_normalization_into_affine(&v))
+            .map(|v| E::G1::normalize_batch(&v))
             .collect();
         let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();

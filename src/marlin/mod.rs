@@ -84,8 +84,8 @@ where
                 s_flags.push(false);
             }
         }
-        let comms = E::G1::batch_normalization_into_affine(&comms);
-        let s_comms = E::G1::batch_normalization_into_affine(&mut s_comms);
+        let comms = E::G1::normalize_batch(&comms);
+        let s_comms = E::G1::normalize_batch(&mut s_comms);
         comms
             .into_iter()
             .zip(s_comms)

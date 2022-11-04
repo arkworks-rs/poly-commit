@@ -122,7 +122,7 @@ where
         g2_prepared_elems.push(vk.prepared_beta_h.clone());
 
         let g1_prepared_elems_iter =
-            E::G1::batch_normalization_into_affine(g1_projective_elems.as_slice())
+            E::G1::normalize_batch(g1_projective_elems.as_slice())
                 .into_iter()
                 .map(|a| a.into());
 
@@ -567,7 +567,7 @@ where
         }
 
         let comms: Vec<Self::Commitment> =
-            E::G1::batch_normalization_into_affine(&lc_commitments)
+            E::G1::normalize_batch(&lc_commitments)
                 .into_iter()
                 .map(|c| kzg10::Commitment::<E>(c))
                 .collect();
@@ -652,7 +652,7 @@ where
         }
 
         let comms: Vec<Self::Commitment> =
-            E::G1::batch_normalization_into_affine(&lc_commitments)
+            E::G1::normalize_batch(&lc_commitments)
                 .into_iter()
                 .map(|c| kzg10::Commitment(c))
                 .collect();

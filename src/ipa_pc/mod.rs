@@ -278,7 +278,7 @@ where
         lc_info: &[(String, Option<usize>)],
         elements: &[G::Group],
     ) -> Vec<LabeledCommitment<Commitment<G>>> {
-        let comms = G::Group::batch_normalization_into_affine(elements);
+        let comms = G::Group::normalize_batch(elements);
         let mut commitments = Vec::new();
 
         let mut i = 0;
@@ -331,7 +331,7 @@ where
             })
             .collect();
 
-        G::Group::batch_normalization_into_affine(&generators)
+        G::Group::normalize_batch(&generators)
     }
 }
 
@@ -595,7 +595,7 @@ where
                 Some(hiding_rand),
             );
 
-            let mut batch = G::Group::batch_normalization_into_affine(&[
+            let mut batch = G::Group::normalize_batch(&[
                 combined_commitment_proj,
                 hiding_commitment_proj,
             ]);
@@ -689,7 +689,7 @@ where
             let r = Self::cm_commit(key_r, coeffs_l, None, None)
                 + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
 
-            let lr = G::Group::batch_normalization_into_affine(&[l, r]);
+            let lr = G::Group::normalize_batch(&[l, r]);
             l_vec.push(lr[0]);
             r_vec.push(lr[1]);
 
@@ -719,7 +719,7 @@ where
             z = z_l;
 
             key_proj = key_proj_l;
-            temp = G::Group::batch_normalization_into_affine(key_proj);
+            temp = G::Group::normalize_batch(key_proj);
             comm_key = &temp;
 
             n /= 2;
