@@ -1,7 +1,7 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
-use ark_ec::scalar_mul::variable_base::{VariableBaseMSM};
+use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::{AffineRepr, pairing::Pairing, ProjectiveCurve};
 use ark_ff::{Field, PrimeField};
