@@ -25,7 +25,7 @@ use ark_std::{
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
-    rc::Rc,
+    sync::Arc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -163,7 +163,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
-    type Proof: PCProof + Clone;
+    type Proof: Clone;
     /// The evaluation proof for a query set.
     type BatchProof: Clone
         + From<Vec<Self::Proof>>
