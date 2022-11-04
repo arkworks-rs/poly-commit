@@ -3,7 +3,9 @@ use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
 use ark_ec::pairing::Pairing;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError};
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
+};
 use ark_std::io::{Read, Write};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -199,68 +201,26 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
+impl<E: Pairing> Valid for VerifierKey<E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
+}
+
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
         let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize(&mut reader)?;
-        let supported_degree = usize::deserialize(&mut reader)?;
-        let max_degree = usize::deserialize(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-            degree_bounds_and_neg_powers_of_h,
-            supported_degree,
-            max_degree,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize_uncompressed(&mut reader)?;
-        let supported_degree = usize::deserialize_uncompressed(&mut reader)?;
-        let max_degree = usize::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-            degree_bounds_and_neg_powers_of_h,
-            supported_degree,
-            max_degree,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize_unchecked(&mut reader)?;
-        let supported_degree = usize::deserialize_unchecked(&mut reader)?;
-        let max_degree = usize::deserialize_unchecked(&mut reader)?;
+            Option::<Vec<(usize, E::G2Affine)>>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());

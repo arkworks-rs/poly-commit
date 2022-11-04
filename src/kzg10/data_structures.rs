@@ -1,7 +1,9 @@
 use crate::*;
 use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::{PrimeField, ToConstraintField, Zero};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError};
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
+};
 use ark_std::{
     borrow::Cow,
     io::{Read, Write},
@@ -54,7 +56,7 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
             .serialize_with_mode(&mut writer, compress)?;
         self.h.serialize_with_mode(&mut writer, compress)?;
         self.beta_h.serialize_with_mode(&mut writer, compress)?;
-        self.neg_powers_of_h.serialize_unchecked(&mut writer)
+        self.neg_powers_of_h.serialize_with_mode(&mut writer, compress)
     }
 
     fn serialized_size(&self, compress: Compress) -> usize {
@@ -66,57 +68,25 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
     }
 }
 
+impl<E: Pairing> Valid for UniversalParams<E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
+}
+
 impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
-        let powers_of_gamma_g = BTreeMap::<usize, E::G1Affine>::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize(&mut reader)?;
-        let neg_powers_of_h = BTreeMap::<usize, E::G2Affine>::deserialize(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            powers_of_g,
-            powers_of_gamma_g,
-            h,
-            beta_h,
-            neg_powers_of_h,
-            prepared_h,
-            prepared_beta_h,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_uncompressed(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
         let powers_of_gamma_g =
-            BTreeMap::<usize, E::G1Affine>::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
+            BTreeMap::<usize, E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
         let neg_powers_of_h =
-            BTreeMap::<usize, E::G2Affine>::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            powers_of_g,
-            powers_of_gamma_g,
-            h,
-            beta_h,
-            neg_powers_of_h,
-            prepared_h,
-            prepared_beta_h,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
-        let powers_of_gamma_g = BTreeMap::<usize, E::G1Affine>::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let neg_powers_of_h = BTreeMap::<usize, E::G2Affine>::deserialize_unchecked(&mut reader)?;
+            BTreeMap::<usize, E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
@@ -180,28 +150,20 @@ impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
     }
 }
 
+impl<'a, E: Pairing> Valid for Powers<'a, E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
+}
+
 impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
-        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize(&mut reader)?;
-        Ok(Self {
-            powers_of_g: Cow::Owned(powers_of_g),
-            powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
-        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_unchecked(&mut reader)?;
-        Ok(Self {
-            powers_of_g: Cow::Owned(powers_of_g),
-            powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_uncompressed(&mut reader)?;
-        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_uncompressed(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let powers_of_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
         Ok(Self {
             powers_of_g: Cow::Owned(powers_of_g),
             powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
@@ -254,50 +216,22 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
+impl<E: Pairing> Valid for VerifierKey<E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
+}
+
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());

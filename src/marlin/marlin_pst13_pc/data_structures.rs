@@ -11,7 +11,9 @@ use ark_std::{
     ops::{Add, AddAssign, Index},
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError};
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
+};
 use ark_std::rand::RngCore;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
@@ -46,6 +48,17 @@ where
     pub num_vars: usize,
     /// The maximum degree supported by `self`
     pub max_degree: usize,
+}
+
+impl<E, P> Valid for UniversalParams<E, P>
+where
+    E: Pairing,
+    P: DenseMVPolynomial<E::ScalarField>,
+    P::Point: Index<usize, Output = E::ScalarField>,
+{
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
 }
 
 impl<E, P> CanonicalSerialize for UniversalParams<E, P>
@@ -87,60 +100,20 @@ where
     P: DenseMVPolynomial<E::ScalarField>,
     P::Point: Index<usize, Output = E::ScalarField>,
 {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = BTreeMap::<P::Term, E::G1Affine>::deserialize(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
-        let powers_of_gamma_g = Vec::<Vec<E::G1Affine>>::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize(&mut reader)?;
-        let num_vars = usize::deserialize(&mut reader)?;
-        let max_degree = usize::deserialize(&mut reader)?;
-
-        let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
-            powers_of_g,
-            gamma_g,
-            powers_of_gamma_g,
-            h,
-            beta_h,
-            prepared_h: h.into(),
-            prepared_beta_h,
-            num_vars,
-            max_degree,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = BTreeMap::<P::Term, E::G1Affine>::deserialize_uncompressed(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let powers_of_gamma_g = Vec::<Vec<E::G1Affine>>::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_uncompressed(&mut reader)?;
-        let num_vars = usize::deserialize_uncompressed(&mut reader)?;
-        let max_degree = usize::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
-            powers_of_g,
-            gamma_g,
-            powers_of_gamma_g,
-            h,
-            beta_h,
-            prepared_h: h.into(),
-            prepared_beta_h,
-            num_vars,
-            max_degree,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let powers_of_g = BTreeMap::<P::Term, E::G1Affine>::deserialize_unchecked(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let powers_of_gamma_g = Vec::<Vec<E::G1Affine>>::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_unchecked(&mut reader)?;
-        let num_vars = usize::deserialize_unchecked(&mut reader)?;
-        let max_degree = usize::deserialize_unchecked(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let powers_of_g =
+            BTreeMap::<P::Term, E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_gamma_g =
+            Vec::<Vec<E::G1Affine>>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
         Ok(Self {
@@ -267,61 +240,25 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     }
 }
 
+impl<E: Pairing> Valid for VerifierKey<E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        todo!()
+    }
+}
+
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize(&mut reader)?;
-        let num_vars = usize::deserialize(&mut reader)?;
-        let supported_degree = usize::deserialize(&mut reader)?;
-        let max_degree = usize::deserialize(&mut reader)?;
-
-        let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h: h.into(),
-            prepared_beta_h,
-            num_vars,
-            supported_degree,
-            max_degree,
-        })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_uncompressed(&mut reader)?;
-        let num_vars = usize::deserialize_uncompressed(&mut reader)?;
-        let supported_degree = usize::deserialize_uncompressed(&mut reader)?;
-        let max_degree = usize::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h: h.into(),
-            prepared_beta_h,
-            num_vars,
-            supported_degree,
-            max_degree,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_unchecked(&mut reader)?;
-        let num_vars = usize::deserialize_unchecked(&mut reader)?;
-        let supported_degree = usize::deserialize_unchecked(&mut reader)?;
-        let max_degree = usize::deserialize_unchecked(&mut reader)?;
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
         Ok(Self {
