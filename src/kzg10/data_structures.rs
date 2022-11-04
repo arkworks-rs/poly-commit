@@ -56,7 +56,8 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
             .serialize_with_mode(&mut writer, compress)?;
         self.h.serialize_with_mode(&mut writer, compress)?;
         self.beta_h.serialize_with_mode(&mut writer, compress)?;
-        self.neg_powers_of_h.serialize_with_mode(&mut writer, compress)
+        self.neg_powers_of_h
+            .serialize_with_mode(&mut writer, compress)
     }
 
     fn serialized_size(&self, compress: Compress) -> usize {
@@ -80,7 +81,8 @@ impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_g =
+            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
         let powers_of_gamma_g =
             BTreeMap::<usize, E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
         let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
@@ -162,8 +164,10 @@ impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let powers_of_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let powers_of_gamma_g = Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_g =
+            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_gamma_g =
+            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
         Ok(Self {
             powers_of_g: Cow::Owned(powers_of_g),
             powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),

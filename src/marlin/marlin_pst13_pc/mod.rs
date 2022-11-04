@@ -7,12 +7,10 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
-use ark_ec::{
-    AffineRepr, pairing::Pairing,
-};
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
 use ark_ec::CurveGroup;
+use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
@@ -41,7 +39,9 @@ pub struct MarlinPST13<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: Cryp
     _sponge: PhantomData<S>,
 }
 
-impl<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge> MarlinPST13<E, P, S> {
+impl<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge>
+    MarlinPST13<E, P, S>
+{
     /// Given some point `z`, compute the quotients `w_i(X)` s.t
     ///
     /// `p(X) - p(z) = (X_1-z_1)*w_1(X) + (X_2-z_2)*w_2(X) + ... + (X_l-z_l)*w_l(X)`
@@ -382,8 +382,7 @@ where
             end_timer!(to_bigint_time);
 
             let msm_time = start_timer!(|| "MSM to compute commitment to plaintext poly");
-            let mut commitment =
-                <E::G1 as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
+            let mut commitment = <E::G1 as VariableBaseMSM>::msm_bigint(&powers_of_g, &plain_ints);
             end_timer!(msm_time);
 
             // Sample random polynomial
@@ -745,7 +744,10 @@ mod tests {
         SparsePoly::<E::ScalarField, SparseTerm>::rand(degree, num_vars.unwrap(), rng)
     }
 
-    fn rand_point<E: Pairing>(num_vars: Option<usize>, rng: &mut ChaCha20Rng) -> Vec<E::ScalarField> {
+    fn rand_point<E: Pairing>(
+        num_vars: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> Vec<E::ScalarField> {
         let num_vars = num_vars.unwrap();
         let mut point = Vec::with_capacity(num_vars);
         for _ in 0..num_vars {
