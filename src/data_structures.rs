@@ -1,10 +1,9 @@
 use crate::{Arc, Polynomial, String, Vec};
 use ark_ff::{Field, PrimeField, ToConstraintField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError, Valid};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
 use ark_std::{
     borrow::Borrow,
-    io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };

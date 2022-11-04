@@ -3,7 +3,6 @@ use crate::{
     PCCommitterKey, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
 };
 use ark_ec::pairing::Pairing;
-use ark_ff::Zero;
 use ark_poly::DenseMVPolynomial;
 use ark_std::{
     io::{Read, Write},

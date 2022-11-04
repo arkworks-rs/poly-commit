@@ -4,8 +4,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{Field, PrimeField, ToConstraintField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use ark_std::io::{Read, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::ops::{Add, AddAssign};
 use ark_std::rand::RngCore;
 use ark_ec::Group;
