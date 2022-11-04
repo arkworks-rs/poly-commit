@@ -12,7 +12,7 @@ use ark_ec::{AffineRepr, pairing::Pairing};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
-
+use ark_ec::CurveGroup;
 use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;

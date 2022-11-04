@@ -4,6 +4,7 @@ use crate::multilinear_pc::data_structures::{
 use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::{AffineRepr, pairing::Pairing};
+use ark_ec::CurveGroup;
 use ark_ff::{Field, PrimeField};
 use ark_ff::{One, Zero};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};

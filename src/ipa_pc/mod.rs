@@ -8,7 +8,7 @@ use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul, vec};
-
+use ark_ec::CurveGroup;
 mod data_structures;
 pub use data_structures::*;
 

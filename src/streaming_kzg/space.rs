@@ -5,7 +5,7 @@ use ark_poly::Polynomial;
 use ark_std::borrow::Borrow;
 use ark_std::collections::VecDeque;
 use ark_std::vec::Vec;
-
+use ark_ec::CurveGroup;
 use crate::streaming_kzg::{ceil_div, vanishing_polynomial, FoldedPolynomialTree};
 use ark_ec::scalar_mul::variable_base::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
 use ark_std::iterable::{Iterable, Reverse};

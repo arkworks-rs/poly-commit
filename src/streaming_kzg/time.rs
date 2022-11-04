@@ -9,7 +9,8 @@ use ark_std::ops::{Div, Mul};
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
 use ark_std::UniformRand;
-
+use ark_ec::CurveGroup;
+use ark_ec::AffineRepr;
 use crate::streaming_kzg::{
     linear_combination, msm, powers, Commitment, EvaluationProof, VerifierKey,
 };

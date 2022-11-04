@@ -99,7 +99,7 @@ pub mod tests;
 use ark_ff::{Field, One, PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::ops::{Add, Mul};
-
+use ark_ec::CurveGroup;
 use ark_std::borrow::Borrow;
 use ark_std::fmt;
 
