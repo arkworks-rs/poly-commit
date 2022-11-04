@@ -106,16 +106,8 @@ use ark_std::fmt;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, AffineRepr, pairing::Pairing};
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct Commitment<E: Pairing>(pub(crate) E::G1Affine);
-
-impl<E: Pairing> Commitment<E> {
-    /// Return the size of Commitment in bytes.
-    pub fn size_in_bytes(&self) -> usize {
-        // ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
-        E::G1Affine::zero().serialized_size() / 2
-    }
-}
 
 #[inline]
 fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::ScalarField]) -> E::G1Affine {

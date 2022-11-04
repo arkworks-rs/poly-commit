@@ -199,8 +199,6 @@ pub struct Proof<G: AffineRepr> {
     pub rand: Option<G::ScalarField>,
 }
 
-impl<G: AffineRepr> PCProof for Proof<G> {}
-
 /// `SuccinctCheckPolynomial` is a succinctly-representated polynomial
 /// generated from the `log_d` random oracle challenges generated in `open`.
 /// It has the special property that can be evaluated in `O(log_d)` time.

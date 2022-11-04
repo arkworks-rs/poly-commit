@@ -482,5 +482,3 @@ pub struct Proof<E: Pairing> {
     /// the evaluation proof was produced.
     pub random_v: Option<E::ScalarField>,
 }
-
-impl<E: Pairing> PCProof for Proof<E> {}

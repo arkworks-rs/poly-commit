@@ -62,12 +62,6 @@ pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize {
 
     /// Does this commitment have a degree bound?
     fn has_degree_bound(&self) -> bool;
-
-    /// Size in bytes
-    #[deprecated(since = "0.4.0", note = "Please use `.serialized_size()` instead.")]
-    fn size_in_bytes(&self) -> usize {
-        self.serialized_size()
-    }
 }
 
 /// Defines the minimal interface of prepared commitments for any polynomial
@@ -94,16 +88,6 @@ pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Self;
-}
-
-/// Defines the minimal interface of evaluation proofs for any polynomial
-/// commitment scheme.
-pub trait PCProof: Clone + CanonicalSerialize + CanonicalDeserialize {
-    /// Size in bytes
-    #[deprecated(since = "0.4.0", note = "Please use `.serialized_size()` instead.")]
-    fn size_in_bytes(&self) -> usize {
-        self.serialized_size()
-    }
 }
 
 /// A proof of satisfaction of linear combinations.

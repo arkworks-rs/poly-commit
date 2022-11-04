@@ -1,6 +1,6 @@
 use crate::{BTreeMap, Vec};
 use crate::{
-    PCCommitterKey, PCPreparedVerifierKey, PCProof, PCRandomness, PCUniversalParams, PCVerifierKey,
+    PCCommitterKey, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::Zero;
@@ -433,15 +433,4 @@ pub struct Proof<E: Pairing> {
     /// Evaluation of the random polynomial at the point for which
     /// the evaluation proof was produced.
     pub random_v: Option<E::ScalarField>,
-}
-
-impl<E: Pairing> PCProof for Proof<E> {
-    fn size_in_bytes(&self) -> usize {
-        let hiding_size = if self.random_v.is_some() {
-            E::ScalarField::zero().serialized_size()
-        } else {
-            0
-        };
-        (self.w.len() * E::G1Affine::zero().serialized_size()) / 2 + hiding_size
-    }
 }
