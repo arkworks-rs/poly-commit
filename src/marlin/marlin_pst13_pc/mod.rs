@@ -12,6 +12,7 @@ use ark_ec::{
 };
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
+use ark_ec::CurveGroup;
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
