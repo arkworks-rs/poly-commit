@@ -171,7 +171,7 @@ impl<E: Pairing> VerifierKey<E> {
     ) -> VerificationResult {
         let scalars = [(-alpha).into_bigint(), E::ScalarField::one().into_bigint()];
         let ep = <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
-        let lhs = commitment.0.into_projective() - self.powers_of_g[0].mul(evaluation);
+        let lhs = commitment.0.into_group() - self.powers_of_g[0].mul(evaluation);
         let g2 = self.powers_of_g2[0];
 
         if E::pairing(lhs, g2) == E::pairing(proof.0, ep) {
@@ -246,7 +246,7 @@ impl<E: Pairing> VerifierKey<E> {
 
         let g2 = self.powers_of_g2[0];
 
-        if E::pairing(f_comm - i_comm.into_projective(), g2) == E::pairing(proof.0, zeros) {
+        if E::pairing(f_comm - i_comm.into_group(), g2) == E::pairing(proof.0, zeros) {
             Ok(())
         } else {
             Err(VerificationError)

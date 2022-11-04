@@ -558,7 +558,7 @@ where
                 None,
             )?;
         // Compute both sides of the pairing equation
-        let mut inner = combined_comm.into().into_projective() - &vk.g.mul(combined_value);
+        let mut inner = combined_comm.into().into_group() - &vk.g.mul(combined_value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
@@ -569,7 +569,7 @@ where
             .enumerate()
             .map(|(j, w_j)| {
                 let beta_minus_z: E::G2Affine =
-                    (vk.beta_h[j].into_projective() - &vk.h.mul(point[j])).into();
+                    (vk.beta_h[j].into_group() - &vk.h.mul(point[j])).into();
                 ((*w_j).into(), beta_minus_z.into())
             })
             .collect();
@@ -601,8 +601,8 @@ where
             )?;
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", combined_comms.len()));
-        let g = vk.g.into_projective();
-        let gamma_g = vk.gamma_g.into_projective();
+        let g = vk.g.into_group();
+        let gamma_g = vk.gamma_g.into_group();
         let mut total_c = <E::G1>::zero();
         let mut total_w = vec![<E::G1>::zero(); vk.num_vars];
         let combination_time = start_timer!(|| "Combining commitments and proofs");

@@ -77,7 +77,7 @@ where
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
-        let mut witness: E::G1 = proof.w.into_projective();
+        let mut witness: E::G1 = proof.w.into_group();
         let mut adjusted_witness = vk.g.mul(combined_values) - &proof.w.mul(point);
         if let Some(random_v) = proof.random_v {
             adjusted_witness += &vk.gamma_g.mul(random_v);

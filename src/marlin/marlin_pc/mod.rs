@@ -3,12 +3,12 @@ use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use ark_ec::CurveGroup;
 use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
-
 mod data_structures;
 use crate::challenge::ChallengeGenerator;
 use ark_sponge::CryptographicSponge;
@@ -312,7 +312,7 @@ where
         }
         let proof_time = start_timer!(|| "Creating proof for unshifted polynomials");
         let proof = kzg10::KZG10::open(&ck.powers(), &p, *point, &r)?;
-        let mut w = proof.w.into_projective();
+        let mut w = proof.w.into_group();
         let mut random_v = proof.random_v;
         end_timer!(proof_time);
 
@@ -327,7 +327,7 @@ where
             )?;
             end_timer!(proof_time);
 
-            w += &shifted_proof.w.into_projective();
+            w += &shifted_proof.w.into_group();
             if let Some(shifted_random_v) = shifted_proof.random_v {
                 random_v = random_v.map(|v| v + &shifted_random_v);
             }

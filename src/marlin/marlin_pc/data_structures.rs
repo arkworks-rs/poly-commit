@@ -8,7 +8,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError
 use ark_std::io::{Read, Write};
 use ark_std::ops::{Add, AddAssign};
 use ark_std::rand::RngCore;
-
+use ark_ec::Group;
 use crate::kzg10;
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;

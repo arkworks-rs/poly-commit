@@ -132,7 +132,7 @@ where
                     .as_ref()
                     .unwrap()
                     .0
-                    .into_projective();
+                    .into_group();
 
                 let shift_power = vk
                     .unwrap()

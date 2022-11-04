@@ -62,8 +62,8 @@ impl<E: Pairing> MultilinearPC<E> {
             total_scalars += 1 << (num_vars - i);
         }
         let window_size = FixedBase::get_mul_window_size(total_scalars);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
-        let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_projective());
+        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
+        let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_group());
 
         let pp_g = E::G1::batch_normalization_into_affine(&FixedBase::msm(
             scalar_bits,
@@ -92,7 +92,7 @@ impl<E: Pairing> MultilinearPC<E> {
         let g_mask = {
             let window_size = FixedBase::get_mul_window_size(num_vars);
             let g_table =
-                FixedBase::get_window_table(scalar_bits, window_size, g.into_projective());
+                FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
             E::G1::batch_normalization_into_affine(&FixedBase::msm(
                 scalar_bits,
                 window_size,
@@ -203,18 +203,18 @@ impl<E: Pairing> MultilinearPC<E> {
         proof: &Proof<E>,
     ) -> bool {
         let left = E::pairing(
-            commitment.g_product.into_projective() - &vk.g.mul(value),
+            commitment.g_product.into_group() - &vk.g.mul(value),
             vk.h,
         );
 
         let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let window_size = FixedBase::get_mul_window_size(vk.nv);
 
-        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_projective());
+        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_group());
         let g_mul: Vec<E::G1> = FixedBase::msm(scalar_size, window_size, &g_table, point);
 
         let pairing_lefts: Vec<_> = (0..vk.nv)
-            .map(|i| vk.g_mask_random[i].into_projective() - &g_mul[i])
+            .map(|i| vk.g_mask_random[i].into_group() - &g_mul[i])
             .collect();
         let pairing_lefts: Vec<E::G1Affine> =
             E::G1::batch_normalization_into_affine(&pairing_lefts);

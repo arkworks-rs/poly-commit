@@ -1,5 +1,5 @@
 use crate::*;
-use ark_ec::{pairing::Pairing, AffineRepr};
+use ark_ec::{pairing::Pairing, AffineRepr, Group};
 use ark_ff::{PrimeField, ToConstraintField, Zero};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
