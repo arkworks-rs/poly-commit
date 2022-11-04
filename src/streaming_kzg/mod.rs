@@ -86,7 +86,6 @@ mod data_structures;
 mod space;
 mod time;
 
-use ark_ec::ProjectiveCurve;
 use ark_serialize::CanonicalSerialize;
 use ark_std::vec::Vec;
 pub use data_structures::*;

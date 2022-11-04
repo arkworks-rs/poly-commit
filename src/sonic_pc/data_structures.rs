@@ -2,7 +2,7 @@ use crate::kzg10;
 use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
-use ark_ec::{pairing::Pairing, ProjectiveCurve};
+use ark_ec::{pairing::Pairing};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 

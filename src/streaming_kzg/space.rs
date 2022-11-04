@@ -1,5 +1,5 @@
 //! Space-efficient implementation of the polynomial commitment of Kate et al.
-use ark_ec::{pairing::Pairing, ProjectiveCurve};
+use ark_ec::{pairing::Pairing};
 use ark_ff::{PrimeField, Zero};
 use ark_poly::Polynomial;
 use ark_std::borrow::Borrow;

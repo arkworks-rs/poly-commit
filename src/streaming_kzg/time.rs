@@ -2,7 +2,6 @@
 //! with optimization from [\[BDFG20\]](https://eprint.iacr.org/2020/081.pdf).
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::pairing::Pairing;
-use ark_ec::ProjectiveCurve;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::borrow::Borrow;

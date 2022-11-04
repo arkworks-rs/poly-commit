@@ -3,7 +3,7 @@ use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
-use ark_ec::{AffineRepr, pairing::Pairing, ProjectiveCurve};
+use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
