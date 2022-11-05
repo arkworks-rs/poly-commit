@@ -8,12 +8,12 @@
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
 use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::scalar_mul::variable_base::VariableBaseMSM;
-use ark_ec::{AffineRepr, pairing::Pairing};
+use ark_ec::CurveGroup;
+use ark_ec::{pairing::Pairing, AffineRepr};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
-use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
-use ark_ec::CurveGroup;
 use ark_std::rand::RngCore;
+use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -69,23 +69,18 @@ where
         end_timer!(g_time);
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
         let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
-        let mut powers_of_gamma_g = FixedBase::msm::<E::G1>(
-            scalar_bits,
-            window_size,
-            &gamma_g_table,
-            &powers_of_beta,
-        );
+        let mut powers_of_gamma_g =
+            FixedBase::msm::<E::G1>(scalar_bits, window_size, &gamma_g_table, &powers_of_beta);
         // Add an additional power of gamma_g, because we want to be able to support
         // up to D queries.
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
 
         let powers_of_g = E::G1::normalize_batch(&powers_of_g);
-        let powers_of_gamma_g =
-            E::G1::normalize_batch(&powers_of_gamma_g)
-                .into_iter()
-                .enumerate()
-                .collect();
+        let powers_of_gamma_g = E::G1::normalize_batch(&powers_of_gamma_g)
+            .into_iter()
+            .enumerate()
+            .collect();
 
         let neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
         let neg_powers_of_h = if produce_g2_powers {
@@ -359,10 +354,11 @@ where
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
-        let result = E::product_of_pairings(&[
-            (total_w.into(), vk.prepared_beta_h.clone()),
-            (total_c.into(), vk.prepared_h.clone()),
-        ])
+        let result = E::multi_pairing(
+            [total_w, total_c],
+            [vk.prepared_beta_h.clone(), vk.prepared_h.clone()],
+        )
+        .0
         .is_one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));

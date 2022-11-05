@@ -1,7 +1,12 @@
 //! An impementation of a time-efficient version of Kate et al's polynomial commitment,
 //! with optimization from [\[BDFG20\]](https://eprint.iacr.org/2020/081.pdf).
-use ark_ec::scalar_mul::fixed_base::FixedBase;
+use crate::streaming_kzg::{
+    linear_combination, msm, powers, Commitment, EvaluationProof, VerifierKey,
+};
 use ark_ec::pairing::Pairing;
+use ark_ec::scalar_mul::fixed_base::FixedBase;
+use ark_ec::AffineRepr;
+use ark_ec::CurveGroup;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::borrow::Borrow;
@@ -9,11 +14,6 @@ use ark_std::ops::{Div, Mul};
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
 use ark_std::UniformRand;
-use ark_ec::CurveGroup;
-use ark_ec::AffineRepr;
-use crate::streaming_kzg::{
-    linear_combination, msm, powers, Commitment, EvaluationProof, VerifierKey,
-};
 
 use super::vanishing_polynomial;
 
@@ -90,7 +90,7 @@ impl<E: Pairing> CommitterKey<E> {
         indices
             .iter()
             .zip(self.powers_of_g.iter())
-            .for_each(|(&i, &g)| indexed_powers_of_g[i] = indexed_powers_of_g[i] + g);
+            .for_each(|(&i, &g)| indexed_powers_of_g[i] = (indexed_powers_of_g[i] + g).into());
         Self {
             powers_of_g2: self.powers_of_g2.clone(),
             powers_of_g: indexed_powers_of_g,
@@ -126,7 +126,9 @@ impl<E: Pairing> CommitterKey<E> {
             previous = coefficient;
         }
 
-        let (&evaluation, quotient) = quotient.split_first().unwrap_or((&E::ScalarField::zero(), &[]));
+        let (&evaluation, quotient) = quotient
+            .split_first()
+            .unwrap_or((&E::ScalarField::zero(), &[]));
         let evaluation_proof = msm::<E>(&self.powers_of_g, quotient);
         (evaluation, EvaluationProof(evaluation_proof))
     }

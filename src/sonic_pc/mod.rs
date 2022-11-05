@@ -4,7 +4,7 @@ use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{AffineRepr, pairing::Pairing};
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
@@ -70,9 +70,7 @@ where
             }
 
             // Accumulate values in the BTreeMap
-            *combined_comms
-                .entry(degree_bound)
-                .or_insert(E::G1::zero()) += &comm_with_challenge;
+            *combined_comms.entry(degree_bound).or_insert(E::G1::zero()) += &comm_with_challenge;
             curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
         }
 
@@ -565,11 +563,10 @@ where
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> =
-            E::G1::normalize_batch(&lc_commitments)
-                .into_iter()
-                .map(|c| kzg10::Commitment::<E>(c))
-                .collect();
+        let comms: Vec<Self::Commitment> = E::G1::normalize_batch(&lc_commitments)
+            .into_iter()
+            .map(|c| kzg10::Commitment::<E>(c))
+            .collect();
 
         let lc_commitments = lc_info
             .into_iter()
@@ -650,11 +647,10 @@ where
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> =
-            E::G1::normalize_batch(&lc_commitments)
-                .into_iter()
-                .map(|c| kzg10::Commitment(c))
-                .collect();
+        let comms: Vec<Self::Commitment> = E::G1::normalize_batch(&lc_commitments)
+            .into_iter()
+            .map(|c| kzg10::Commitment(c))
+            .collect();
 
         let lc_commitments = lc_info
             .into_iter()

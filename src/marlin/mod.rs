@@ -4,7 +4,7 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
-use ark_ec::{AffineRepr, pairing::Pairing};
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_sponge::CryptographicSponge;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
@@ -127,12 +127,7 @@ where
             if let Some(degree_bound) = degree_bound {
                 let challenge_i_1 = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
 
-                let shifted_comm = commitment
-                    .shifted_comm
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .into_group();
+                let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_group();
 
                 let shift_power = vk
                     .unwrap()
@@ -212,7 +207,7 @@ where
             combined_evals.push(v);
         }
         let norm_time = start_timer!(|| "Normalizing combined commitments");
-        E::G1::batch_normalization(&mut combined_comms);
+        E::G1::normalize_batch(&mut combined_comms);
         let combined_comms = combined_comms
             .into_iter()
             .map(|c| kzg10::Commitment(c.into()))

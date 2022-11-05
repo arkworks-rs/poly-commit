@@ -231,6 +231,7 @@ impl<E: Pairing> MultilinearPC<E> {
             .collect();
 
         let right = E::multi_pairing(pairing_lefts, pairing_rights);
+        // TODO probably can be optimised further into the multi-pairing?
         left == right
     }
 }

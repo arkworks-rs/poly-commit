@@ -327,7 +327,7 @@ where
                     j += 1;
                 }
                 let generator = g.unwrap();
-                generator.mul_by_cofactor_to_projective()
+                generator.mul_by_cofactor_to_group()
             })
             .collect();
 
