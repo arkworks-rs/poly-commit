@@ -3,7 +3,7 @@ use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::pairing::Pairing;
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
@@ -26,13 +26,13 @@ pub use data_structures::*;
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
 /// [marlin]: https://eprint.iacr.org/2019/104
-pub struct MarlinKZG10<E: PairingEngine, P: DenseUVPolynomial<E::Fr>, S: CryptographicSponge> {
+pub struct MarlinKZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
     _sponge: PhantomData<S>,
 }
 
-pub(crate) fn shift_polynomial<E: PairingEngine, P: DenseUVPolynomial<E::Fr>>(
+pub(crate) fn shift_polynomial<E: Pairing, P: DenseUVPolynomial<E::ScalarField>>(
     ck: &CommitterKey<E>,
     p: &P,
     degree_bound: usize,
@@ -47,16 +47,16 @@ pub(crate) fn shift_polynomial<E: PairingEngine, P: DenseUVPolynomial<E::Fr>>(
         let largest_enforced_degree_bound = enforced_degree_bounds.last().unwrap();
 
         let mut shifted_polynomial_coeffs =
-            vec![E::Fr::zero(); largest_enforced_degree_bound - degree_bound];
+            vec![E::ScalarField::zero(); largest_enforced_degree_bound - degree_bound];
         shifted_polynomial_coeffs.extend_from_slice(&p.coeffs());
         P::from_coefficients_vec(shifted_polynomial_coeffs)
     }
 }
 
-impl<E, P, S> PolynomialCommitment<E::Fr, P, S> for MarlinKZG10<E, P, S>
+impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for MarlinKZG10<E, P, S>
 where
-    E: PairingEngine,
-    P: DenseUVPolynomial<E::Fr, Point = E::Fr>,
+    E: Pairing,
+    P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
@@ -66,7 +66,7 @@ where
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type PreparedCommitment = PreparedCommitment<E>;
-    type Randomness = Randomness<E::Fr, P>;
+    type Randomness = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -175,7 +175,7 @@ where
     /// Outputs a commitment to `polynomial`.
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
@@ -248,10 +248,10 @@ where
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -345,9 +345,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        values: impl IntoIterator<Item = E::Fr>,
+        values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -371,9 +371,9 @@ where
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        values: &Evaluations<E::Fr, P::Point>,
+        values: &Evaluations<E::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -403,14 +403,14 @@ where
 
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::Fr, Self::BatchProof>, Self::Error>
+    ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
@@ -432,12 +432,12 @@ where
     /// committed in `labeled_commitments`.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::Fr>>,
+        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<E::Fr, P::Point>,
-        proof: &BatchLCProof<E::Fr, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        evaluations: &Evaluations<E::ScalarField, P::Point>,
+        proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -459,10 +459,10 @@ where
     /// of the polynomials at the points in the query set.
     fn batch_open<'a>(
         ck: &CommitterKey<E>,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::Fr, P>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::Fr, S>,
+        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
@@ -538,41 +538,41 @@ mod tests {
     use super::MarlinKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
-    use ark_ec::PairingEngine;
+    use ark_ec::pairing::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
-    type UniPoly_381 = DensePoly<<Bls12_381 as PairingEngine>::Fr>;
-    type UniPoly_377 = DensePoly<<Bls12_377 as PairingEngine>::Fr>;
+    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::Fr>;
 
     type PC<E, P, S> = MarlinKZG10<E, P, S>;
 
-    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as PairingEngine>::Fr>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as PairingEngine>::Fr>;
+    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::Fr>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::Fr>;
 
     type PC_Bls12_381 = PC<Bls12_381, UniPoly_381, Sponge_Bls12_381>;
     type PC_Bls12_377 = PC<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
 
-    fn rand_poly<E: PairingEngine>(
+    fn rand_poly<E: Pairing>(
         degree: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePoly<E::Fr> {
-        DensePoly::<E::Fr>::rand(degree, rng)
+    ) -> DensePoly<E::ScalarField> {
+        DensePoly::<E::ScalarField>::rand(degree, rng)
     }
 
-    fn constant_poly<E: PairingEngine>(
+    fn constant_poly<E: Pairing>(
         _: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePoly<E::Fr> {
-        DensePoly::<E::Fr>::from_coefficients_slice(&[E::Fr::rand(rng)])
+    ) -> DensePoly<E::ScalarField> {
+        DensePoly::<E::ScalarField>::from_coefficients_slice(&[E::ScalarField::rand(rng)])
     }
 
-    fn rand_point<E: PairingEngine>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::Fr {
-        E::Fr::rand(rng)
+    fn rand_point<E: Pairing>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::ScalarField {
+        E::ScalarField::rand(rng)
     }
 
     #[test]

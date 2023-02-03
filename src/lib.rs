@@ -7,7 +7,7 @@
 #![deny(missing_docs)]
 #![deny(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
-#![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
+#![deny(unused_comparisons, bare_trait_objects, unused_must_use)]
 #![forbid(unsafe_code)]
 
 #[allow(unused)]
@@ -25,7 +25,6 @@ use ark_std::{
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
-    rc::Rc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -163,7 +162,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
-    type Proof: PCProof + Clone;
+    type Proof: Clone;
     /// The evaluation proof for a query set.
     type BatchProof: Clone
         + From<Vec<Self::Proof>>
