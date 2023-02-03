@@ -458,8 +458,8 @@ mod tests {
     use ark_poly::univariate::DensePolynomial as DensePoly;
     use ark_std::test_rng;
 
-    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;
-    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::Fr>;
+    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::ScalarField>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::ScalarField>;
     type KZG_Bls12_381 = KZG10<Bls12_381, UniPoly_381>;
 
     impl<E: Pairing, P: DenseUVPolynomial<E::ScalarField>> KZG10<E, P> {

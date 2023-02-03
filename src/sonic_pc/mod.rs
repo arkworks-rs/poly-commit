@@ -686,12 +686,12 @@ mod tests {
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
     use rand_chacha::ChaCha20Rng;
 
-    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;
-    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::Fr>;
+    type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::ScalarField>;
+    type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::ScalarField>;
 
     type PC<E, P, S> = SonicKZG10<E, P, S>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::Fr>;
-    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::Fr>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
+    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::ScalarField>;
     type PC_Bls12_377 = PC<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
     type PC_Bls12_381 = PC<Bls12_381, UniPoly_381, Sponge_Bls12_381>;
 

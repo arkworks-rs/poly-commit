@@ -727,13 +727,13 @@ mod tests {
     };
     use rand_chacha::ChaCha20Rng;
 
-    type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::Fr, SparseTerm>;
-    type MVPoly_377 = SparsePoly<<Bls12_377 as Pairing>::Fr, SparseTerm>;
+    type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::ScalarField, SparseTerm>;
+    type MVPoly_377 = SparsePoly<<Bls12_377 as Pairing>::ScalarField, SparseTerm>;
 
     type PC<E, P, S> = MarlinPST13<E, P, S>;
 
-    type Sponge_bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::Fr>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::Fr>;
+    type Sponge_bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::ScalarField>;
+    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
 
     type PC_Bls12_381 = PC<Bls12_381, MVPoly_381, Sponge_bls12_381>;
     type PC_Bls12_377 = PC<Bls12_377, MVPoly_377, Sponge_Bls12_377>;

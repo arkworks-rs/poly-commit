@@ -260,16 +260,17 @@ fn eq_extension<F: Field>(t: &[F]) -> Vec<DenseMultilinearExtension<F>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ark_std::UniformRand;
     use crate::multilinear_pc::data_structures::UniversalParams;
     use crate::multilinear_pc::MultilinearPC;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
     use ark_std::rand::RngCore;
+    use ark_std::test_rng;
     use ark_std::vec::Vec;
-    use ark_std::{test_rng, UniformRand};
     type E = Bls12_381;
-    type Fr = <E as Pairing>::Fr;
+    type Fr = <E as Pairing>::ScalarField;
 
     fn test_polynomial<R: RngCore>(
         uni_params: &UniversalParams<E>,
