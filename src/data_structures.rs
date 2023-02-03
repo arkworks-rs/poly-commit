@@ -1,10 +1,9 @@
-use crate::{Polynomial, Rc, String, Vec};
+use crate::{Polynomial, String, Vec};
 use ark_ff::{Field, PrimeField, ToConstraintField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
 use ark_std::{
     borrow::Borrow,
-    io::{Read, Write},
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
 };
@@ -62,12 +61,6 @@ pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize {
 
     /// Does this commitment have a degree bound?
     fn has_degree_bound(&self) -> bool;
-
-    /// Size in bytes
-    #[deprecated(since = "0.4.0", note = "Please use `.serialized_size()` instead.")]
-    fn size_in_bytes(&self) -> usize {
-        self.serialized_size()
-    }
 }
 
 /// Defines the minimal interface of prepared commitments for any polynomial
@@ -96,16 +89,6 @@ pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
     ) -> Self;
 }
 
-/// Defines the minimal interface of evaluation proofs for any polynomial
-/// commitment scheme.
-pub trait PCProof: Clone + CanonicalSerialize + CanonicalDeserialize {
-    /// Size in bytes
-    #[deprecated(since = "0.4.0", note = "Please use `.serialized_size()` instead.")]
-    fn size_in_bytes(&self) -> usize {
-        self.serialized_size()
-    }
-}
-
 /// A proof of satisfaction of linear combinations.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BatchLCProof<F: PrimeField, T: Clone + CanonicalSerialize + CanonicalDeserialize> {
@@ -121,7 +104,7 @@ pub struct BatchLCProof<F: PrimeField, T: Clone + CanonicalSerialize + Canonical
 #[derive(Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct LabeledPolynomial<F: Field, P: Polynomial<F>> {
     label: PolynomialLabel,
-    polynomial: Rc<P>,
+    polynomial: P,
     degree_bound: Option<usize>,
     hiding_bound: Option<usize>,
     _field: PhantomData<F>,
@@ -145,7 +128,7 @@ impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<F, P> {
     ) -> Self {
         Self {
             label,
-            polynomial: Rc::new(polynomial),
+            polynomial: polynomial,
             degree_bound,
             hiding_bound,
             _field: PhantomData,

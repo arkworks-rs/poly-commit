@@ -3,7 +3,7 @@ use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitterKey, PCRandomness, PCUniversalParams, PolynomialCommitment};
 
-use ark_ec::{msm::VariableBaseMSM, AffineCurve, ProjectiveCurve};
+use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
@@ -16,7 +16,7 @@ pub use data_structures::*;
 use rayon::prelude::*;
 
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::CryptographicSponge;
 use digest::Digest;
 
 /// A polynomial commitment scheme based on the hardness of the
@@ -33,7 +33,7 @@ use digest::Digest;
 /// [pcdas]: https://eprint.iacr.org/2020/499
 /// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct InnerProductArgPC<
-    G: AffineCurve,
+    G: AffineRepr,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
@@ -46,8 +46,8 @@ pub struct InnerProductArgPC<
 
 impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
-    G: AffineCurve,
-    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
+    G: AffineRepr,
+    G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField>,
     S: CryptographicSponge,
@@ -62,12 +62,12 @@ where
         scalars: &[G::ScalarField],
         hiding_generator: Option<G>,
         randomizer: Option<G::ScalarField>,
-    ) -> G::Projective {
+    ) -> G::Group {
         let scalars_bigint = ark_std::cfg_iter!(scalars)
             .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
 
-        let mut comm = <G::Projective as VariableBaseMSM>::msm_bigint(comm_key, &scalars_bigint);
+        let mut comm = <G::Group as VariableBaseMSM>::msm_bigint(comm_key, &scalars_bigint);
 
         if randomizer.is_some() {
             assert!(hiding_generator.is_some());
@@ -114,7 +114,7 @@ where
         // `log_d` is ceil(log2 (d + 1)), which is the number of steps to compute all of the challenges
         let log_d = ark_std::log2(d + 1) as usize;
 
-        let mut combined_commitment_proj = G::Projective::zero();
+        let mut combined_commitment_proj = G::Group::zero();
         let mut combined_v = G::ScalarField::zero();
 
         let mut cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
@@ -196,7 +196,7 @@ where
         let v_prime = check_poly.evaluate(point) * &proof.c;
         let h_prime = h_prime.into_affine();
 
-        let check_commitment_elem: G::Projective = Self::cm_commit(
+        let check_commitment_elem: G::Group = Self::cm_commit(
             &[proof.final_comm_key.clone(), h_prime],
             &[proof.c.clone(), v_prime],
             None,
@@ -262,10 +262,10 @@ where
     }
 
     fn combine_shifted_comm(
-        combined_comm: Option<G::Projective>,
+        combined_comm: Option<G::Group>,
         new_comm: Option<G>,
         coeff: G::ScalarField,
-    ) -> Option<G::Projective> {
+    ) -> Option<G::Group> {
         if let Some(new_comm) = new_comm {
             let coeff_new_comm = new_comm.mul(coeff);
             return Some(combined_comm.map_or(coeff_new_comm, |c| c + &coeff_new_comm));
@@ -276,9 +276,9 @@ where
 
     fn construct_labeled_commitments(
         lc_info: &[(String, Option<usize>)],
-        elements: &[G::Projective],
+        elements: &[G::Group],
     ) -> Vec<LabeledCommitment<Commitment<G>>> {
-        let comms = G::Projective::batch_normalization_into_affine(elements);
+        let comms = G::Group::normalize_batch(elements);
         let mut commitments = Vec::new();
 
         let mut i = 0;
@@ -327,18 +327,18 @@ where
                     j += 1;
                 }
                 let generator = g.unwrap();
-                generator.mul_by_cofactor_to_projective()
+                generator.mul_by_cofactor_to_group()
             })
             .collect();
 
-        G::Projective::batch_normalization_into_affine(&generators)
+        G::Group::normalize_batch(&generators)
     }
 }
 
 impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgPC<G, D, P, S>
 where
-    G: AffineCurve,
-    G::Projective: VariableBaseMSM<MSMBase = G, Scalar = G::ScalarField>,
+    G: AffineRepr,
+    G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField, Point = G::ScalarField>,
     S: CryptographicSponge,
@@ -501,7 +501,7 @@ where
     {
         let mut combined_polynomial = P::zero();
         let mut combined_rand = G::ScalarField::zero();
-        let mut combined_commitment_proj = G::Projective::zero();
+        let mut combined_commitment_proj = G::Group::zero();
 
         let mut has_hiding = false;
 
@@ -595,10 +595,8 @@ where
                 Some(hiding_rand),
             );
 
-            let mut batch = G::Projective::batch_normalization_into_affine(&[
-                combined_commitment_proj,
-                hiding_commitment_proj,
-            ]);
+            let mut batch =
+                G::Group::normalize_batch(&[combined_commitment_proj, hiding_commitment_proj]);
             hiding_commitment = Some(batch.pop().unwrap());
             combined_commitment = batch.pop().unwrap();
 
@@ -664,7 +662,7 @@ where
         let mut z = z.as_mut_slice();
 
         // This will be used for transforming the key in each step
-        let mut key_proj: Vec<G::Projective> = ck.comm_key.iter().map(|x| (*x).into()).collect();
+        let mut key_proj: Vec<G::Group> = ck.comm_key.iter().map(|x| (*x).into()).collect();
         let mut key_proj = key_proj.as_mut_slice();
 
         let mut temp;
@@ -689,7 +687,7 @@ where
             let r = Self::cm_commit(key_r, coeffs_l, None, None)
                 + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
 
-            let lr = G::Projective::batch_normalization_into_affine(&[l, r]);
+            let lr = G::Group::normalize_batch(&[l, r]);
             l_vec.push(lr[0]);
             r_vec.push(lr[1]);
 
@@ -719,7 +717,7 @@ where
             z = z_l;
 
             key_proj = key_proj_l;
-            temp = G::Projective::batch_normalization_into_affine(key_proj);
+            temp = G::Group::normalize_batch(key_proj);
             comm_key = &temp;
 
             n /= 2;
@@ -815,7 +813,7 @@ where
         let mut randomizer = G::ScalarField::one();
 
         let mut combined_check_poly = P::zero();
-        let mut combined_final_key = G::Projective::zero();
+        let mut combined_final_key = G::Group::zero();
 
         for ((_point_label, (point, labels)), p) in query_to_labels_map.into_iter().zip(proof) {
             let lc_time =
@@ -907,8 +905,8 @@ where
             let mut degree_bound = None;
             let mut hiding_bound = None;
 
-            let mut combined_comm = G::Projective::zero();
-            let mut combined_shifted_comm: Option<G::Projective> = None;
+            let mut combined_comm = G::Group::zero();
+            let mut combined_shifted_comm: Option<G::Group> = None;
 
             let mut combined_rand = G::ScalarField::zero();
             let mut combined_shifted_rand: Option<G::ScalarField> = None;
@@ -1011,8 +1009,8 @@ where
             let num_polys = lc.len();
 
             let mut degree_bound = None;
-            let mut combined_comm = G::Projective::zero();
-            let mut combined_shifted_comm: Option<G::Projective> = None;
+            let mut combined_comm = G::Group::zero();
+            let mut combined_shifted_comm: Option<G::Group> = None;
 
             for (coeff, label) in lc.iter() {
                 if label.is_one() {
@@ -1075,16 +1073,16 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::InnerProductArgPC;
-    use ark_ec::AffineCurve;
+    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
+    use ark_ec::AffineRepr;
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
-    use ark_sponge::poseidon::PoseidonSponge;
     use blake2::Blake2s;
     use rand_chacha::ChaCha20Rng;
 
     type UniPoly = DensePoly<Fr>;
-    type Sponge = PoseidonSponge<<EdwardsAffine as AffineCurve>::ScalarField>;
+    type Sponge = PoseidonSponge<<EdwardsAffine as AffineRepr>::ScalarField>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, Sponge>;
 
