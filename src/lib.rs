@@ -108,7 +108,7 @@ pub mod challenge;
 pub mod multilinear_pc;
 
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::{CryptographicSponge, FieldElementSize};
+use ark_crypto_primitives::sponge::{CryptographicSponge, FieldElementSize};
 /// Multivariate polynomial commitment based on the construction in
 /// [[PST13]][pst] with batching and (optional) hiding property inspired
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
@@ -533,8 +533,8 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
+    use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_poly::Polynomial;
-    use ark_sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,

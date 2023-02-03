@@ -3,15 +3,17 @@ use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use ark_ec::AffineRepr;
+use ark_ec::CurveGroup;
 
-use ark_ec::{pairing::Pairing, };
+use ark_ec::pairing::Pairing;
 use ark_ff::{One, UniformRand, Zero};
 use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 mod data_structures;
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::CryptographicSponge;
 pub use data_structures::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement and
@@ -75,7 +77,7 @@ where
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
-        let mut witness: E::G1 = proof.w.into_projective();
+        let mut witness: E::G1 = proof.w.into_group();
         let mut adjusted_witness = vk.g.mul(combined_values) - &proof.w.mul(point);
         if let Some(random_v) = proof.random_v {
             adjusted_witness += &vk.gamma_g.mul(random_v);
@@ -119,14 +121,15 @@ where
         g1_projective_elems.push(-combined_witness);
         g2_prepared_elems.push(vk.prepared_beta_h.clone());
 
-        let g1_prepared_elems_iter =
-            E::G1::batch_normalization_into_affine(g1_projective_elems.as_slice())
+        let g1_prepared_elems_iter: Vec<E::G1Prepared> =
+            E::G1::normalize_batch(g1_projective_elems.as_slice())
                 .into_iter()
-                .map(|a| a.into());
+                .map(|a| a.into())
+                .collect::<Vec<_>>();
 
-        let g1_g2_prepared: Vec<(E::G1Prepared, E::G2Prepared)> =
-            g1_prepared_elems_iter.zip(g2_prepared_elems).collect();
-        let is_one: bool = E::product_of_pairings(g1_g2_prepared.iter()).is_one();
+        let is_one: bool = E::multi_pairing(g1_prepared_elems_iter, g2_prepared_elems)
+            .0
+            .is_one();
         end_timer!(check_time);
         Ok(is_one)
     }
@@ -564,7 +567,7 @@ where
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> = E::G1::batch_normalization_into_affine(&lc_commitments)
+        let comms: Vec<Self::Commitment> = E::G1::normalize_batch(&lc_commitments)
             .into_iter()
             .map(|c| kzg10::Commitment::<E>(c))
             .collect();
@@ -648,7 +651,7 @@ where
             lc_info.push((lc_label, degree_bound));
         }
 
-        let comms: Vec<Self::Commitment> = E::G1::batch_normalization_into_affine(&lc_commitments)
+        let comms: Vec<Self::Commitment> = E::G1::normalize_batch(&lc_commitments)
             .into_iter()
             .map(|c| kzg10::Commitment(c))
             .collect();
@@ -677,10 +680,10 @@ mod tests {
     use super::SonicKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
+    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
     use ark_ec::pairing::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
-    use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;

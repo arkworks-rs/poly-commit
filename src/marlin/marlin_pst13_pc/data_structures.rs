@@ -11,7 +11,7 @@ use ark_std::{
 };
 
 use ark_serialize::{
-    CanonicalDeserialize, Valid, CanonicalSerialize, Compress, SerializationError, Validate,
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
 use ark_std::rand::RngCore;
 
@@ -57,15 +57,15 @@ where
 {
     fn check(&self) -> Result<(), SerializationError> {
         if self.powers_of_g.len() != (self.max_degree + 1) * self.num_vars {
-            return false;
+            return Err(SerializationError::InvalidData);
         }
 
         if self.beta_h.len() != self.num_vars {
-            return false;
+            return Err(SerializationError::InvalidData);
         }
 
         if self.prepared_beta_h.len() != self.num_vars {
-            return false;
+            return Err(SerializationError::InvalidData);
         }
         Ok(())
     }
@@ -79,17 +79,18 @@ where
 {
     fn serialize_with_mode<W: Write>(
         &self,
-        writer: W,
+        mut writer: W,
         compress: Compress,
     ) -> Result<(), SerializationError> {
         self.powers_of_g
             .serialize_with_mode(&mut writer, compress)?;
-        self.gamma_g.serialize(&mut writer, compress)?;
-        self.powers_of_gamma_g.serialize(&mut writer, compress)?;
-        self.h.serialize(&mut writer, compress)?;
-        self.beta_h.serialize(&mut writer, compress)?;
-        self.num_vars.serialize(&mut writer, compress)?;
-        self.max_degree.serialize(&mut writer, compress)
+        self.gamma_g.serialize_with_mode(&mut writer, compress)?;
+        self.powers_of_gamma_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)?;
+        self.num_vars.serialize_with_mode(&mut writer, compress)?;
+        self.max_degree.serialize_with_mode(&mut writer, compress)
     }
 
     fn serialized_size(&self, compress: Compress) -> usize {
@@ -103,32 +104,14 @@ where
     }
 
     fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_uncompressed(&mut writer)?;
-        self.gamma_g.serialize_uncompressed(&mut writer)?;
-        self.powers_of_gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)?;
-        self.num_vars.serialize_uncompressed(&mut writer)?;
-        self.max_degree.serialize_uncompressed(&mut writer)
+        Self::serialize_with_mode(self, &mut writer, Compress::No)
     }
 
     fn uncompressed_size(&self) -> usize {
-        self.powers_of_g.uncompressed_size()
-            + self.gamma_g.uncompressed_size()
-            + self.powers_of_gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.num_vars.uncompressed_size()
-            + self.max_degree.uncompressed_size()
+        Self::serialized_size(self, Compress::No)
     }
     fn compressed_size(&self) -> usize {
-        self.powers_of_g.compressed_size()
-            + self.gamma_g.compressed_size()
-            + self.powers_of_gamma_g.compressed_size()
-            + self.h.compressed_size()
-            + self.beta_h.compressed_size()
-            + self.num_vars.compressed_size()
-            + self.max_degree.compressed_size()
+        Self::serialized_size(self, Compress::Yes)
     }
 }
 
@@ -139,7 +122,7 @@ where
     P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn deserialize_with_mode<R: Read>(
-        reader: R,
+        mut reader: R,
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
@@ -170,18 +153,16 @@ where
         })
     }
 
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_uncompressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(reader, Compress::No, Validate::Yes)
     }
     fn deserialize_uncompressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(reader, Compress::No, Validate::No)
     }
-    fn deserialize_compressed_unchecked<R: Read>(
-        mut reader: R,
-    ) -> Result<Self, SerializationError> {
+    fn deserialize_compressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(reader, Compress::Yes, Validate::No)
     }
-    fn deserialize_compressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_compressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(
             reader,
             ark_serialize::Compress::Yes,
@@ -295,7 +276,7 @@ impl<E: Pairing> Valid for VerifierKey<E> {
 impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     fn serialize_with_mode<W: Write>(
         &self,
-        writer: W,
+        mut writer: W,
         compress: Compress,
     ) -> Result<(), SerializationError> {
         self.g.serialize_with_mode(&mut writer, compress)?;
@@ -318,10 +299,10 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
             + self.max_degree.serialized_size(compress)
     }
 
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
         Self::serialize_with_mode(&self, writer, Compress::No)
     }
-    fn serialize_compressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
         Self::serialize_with_mode(&self, writer, Compress::Yes)
     }
 

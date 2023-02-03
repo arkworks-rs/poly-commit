@@ -4,6 +4,8 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::pairing::Pairing;
+use ark_ec::AffineRepr;
+use ark_ec::CurveGroup;
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
@@ -11,7 +13,7 @@ use ark_std::{marker::PhantomData, ops::Div, vec};
 
 mod data_structures;
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::CryptographicSponge;
 pub use data_structures::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
@@ -312,7 +314,7 @@ where
         }
         let proof_time = start_timer!(|| "Creating proof for unshifted polynomials");
         let proof = kzg10::KZG10::open(&ck.powers(), &p, *point, &r)?;
-        let mut w = proof.w.into_projective();
+        let mut w = proof.w.into_group();
         let mut random_v = proof.random_v;
         end_timer!(proof_time);
 
@@ -327,7 +329,7 @@ where
             )?;
             end_timer!(proof_time);
 
-            w += &shifted_proof.w.into_projective();
+            w += &shifted_proof.w.into_group();
             if let Some(shifted_random_v) = shifted_proof.random_v {
                 random_v = random_v.map(|v| v + &shifted_random_v);
             }
@@ -538,10 +540,10 @@ mod tests {
     use super::MarlinKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
+    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
     use ark_ec::pairing::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
-    use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
     type UniPoly_381 = DensePoly<<Bls12_381 as Pairing>::Fr>;

@@ -1,5 +1,7 @@
 use crate::*;
 use ark_ec::pairing::Pairing;
+use ark_ec::AffineRepr;
+use ark_ec::Group;
 use ark_ff::{PrimeField, ToConstraintField};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid,
@@ -39,9 +41,13 @@ pub struct UniversalParams<E: Pairing> {
 }
 
 impl<E: Pairing> Valid for UniversalParams<E> {
-    fn check(&self) -> bool {
-        self.powers_of_g.len() == self.powers_of_gamma_g.len()
-            && self.powers_of_g.len() == self.neg_powers_of_h.len()
+    fn check(&self) -> Result<(), SerializationError> {
+        if !(self.powers_of_g.len() == self.powers_of_gamma_g.len()
+            && self.powers_of_g.len() == self.neg_powers_of_h.len())
+        {
+            return Err(SerializationError::InvalidData);
+        }
+        Ok(())
     }
 }
 impl<E: Pairing> PCUniversalParams for UniversalParams<E> {
@@ -53,7 +59,7 @@ impl<E: Pairing> PCUniversalParams for UniversalParams<E> {
 impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
     fn serialize_with_mode<W: Write>(
         &self,
-        writer: W,
+        mut writer: W,
         compress: Compress,
     ) -> Result<(), SerializationError> {
         self.powers_of_g
@@ -74,11 +80,11 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
             + self.neg_powers_of_h.serialized_size(compress)
     }
 
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
         Self::serialize_with_mode(&self, writer, Compress::No)
     }
 
-    fn serialize_compressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
+    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
         Self::serialize_with_mode(&self, writer, Compress::Yes)
     }
 
@@ -93,7 +99,7 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
 
 impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
     fn deserialize_with_mode<R: Read>(
-        reader: R,
+        mut reader: R,
         compress: Compress,
         validate: ark_serialize::Validate,
     ) -> Result<Self, SerializationError> {
@@ -123,13 +129,17 @@ impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
     fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::Yes)
     }
-    fn deserialize_compressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_compressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::Yes)
     }
-    fn deserialize_compressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_compressed_unchecked<R: Read>(
+        mut reader: R,
+    ) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::No)
     }
-    fn deserialize_uncompressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_uncompressed_unchecked<R: Read>(
+        mut reader: R,
+    ) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::No)
     }
 }
@@ -158,18 +168,23 @@ impl<E: Pairing> Powers<'_, E> {
     }
 }
 impl<'a, E: Pairing> Valid for Powers<'a, E> {
-    fn check(&self) -> bool {
-        self.powers_of_g.len() == self.powers_of_gamma_g.len()
+    fn check(&self) -> Result<(), SerializationError> {
+        if self.powers_of_g.len() != self.powers_of_gamma_g.len() {
+            return Err(SerializationError::InvalidData);
+        }
+        Ok(())
     }
 }
 impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
     fn serialize_with_mode<W: Write>(
         &self,
-        writer: W,
+        mut writer: W,
         compress: Compress,
     ) -> Result<(), SerializationError> {
-        self.powers_of_g.serialize_with_mode(&mut writer)?;
-        self.powers_of_gamma_g.serialize_with_mode(&mut writer)
+        self.powers_of_g
+            .serialize_with_mode(&mut writer, compress)?;
+        self.powers_of_gamma_g
+            .serialize_with_mode(&mut writer, compress)
     }
 
     fn serialized_size(&self, compress: Compress) -> usize {
@@ -193,7 +208,7 @@ impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
 
 impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
     fn deserialize_with_mode<R: Read>(
-        reader: R,
+        mut reader: R,
         compress: Compress,
         validate: ark_serialize::Validate,
     ) -> Result<Self, SerializationError> {
@@ -207,16 +222,20 @@ impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
         })
     }
 
-    fn deserialize_compressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_compressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::Yes)
     }
-    fn deserialize_compressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_compressed_unchecked<R: Read>(
+        mut reader: R,
+    ) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::No)
     }
-    fn deserialize_uncompressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::Yes)
     }
-    fn deserialize_uncompressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
+    fn deserialize_uncompressed_unchecked<R: Read>(
+        mut reader: R,
+    ) -> Result<Self, SerializationError> {
         Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::No)
     }
 }
@@ -255,7 +274,7 @@ impl<E: Pairing> Valid for VerifierKey<E> {
 impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
     fn serialize_with_mode<W: Write>(
         &self,
-        writer: W,
+        mut writer: W,
         compress: Compress,
     ) -> Result<(), SerializationError> {
         self.g.serialize_with_mode(&mut writer, compress)?;
@@ -286,14 +305,14 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
 
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     fn deserialize_with_mode<R: Read>(
-        reader: R,
+        mut reader: R,
         compress: Compress,
         validate: ark_serialize::Validate,
     ) -> Result<Self, SerializationError> {
         let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize(&mut reader, compress, validate)?;
-        let beta_h = E::G2Affine::deserialize(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
@@ -357,7 +376,7 @@ impl<E: Pairing> PreparedVerifierKey<E> {
         let supported_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let mut prepared_g = Vec::<E::G1Affine>::new();
-        let mut g = E::G1::ScalarFieldom(vk.g.clone());
+        let mut g = E::G1::from(vk.g.clone());
         for _ in 0..supported_bits {
             prepared_g.push(g.clone().into());
             g.double_in_place();
@@ -411,7 +430,7 @@ impl<'a, E: Pairing> AddAssign<(E::ScalarField, &'a Commitment<E>)> for Commitme
     #[inline]
     fn add_assign(&mut self, (f, other): (E::ScalarField, &'a Commitment<E>)) {
         let mut other = other.0 * f;
-        other.add_assign_mixed(&self.0);
+        other.add_assign(&self.0);
         self.0 = other.into();
     }
 }
@@ -435,7 +454,7 @@ impl<E: Pairing> PreparedCommitment<E> {
     /// prepare `PreparedCommitment` from `Commitment`
     pub fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
-        let mut cur = E::G1::ScalarFieldom(comm.0.clone());
+        let mut cur = E::G1::from(comm.0.clone());
 
         let supported_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 

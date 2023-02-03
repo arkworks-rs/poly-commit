@@ -64,7 +64,7 @@ where
         SF: Iterable,
         SF::Item: Borrow<E::ScalarField>,
     {
-        let mut quotient = ChunkedPippenger::new(max_msm_buffer);
+        let mut quotient: ChunkedPippenger<E::G1> = ChunkedPippenger::new(max_msm_buffer);
 
         let bases_init = self.powers_of_g.iter();
         let scalars = polynomial.iter();
@@ -98,7 +98,7 @@ where
         SF::Item: Borrow<E::ScalarField>,
     {
         let zeros = vanishing_polynomial(points);
-        let mut quotient = ChunkedPippenger::new(max_msm_buffer);
+        let mut quotient: ChunkedPippenger<E::G1> = ChunkedPippenger::new(max_msm_buffer);
         let bases_init = self.powers_of_g.iter();
         // TODO: change `skip` to `advance_by` once rust-lang/rust#7774 is fixed.
         // See <https://github.com/rust-lang/rust/issues/77404>
@@ -164,10 +164,11 @@ where
         SF::Item: Borrow<E::ScalarField>,
     {
         let n = polynomials.depth();
-        let mut pippengers: Vec<ChunkedPippenger<E::G1Affine>> = Vec::new();
+        let mut pippengers: Vec<ChunkedPippenger<E::G1>> = Vec::new();
         let mut folded_bases = Vec::new();
         for i in 1..n + 1 {
-            let pippenger = ChunkedPippenger::with_size(max_msm_buffer / n);
+            let pippenger: ChunkedPippenger<<E as Pairing>::G1> =
+                ChunkedPippenger::with_size(max_msm_buffer / n);
             let bases_init = self.powers_of_g.iter();
 
             let delta = self.powers_of_g.len() - ceil_div(polynomials.len(), 1 << i);

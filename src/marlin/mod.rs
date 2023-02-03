@@ -4,9 +4,11 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCRandomness, Polynomial, PolynomialCommitment};
+use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::pairing::Pairing;
+use ark_ec::AffineRepr;
+use ark_ec::CurveGroup;
 use ark_ff::{One, Zero};
-use ark_sponge::CryptographicSponge;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
@@ -54,7 +56,7 @@ where
         let mut combined_shifted_comm = None;
         for (coeff, comm) in coeffs_and_comms {
             if coeff.is_one() {
-                combined_comm.add_assign_mixed(&comm.comm.0);
+                combined_comm.add_assign(&comm.comm.0);
             } else {
                 combined_comm += &comm.comm.0.mul(coeff);
             }
@@ -84,8 +86,8 @@ where
                 s_flags.push(false);
             }
         }
-        let comms = E::G1::batch_normalization_into_affine(&comms);
-        let s_comms = E::G1::batch_normalization_into_affine(&mut s_comms);
+        let comms = E::G1::normalize_batch(&comms);
+        let s_comms = E::G1::normalize_batch(&mut s_comms);
         comms
             .into_iter()
             .zip(s_comms)
@@ -127,12 +129,7 @@ where
             if let Some(degree_bound) = degree_bound {
                 let challenge_i_1 = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
 
-                let shifted_comm = commitment
-                    .shifted_comm
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .into_projective();
+                let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_group();
 
                 let shift_power = vk
                     .unwrap()
@@ -212,8 +209,8 @@ where
             combined_evals.push(v);
         }
         let norm_time = start_timer!(|| "Normalizing combined commitments");
-        E::G1::batch_normalization(&mut combined_comms);
-        let combined_comms = combined_comms
+        let combined_comms_affine = E::G1::normalize_batch(&combined_comms);
+        let combined_comms = combined_comms_affine
             .into_iter()
             .map(|c| kzg10::Commitment(c.into()))
             .collect::<Vec<_>>();

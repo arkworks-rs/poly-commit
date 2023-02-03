@@ -1,5 +1,5 @@
 use ark_ff::PrimeField;
-use ark_sponge::{CryptographicSponge, FieldElementSize};
+use ark_crypto_primitives::sponge::{CryptographicSponge, FieldElementSize};
 
 /// `ChallengeGenerator` generates opening challenges using multivariate or univariate strategy.
 /// For multivariate strategy, each challenge is freshly squeezed from a sponge.

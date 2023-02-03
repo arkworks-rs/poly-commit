@@ -3,6 +3,7 @@ use crate::{
     PCRandomness, PCVerifierKey, Vec,
 };
 use ark_ec::pairing::Pairing;
+use ark_ec::Group;
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::ops::{Add, AddAssign};
@@ -188,7 +189,7 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
                 for (d, shift_power) in degree_bounds_and_shift_powers {
                     let mut prepared_shift_power = Vec::<E::G1Affine>::new();
 
-                    let mut cur = E::G1::ScalarFieldom(shift_power.clone());
+                    let mut cur = E::G1::from(shift_power.clone());
                     for _ in 0..supported_bits {
                         prepared_shift_power.push(cur.clone().into());
                         cur.double_in_place();

@@ -7,11 +7,13 @@ use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
+use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, ops::Mul, vec};
+use std::ops::AddAssign;
 
 mod data_structures;
 pub use data_structures::*;
@@ -20,7 +22,7 @@ mod combinations;
 use combinations::*;
 
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::CryptographicSponge;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -183,7 +185,7 @@ where
         // Generators
         let g = E::G1::rand(rng);
         let gamma_g = E::G1::rand(rng);
-        let h = E::G2Projective::rand(rng);
+        let h = E::G2::rand(rng);
 
         // A list of all variable numbers of multiplicity `max_degree`
         let variable_set: Vec<_> = (0..num_vars)
@@ -247,11 +249,11 @@ where
             });
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
+        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
         let gamma_g = gamma_g.into_affine();
         let powers_of_gamma_g = powers_of_gamma_g
             .into_iter()
-            .map(|v| E::G1::batch_normalization_into_affine(&v))
+            .map(|v| E::G1::normalize_batch(&v))
             .collect();
         let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
@@ -420,7 +422,7 @@ where
             end_timer!(msm_time);
 
             // Mask commitment with random poly
-            commitment.add_assign_mixed(&random_commitment);
+            commitment.add_assign(&random_commitment);
 
             let comm = Self::Commitment {
                 comm: kzg10::Commitment(commitment.into()),
@@ -555,22 +557,23 @@ where
                 None,
             )?;
         // Compute both sides of the pairing equation
-        let mut inner = combined_comm.into().into_projective() - &vk.g.mul(combined_value);
+        let mut inner = combined_comm.into().into_group() - &vk.g.mul(combined_value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
         let lhs = E::pairing(inner, vk.h);
 
         // Create a list of elements corresponding to each pairing in the product on the rhs
-        let rhs_product: Vec<(E::G1Prepared, E::G2Prepared)> = ark_std::cfg_iter!(proof.w)
-            .enumerate()
-            .map(|(j, w_j)| {
-                let beta_minus_z: E::G2Affine =
-                    (vk.beta_h[j].into_projective() - &vk.h.mul(point[j])).into();
-                ((*w_j).into(), beta_minus_z.into())
-            })
-            .collect();
-        let rhs = E::product_of_pairings(&rhs_product);
+        let (rhs_product_g1, rhs_product_g2): (Vec<E::G1Prepared>, Vec<E::G2Prepared>) =
+            ark_std::cfg_iter!(proof.w)
+                .enumerate()
+                .map(|(j, w_j)| {
+                    let beta_minus_z: E::G2Affine =
+                        (vk.beta_h[j].into_group() - &vk.h.mul(point[j])).into();
+                    ((*w_j).into(), beta_minus_z.into())
+                })
+                .unzip();
+        let rhs = E::multi_pairing(rhs_product_g1, rhs_product_g2);
         end_timer!(check_time);
 
         Ok(lhs == rhs)
@@ -598,8 +601,8 @@ where
             )?;
         let check_time =
             start_timer!(|| format!("Checking {} evaluation proofs", combined_comms.len()));
-        let g = vk.g.into_projective();
-        let gamma_g = vk.gamma_g.into_projective();
+        let g = vk.g.into_group();
+        let gamma_g = vk.gamma_g.into_group();
         let mut total_c = <E::G1>::zero();
         let mut total_w = vec![<E::G1>::zero(); vk.num_vars];
         let combination_time = start_timer!(|| "Combining commitments and proofs");
@@ -619,7 +622,7 @@ where
                 .enumerate()
                 .map(|(j, w_j)| w_j.mul(z[j]))
                 .sum();
-            temp.add_assign_mixed(&c.0);
+            temp.add_assign(&c.0);
             let c = temp;
             g_multiplier += &(randomizer * &v);
             if let Some(random_v) = proof.random_v {
@@ -638,15 +641,17 @@ where
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let mut pairings = Vec::new();
-        total_w.into_iter().enumerate().for_each(|(j, w_j)| {
-            pairings.push(((-w_j).into_affine().into(), vk.prepared_beta_h[j].clone()))
-        });
-        pairings.push((total_c.into_affine().into(), vk.prepared_h.clone()));
+        let (mut p1, mut p2): (Vec<E::G1Prepared>, Vec<E::G2Prepared>) = total_w
+            .into_iter()
+            .enumerate()
+            .map(|(j, w_j)| ((-w_j).into_affine().into(), vk.prepared_beta_h[j].clone()))
+            .unzip();
+        p1.push(total_c.into_affine().into());
+        p2.push(vk.prepared_h.clone());
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
-        let result = E::product_of_pairings(&pairings).is_one();
+        let result = E::multi_pairing(p1, p2).0.is_one();
         end_timer!(pairing_time);
         end_timer!(check_time);
         Ok(result)
@@ -713,13 +718,13 @@ mod tests {
     use super::MarlinPST13;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
+    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
     use ark_ec::pairing::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         DenseMVPolynomial,
     };
-    use ark_sponge::poseidon::PoseidonSponge;
     use rand_chacha::ChaCha20Rng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::Fr, SparseTerm>;

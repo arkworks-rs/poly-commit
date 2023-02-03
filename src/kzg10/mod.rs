@@ -6,11 +6,13 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
+use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ec::{scalar_mul::fixed_base::FixedBase, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
+use std::ops::AddAssign;
 
 use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
@@ -48,7 +50,7 @@ where
         let beta = E::ScalarField::rand(rng);
         let g = E::G1::rand(rng);
         let gamma_g = E::G1::rand(rng);
-        let h = E::G2Projective::rand(rng);
+        let h = E::G2::rand(rng);
 
         let mut powers_of_beta = vec![E::ScalarField::one()];
 
@@ -75,8 +77,8 @@ where
         powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::batch_normalization_into_affine(&powers_of_g);
-        let powers_of_gamma_g = E::G1::batch_normalization_into_affine(&powers_of_gamma_g)
+        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
+        let powers_of_gamma_g = E::G1::normalize_batch(&powers_of_gamma_g)
             .into_iter()
             .enumerate()
             .collect();
@@ -91,14 +93,14 @@ where
             }
 
             let neg_h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
-            let neg_powers_of_h = FixedBase::msm::<E::G2Projective>(
+            let neg_powers_of_h = FixedBase::msm::<E::G2>(
                 scalar_bits,
                 window_size,
                 &neg_h_table,
                 &neg_powers_of_beta,
             );
 
-            let affines = E::G2Projective::batch_normalization_into_affine(&neg_powers_of_h);
+            let affines = E::G2::normalize_batch(&neg_powers_of_h);
             let mut affines_map = BTreeMap::new();
             affines.into_iter().enumerate().for_each(|(i, a)| {
                 affines_map.insert(i, a);
@@ -178,7 +180,7 @@ where
         .into_affine();
         end_timer!(msm_time);
 
-        commitment.add_assign_mixed(&random_commitment);
+        commitment.add_assign(&random_commitment);
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
@@ -293,13 +295,13 @@ where
         proof: &Proof<E>,
     ) -> Result<bool, Error> {
         let check_time = start_timer!(|| "Checking evaluation");
-        let mut inner = comm.0.into_projective() - &vk.g.mul(value);
+        let mut inner = comm.0.into_group() - &vk.g.mul(value);
         if let Some(random_v) = proof.random_v {
             inner -= &vk.gamma_g.mul(random_v);
         }
         let lhs = E::pairing(inner, vk.h);
 
-        let inner = vk.beta_h.into_projective() - &vk.h.mul(point);
+        let inner = vk.beta_h.into_group() - &vk.h.mul(point);
         let rhs = E::pairing(proof.w, inner);
 
         end_timer!(check_time, || format!("Result: {}", lhs == rhs));
@@ -331,7 +333,7 @@ where
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
             let w = proof.w;
             let mut temp = w.mul(*z);
-            temp.add_assign_mixed(&c.0);
+            temp.add_assign(&c.0);
             let c = temp;
             g_multiplier += &(randomizer * v);
             if let Some(random_v) = proof.random_v {
@@ -348,15 +350,16 @@ where
         end_timer!(combination_time);
 
         let to_affine_time = start_timer!(|| "Converting results to affine for pairing");
-        let affine_points = E::G1::batch_normalization_into_affine(&[-total_w, total_c]);
+        let affine_points = E::G1::normalize_batch(&[-total_w, total_c]);
         let (total_w, total_c) = (affine_points[0], affine_points[1]);
         end_timer!(to_affine_time);
 
         let pairing_time = start_timer!(|| "Performing product of pairings");
-        let result = E::product_of_pairings(&[
-            (total_w.into(), vk.prepared_beta_h.clone()),
-            (total_c.into(), vk.prepared_h.clone()),
-        ])
+        let result = E::multi_pairing(
+            [total_w, total_c],
+            [vk.prepared_beta_h.clone(), vk.prepared_h.clone()],
+        )
+        .0
         .is_one();
         end_timer!(pairing_time);
         end_timer!(check_time, || format!("Result: {}", result));
