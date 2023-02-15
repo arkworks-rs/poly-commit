@@ -174,7 +174,11 @@ impl<E: Pairing> VerifierKey<E> {
 
 impl<E: Pairing> Valid for VerifierKey<E> {
     fn check(&self) -> Result<(), SerializationError> {
-        // TODO probably need to do more checks here
+        self.g.check()?;
+        self.gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+        self.degree_bounds_and_neg_powers_of_h.check()?;
         if self.supported_degree > self.max_degree {
             return Err(SerializationError::InvalidData);
         }
@@ -218,23 +222,23 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
         let degree_bounds_and_neg_powers_of_h =
             Option::<Vec<(usize, E::G2Affine)>>::deserialize_with_mode(
                 &mut reader,
                 compress,
-                validate,
+                Validate::No,
             )?;
-        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
 
-        Ok(Self {
+        let result = Self {
             g,
             gamma_g,
             h,
@@ -244,7 +248,13 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
             degree_bounds_and_neg_powers_of_h,
             supported_degree,
             max_degree,
-        })
+        };
+
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+
+        Ok(result)
     }
 }
 

@@ -4,7 +4,7 @@ use ark_ec::AffineRepr;
 use ark_ec::Group;
 use ark_ff::{PrimeField, ToConstraintField};
 use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid,
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
 use ark_std::{
     borrow::Cow,
@@ -42,11 +42,11 @@ pub struct UniversalParams<E: Pairing> {
 
 impl<E: Pairing> Valid for UniversalParams<E> {
     fn check(&self) -> Result<(), SerializationError> {
-        if !(self.powers_of_g.len() == self.powers_of_gamma_g.len()
-            && self.powers_of_g.len() == self.neg_powers_of_h.len())
-        {
-            return Err(SerializationError::InvalidData);
-        }
+        self.powers_of_g.check()?;
+        self.powers_of_gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+        self.neg_powers_of_h.check()?;
         Ok(())
     }
 }
@@ -85,21 +85,18 @@ impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
     fn deserialize_with_mode<R: Read>(
         mut reader: R,
         compress: Compress,
-        validate: ark_serialize::Validate,
+        validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let powers_of_g =
-            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_g = Vec::deserialize_with_mode(&mut reader, compress, Validate::No)?;
         let powers_of_gamma_g =
-            BTreeMap::<usize, E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let neg_powers_of_h =
-            BTreeMap::<usize, E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+            BTreeMap::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let neg_powers_of_h = BTreeMap::deserialize_with_mode(&mut reader, compress, Validate::No)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
+        let result = Self {
             powers_of_g,
             powers_of_gamma_g,
             h,
@@ -107,7 +104,12 @@ impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
             neg_powers_of_h,
             prepared_h,
             prepared_beta_h,
-        })
+        };
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+
+        Ok(result)
     }
 }
 
@@ -136,9 +138,6 @@ impl<E: Pairing> Powers<'_, E> {
 }
 impl<'a, E: Pairing> Valid for Powers<'a, E> {
     fn check(&self) -> Result<(), SerializationError> {
-        if self.powers_of_g.len() != self.powers_of_gamma_g.len() {
-            return Err(SerializationError::InvalidData);
-        }
         Ok(())
     }
 }
@@ -164,16 +163,20 @@ impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
     fn deserialize_with_mode<R: Read>(
         mut reader: R,
         compress: Compress,
-        validate: ark_serialize::Validate,
+        validate: Validate,
     ) -> Result<Self, SerializationError> {
         let powers_of_g =
-            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
+            Vec::deserialize_with_mode(&mut reader, compress, validate)?;
         let powers_of_gamma_g =
-            Vec::<E::G1Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
-        Ok(Self {
+            Vec::deserialize_with_mode(&mut reader, compress, validate)?;
+        let result = Self {
             powers_of_g: Cow::Owned(powers_of_g),
             powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
-        })
+        };
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+        Ok(result)
     }
 }
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
@@ -204,6 +207,11 @@ pub struct VerifierKey<E: Pairing> {
 
 impl<E: Pairing> Valid for VerifierKey<E> {
     fn check(&self) -> Result<(), SerializationError> {
+        self.g.check()?;
+        self.gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+
         Ok(())
     }
 }
@@ -232,24 +240,28 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
     fn deserialize_with_mode<R: Read>(
         mut reader: R,
         compress: Compress,
-        validate: ark_serialize::Validate,
+        validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
 
         let prepared_h = E::G2Prepared::from(h.clone());
         let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
+        let result = Self {
             g,
             gamma_g,
             h,
             beta_h,
             prepared_h,
             prepared_beta_h,
-        })
+        };
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+
+        Ok(result)
     }
 }
 

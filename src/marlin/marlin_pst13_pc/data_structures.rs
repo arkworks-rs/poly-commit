@@ -56,17 +56,13 @@ where
     P::Point: Index<usize, Output = E::ScalarField>,
 {
     fn check(&self) -> Result<(), SerializationError> {
-        if self.powers_of_g.len() != (self.max_degree + 1) * self.num_vars {
-            return Err(SerializationError::InvalidData);
-        }
-
-        if self.beta_h.len() != self.num_vars {
-            return Err(SerializationError::InvalidData);
-        }
-
-        if self.prepared_beta_h.len() != self.num_vars {
-            return Err(SerializationError::InvalidData);
-        }
+        self.powers_of_g.check()?;
+        self.gamma_g.check()?;
+        self.powers_of_gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+        self.num_vars.check()?;
+        self.max_degree.check()?;
         Ok(())
     }
 }
@@ -115,21 +111,21 @@ where
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let powers_of_g = BTreeMap::<P::Term, E::G1Affine>::deserialize_with_mode(
+        let powers_of_g = BTreeMap::deserialize_with_mode(
             &mut reader,
             compress,
-            validate,
+            Validate::No,
         )?;
-        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
         let powers_of_gamma_g =
-            Vec::<Vec<E::G1Affine>>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+            Vec::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let num_vars = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
 
         let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
+        let result = Self {
             powers_of_g,
             gamma_g,
             powers_of_gamma_g,
@@ -139,7 +135,11 @@ where
             prepared_beta_h,
             num_vars,
             max_degree,
-        })
+        };
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+        Ok(result)
     }
 }
 
@@ -227,21 +227,21 @@ pub struct VerifierKey<E: Pairing> {
 }
 impl<E: Pairing> Valid for VerifierKey<E> {
     fn check(&self) -> Result<(), SerializationError> {
+        self.g.check()?;
+        self.gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+
         if self.num_vars == 0 {
             return Err(SerializationError::InvalidData);
         }
         if self.supported_degree == 0 {
             return Err(SerializationError::InvalidData);
         }
-        if self.max_degree == 0 {
+        if self.max_degree == 0 || self.max_degree < self.supported_degree {
             return Err(SerializationError::InvalidData);
         }
-        if self.beta_h.len() != self.num_vars {
-            return Err(SerializationError::InvalidData);
-        }
-        if self.prepared_beta_h.len() != self.num_vars {
-            return Err(SerializationError::InvalidData);
-        }
+
         Ok(())
     }
 }
@@ -278,16 +278,16 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, validate)?;
-        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let max_degree = usize::deserialize_with_mode(&mut reader, compress, validate)?;
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = Vec::<E::G2Affine>::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let num_vars = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
 
         let prepared_beta_h = beta_h.iter().map(|x| x.clone().into()).collect();
-        Ok(Self {
+        let result = Self {
             g,
             gamma_g,
             h,
@@ -297,7 +297,11 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
             num_vars,
             supported_degree,
             max_degree,
-        })
+        };
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+        Ok(result)
     }
 }
 
