@@ -60,7 +60,7 @@ macro_rules! eprintln {
     () => {};
     ($($arg: tt)*) => {};
 }
-#[cfg(not(feature = "std"))]
+#[cfg(all(test, not(feature = "std")))]
 macro_rules! println {
     () => {};
     ($($arg: tt)*) => {};

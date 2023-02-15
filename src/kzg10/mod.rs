@@ -12,7 +12,6 @@ use ark_ec::{scalar_mul::fixed_base::FixedBase, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
-use std::ops::AddAssign;
 
 use ark_std::rand::RngCore;
 #[cfg(feature = "parallel")]
@@ -180,7 +179,7 @@ where
         .into_affine();
         end_timer!(msm_time);
 
-        commitment.add_assign(&random_commitment);
+        commitment += &random_commitment;
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
@@ -333,7 +332,7 @@ where
         for (((c, z), v), proof) in commitments.iter().zip(points).zip(values).zip(proofs) {
             let w = proof.w;
             let mut temp = w.mul(*z);
-            temp.add_assign(&c.0);
+            temp += &c.0;
             let c = temp;
             g_multiplier += &(randomizer * v);
             if let Some(random_v) = proof.random_v {

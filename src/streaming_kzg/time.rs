@@ -5,12 +5,7 @@ use ark_ec::scalar_mul::fixed_base::FixedBase;
 use ark_ec::CurveGroup;
 use ark_ff::{PrimeField, Zero};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-use ark_std::borrow::Borrow;
-use ark_std::ops::Div;
-use ark_std::rand::RngCore;
-use ark_std::vec::Vec;
-use ark_std::UniformRand;
-use std::ops::Mul;
+use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, vec::Vec, UniformRand};
 
 use crate::streaming_kzg::{
     linear_combination, msm, powers, Commitment, EvaluationProof, VerifierKey,

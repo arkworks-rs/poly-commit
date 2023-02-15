@@ -13,7 +13,6 @@ use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Index, ops::Mul, vec};
-use std::ops::AddAssign;
 
 mod data_structures;
 pub use data_structures::*;
@@ -422,7 +421,7 @@ where
             end_timer!(msm_time);
 
             // Mask commitment with random poly
-            commitment.add_assign(&random_commitment);
+            commitment += &random_commitment;
 
             let comm = Self::Commitment {
                 comm: kzg10::Commitment(commitment.into()),
@@ -622,7 +621,7 @@ where
                 .enumerate()
                 .map(|(j, w_j)| w_j.mul(z[j]))
                 .sum();
-            temp.add_assign(&c.0);
+            temp += &c.0;
             let c = temp;
             g_multiplier += &(randomizer * &v);
             if let Some(random_v) = proof.random_v {
@@ -725,6 +724,7 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         DenseMVPolynomial,
     };
+    use ark_std::vec::Vec;
     use rand_chacha::ChaCha20Rng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::ScalarField, SparseTerm>;

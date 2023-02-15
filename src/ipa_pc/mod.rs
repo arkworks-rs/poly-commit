@@ -1078,13 +1078,13 @@ mod tests {
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
-    use blake2::Blake2s;
+    use blake2::Blake2s256;
     use rand_chacha::ChaCha20Rng;
 
     type UniPoly = DensePoly<Fr>;
     type Sponge = PoseidonSponge<<EdwardsAffine as AffineRepr>::ScalarField>;
     type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
-    type PC_JJB2S = PC<EdwardsAffine, Blake2s, UniPoly, Sponge>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s256, UniPoly, Sponge>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,

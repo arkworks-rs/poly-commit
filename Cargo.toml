@@ -1,9 +1,6 @@
 [package]
 name = "ark-poly-commit"
 version = "0.4.0"
-authors = [
-    "arkworks contributors"
-]
 description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
 repository = "https://github.com/arkworks-rs/poly-commit"
 documentation = "https://docs.rs/ark-poly-commit/"
@@ -18,22 +15,22 @@ ark-serialize = { version = "^0.4.0", default-features = false, features = [ "de
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
 ark-poly = {version = "^0.4.0", default-features = false }
-ark-crypto-primitives = {version = "^0.4.0", features = ["sponge"] }
-
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge"] }
 ark-std = { version = "^0.4.0", default-features = false }
+
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-hashbrown = { version = "0.9", optional = true }
+hashbrown = { version = "0.13", default-features = false, optional = true }
 
-digest = "0.9"
-rayon = { version = "1", optional = true }
+digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
-blake2 = { version = "0.9", default-features = false }
+blake2 = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
 
 [profile.release]
@@ -47,8 +44,6 @@ opt-level = 3
 debug-assertions = true
 incremental = true
 debug = true
-
-# To be removed in the new release.
 
 [features]
 default = [ "std", "parallel" ]
