@@ -7,7 +7,7 @@
 #![deny(missing_docs)]
 #![deny(unused_imports)]
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
-#![deny(unused_comparisons, bare_trait_objects, unused_must_use, const_err)]
+#![deny(unused_comparisons, bare_trait_objects, unused_must_use)]
 #![forbid(unsafe_code)]
 
 #[allow(unused)]
@@ -25,7 +25,6 @@ use ark_std::{
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
-    rc::Rc,
     string::{String, ToString},
     vec::Vec,
 };
@@ -61,7 +60,7 @@ macro_rules! eprintln {
     () => {};
     ($($arg: tt)*) => {};
 }
-#[cfg(not(feature = "std"))]
+#[cfg(all(test, not(feature = "std")))]
 macro_rules! println {
     () => {};
     ($($arg: tt)*) => {};
@@ -109,7 +108,7 @@ pub mod challenge;
 pub mod multilinear_pc;
 
 use crate::challenge::ChallengeGenerator;
-use ark_sponge::{CryptographicSponge, FieldElementSize};
+use ark_crypto_primitives::sponge::{CryptographicSponge, FieldElementSize};
 /// Multivariate polynomial commitment based on the construction in
 /// [[PST13]][pst] with batching and (optional) hiding property inspired
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
@@ -163,7 +162,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
-    type Proof: PCProof + Clone;
+    type Proof: Clone;
     /// The evaluation proof for a query set.
     type BatchProof: Clone
         + From<Vec<Self::Proof>>
@@ -534,8 +533,8 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 #[cfg(test)]
 pub mod tests {
     use crate::*;
+    use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_poly::Polynomial;
-    use ark_sponge::poseidon::{PoseidonConfig, PoseidonSponge};
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,

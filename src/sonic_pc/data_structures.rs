@@ -2,8 +2,11 @@ use crate::kzg10;
 use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
-use ark_ec::{PairingEngine, ProjectiveCurve};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
+use ark_ec::pairing::Pairing;
+use ark_ec::Group;
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
+};
 use ark_std::io::{Read, Write};
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
@@ -18,11 +21,11 @@ pub type Commitment<E> = kzg10::Commitment<E>;
 /// `PreparedCommitment` is the prepared commitment for the KZG10 scheme.
 pub type PreparedCommitment<E> = kzg10::PreparedCommitment<E>;
 
-impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();
-        let mut cur = E::G1Projective::from(comm.0.clone());
+        let mut cur = E::G1::from(comm.0.clone());
         for _ in 0..128 {
             prepared_comm.push(cur.clone().into());
             cur.double_in_place();
@@ -41,7 +44,7 @@ impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitmen
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E: Pairing> {
     /// The key used to commit to polynomials.
     pub powers_of_g: Vec<E::G1Affine>,
 
@@ -65,7 +68,7 @@ pub struct CommitterKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> CommitterKey<E> {
+impl<E: Pairing> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
     pub fn powers(&self) -> kzg10::Powers<E> {
         kzg10::Powers {
@@ -111,7 +114,7 @@ impl<E: PairingEngine> CommitterKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
+impl<E: Pairing> PCCommitterKey for CommitterKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -124,7 +127,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of G1.
     pub g: E::G1Affine,
 
@@ -156,7 +159,7 @@ pub struct VerifierKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> VerifierKey<E> {
+impl<E: Pairing> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, degree_bound: usize) -> Option<E::G2Prepared> {
         self.degree_bounds_and_neg_powers_of_h
@@ -169,142 +172,93 @@ impl<E: PairingEngine> VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> CanonicalSerialize for VerifierKey<E> {
-    fn serialize<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize(&mut writer)?;
-        self.gamma_g.serialize(&mut writer)?;
-        self.h.serialize(&mut writer)?;
-        self.beta_h.serialize(&mut writer)?;
-        self.degree_bounds_and_neg_powers_of_h
-            .serialize(&mut writer)?;
-        self.supported_degree.serialize(&mut writer)?;
-        self.max_degree.serialize(&mut writer)
-    }
-
-    fn serialized_size(&self) -> usize {
-        self.g.serialized_size()
-            + self.gamma_g.serialized_size()
-            + self.h.serialized_size()
-            + self.beta_h.serialized_size()
-            + self.degree_bounds_and_neg_powers_of_h.serialized_size()
-            + self.supported_degree.serialized_size()
-            + self.max_degree.serialized_size()
-    }
-
-    fn serialize_uncompressed<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_uncompressed(&mut writer)?;
-        self.gamma_g.serialize_uncompressed(&mut writer)?;
-        self.h.serialize_uncompressed(&mut writer)?;
-        self.beta_h.serialize_uncompressed(&mut writer)?;
-        self.degree_bounds_and_neg_powers_of_h
-            .serialize_uncompressed(&mut writer)?;
-        self.supported_degree.serialize_uncompressed(&mut writer)?;
-        self.max_degree.serialize_uncompressed(&mut writer)
-    }
-
-    fn serialize_unchecked<W: Write>(&self, mut writer: W) -> Result<(), SerializationError> {
-        self.g.serialize_unchecked(&mut writer)?;
-        self.gamma_g.serialize_unchecked(&mut writer)?;
-        self.h.serialize_unchecked(&mut writer)?;
-        self.beta_h.serialize_unchecked(&mut writer)?;
-        self.degree_bounds_and_neg_powers_of_h
-            .serialize_unchecked(&mut writer)?;
-        self.supported_degree.serialize_unchecked(&mut writer)?;
-        self.max_degree.serialize_unchecked(&mut writer)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.g.uncompressed_size()
-            + self.gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.degree_bounds_and_neg_powers_of_h.uncompressed_size()
-            + self.supported_degree.uncompressed_size()
-            + self.max_degree.uncompressed_size()
+impl<E: Pairing> Valid for VerifierKey<E> {
+    fn check(&self) -> Result<(), SerializationError> {
+        self.g.check()?;
+        self.gamma_g.check()?;
+        self.h.check()?;
+        self.beta_h.check()?;
+        self.degree_bounds_and_neg_powers_of_h.check()?;
+        if self.supported_degree > self.max_degree {
+            return Err(SerializationError::InvalidData);
+        }
+        Ok(())
     }
 }
 
-impl<E: PairingEngine> CanonicalDeserialize for VerifierKey<E> {
-    fn deserialize<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize(&mut reader)?;
-        let h = E::G2Affine::deserialize(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize(&mut reader)?;
-        let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize(&mut reader)?;
-        let supported_degree = usize::deserialize(&mut reader)?;
-        let max_degree = usize::deserialize(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-            degree_bounds_and_neg_powers_of_h,
-            supported_degree,
-            max_degree,
-        })
+impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: Compress,
+    ) -> Result<(), SerializationError> {
+        self.g.serialize_with_mode(&mut writer, compress)?;
+        self.gamma_g.serialize_with_mode(&mut writer, compress)?;
+        self.h.serialize_with_mode(&mut writer, compress)?;
+        self.beta_h.serialize_with_mode(&mut writer, compress)?;
+        self.degree_bounds_and_neg_powers_of_h
+            .serialize_with_mode(&mut writer, compress)?;
+        self.supported_degree
+            .serialize_with_mode(&mut writer, compress)?;
+        self.max_degree.serialize_with_mode(&mut writer, compress)
     }
 
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_uncompressed(&mut reader)?;
-        let h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_uncompressed(&mut reader)?;
-        let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize_uncompressed(&mut reader)?;
-        let supported_degree = usize::deserialize_uncompressed(&mut reader)?;
-        let max_degree = usize::deserialize_uncompressed(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-            degree_bounds_and_neg_powers_of_h,
-            supported_degree,
-            max_degree,
-        })
-    }
-
-    fn deserialize_unchecked<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        let g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let gamma_g = E::G1Affine::deserialize_unchecked(&mut reader)?;
-        let h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let beta_h = E::G2Affine::deserialize_unchecked(&mut reader)?;
-        let degree_bounds_and_neg_powers_of_h =
-            Option::<Vec<(usize, E::G2Affine)>>::deserialize_unchecked(&mut reader)?;
-        let supported_degree = usize::deserialize_unchecked(&mut reader)?;
-        let max_degree = usize::deserialize_unchecked(&mut reader)?;
-
-        let prepared_h = E::G2Prepared::from(h.clone());
-        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
-
-        Ok(Self {
-            g,
-            gamma_g,
-            h,
-            beta_h,
-            prepared_h,
-            prepared_beta_h,
-            degree_bounds_and_neg_powers_of_h,
-            supported_degree,
-            max_degree,
-        })
+    fn serialized_size(&self, compress: Compress) -> usize {
+        self.g.serialized_size(compress)
+            + self.gamma_g.serialized_size(compress)
+            + self.h.serialized_size(compress)
+            + self.beta_h.serialized_size(compress)
+            + self
+                .degree_bounds_and_neg_powers_of_h
+                .serialized_size(compress)
+            + self.supported_degree.serialized_size(compress)
+            + self.max_degree.serialized_size(compress)
     }
 }
 
-impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
+impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: Compress,
+        validate: Validate,
+    ) -> Result<Self, SerializationError> {
+        let g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let gamma_g = E::G1Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let beta_h = E::G2Affine::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let degree_bounds_and_neg_powers_of_h =
+            Option::<Vec<(usize, E::G2Affine)>>::deserialize_with_mode(
+                &mut reader,
+                compress,
+                Validate::No,
+            )?;
+        let supported_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+        let max_degree = usize::deserialize_with_mode(&mut reader, compress, Validate::No)?;
+
+        let prepared_h = E::G2Prepared::from(h.clone());
+        let prepared_beta_h = E::G2Prepared::from(beta_h.clone());
+
+        let result = Self {
+            g,
+            gamma_g,
+            h,
+            beta_h,
+            prepared_h,
+            prepared_beta_h,
+            degree_bounds_and_neg_powers_of_h,
+            supported_degree,
+            max_degree,
+        };
+
+        if let Validate::Yes = validate {
+            result.check()?;
+        }
+
+        Ok(result)
+    }
+}
+
+impl<E: Pairing> PCVerifierKey for VerifierKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -317,7 +271,7 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
 /// Nothing to do to prepare this verifier key (for now).
 pub type PreparedVerifierKey<E> = VerifierKey<E>;
 
-impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
+impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     fn prepare(vk: &VerifierKey<E>) -> Self {
         vk.clone()
@@ -334,4 +288,4 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct BatchProof<E: PairingEngine>(pub(crate) Vec<kzg10::Proof<E>>);
+pub struct BatchProof<E: Pairing>(pub(crate) Vec<kzg10::Proof<E>>);

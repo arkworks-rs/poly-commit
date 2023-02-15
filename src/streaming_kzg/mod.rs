@@ -86,8 +86,8 @@ mod data_structures;
 mod space;
 mod time;
 
-use ark_ec::ProjectiveCurve;
-use ark_serialize::CanonicalSerialize;
+use ark_ec::CurveGroup;
+use ark_serialize::{CanonicalSerialize, Compress};
 use ark_std::vec::Vec;
 pub use data_structures::*;
 pub use space::CommitterKeyStream;
@@ -103,40 +103,39 @@ use ark_std::ops::{Add, Mul};
 use ark_std::borrow::Borrow;
 use ark_std::fmt;
 
-use ark_ec::{msm::VariableBaseMSM, AffineCurve, PairingEngine};
+use ark_ec::{pairing::Pairing, AffineRepr, VariableBaseMSM};
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Commitment<E: PairingEngine>(pub(crate) E::G1Affine);
+pub struct Commitment<E: Pairing>(pub(crate) E::G1Affine);
 
-impl<E: PairingEngine> Commitment<E> {
+impl<E: Pairing> Commitment<E> {
     /// Return the size of Commitment in bytes.
     pub fn size_in_bytes(&self) -> usize {
-        // ark_ff::to_bytes![E::G1Affine::zero()].unwrap().len() / 2
-        E::G1Affine::zero().serialized_size() / 2
+        E::G1Affine::zero().serialized_size(Compress::Yes)
     }
 }
 
 #[inline]
-fn msm<E: PairingEngine>(bases: &[E::G1Affine], scalars: &[E::Fr]) -> E::G1Affine {
+fn msm<E: Pairing>(bases: &[E::G1Affine], scalars: &[E::ScalarField]) -> E::G1Affine {
     let scalars = scalars.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
-    let sp = <E::G1Projective as VariableBaseMSM>::msm_bigint(bases, &scalars);
+    let sp = <E::G1 as VariableBaseMSM>::msm_bigint(bases, &scalars);
     sp.into_affine()
 }
 
 /// Polynomial evaluation proof, represented as a single \\(\GG_1\\) element.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EvaluationProof<E: PairingEngine>(pub E::G1Affine);
+pub struct EvaluationProof<E: Pairing>(pub E::G1Affine);
 
-impl<E: PairingEngine> Add for EvaluationProof<E> {
+impl<E: Pairing> Add for EvaluationProof<E> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        EvaluationProof(self.0 + rhs.0)
+        EvaluationProof((self.0 + rhs.0).into_affine())
     }
 }
 
-impl<E: PairingEngine> core::iter::Sum for EvaluationProof<E> {
+impl<E: Pairing> core::iter::Sum for EvaluationProof<E> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let zero = EvaluationProof(E::G1Affine::zero());
         iter.fold(zero, |x, y| x + y)
@@ -159,27 +158,27 @@ pub(crate) type VerificationResult = Result<(), VerificationError>;
 /// The verification key for the polynomial commitment scheme.
 /// It also implements verification functions for the evaluation proof.
 #[derive(Debug, PartialEq, Eq)]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The generator of  \\(\GG_1\\)
     powers_of_g: Vec<E::G1Affine>,
     /// The generator og \\(\GG_2\\), together with its multiplication by the trapdoor.
     powers_of_g2: Vec<E::G2Affine>,
 }
 
-impl<E: PairingEngine> VerifierKey<E> {
+impl<E: Pairing> VerifierKey<E> {
     /// The verification procedure for the EvaluationProof with a single polynomial evaluated at a single evaluation point.
     /// The polynomial are evaluated at the point ``alpha`` and is committed as ``commitment``.
     /// The evaluation proof can be obtained either in a space-efficient or a time-efficient flavour.
     pub fn verify(
         &self,
         commitment: &Commitment<E>,
-        &alpha: &E::Fr,
-        evaluation: &E::Fr,
+        &alpha: &E::ScalarField,
+        evaluation: &E::ScalarField,
         proof: &EvaluationProof<E>,
     ) -> VerificationResult {
-        let scalars = [(-alpha).into_bigint(), E::Fr::one().into_bigint()];
-        let ep = <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
-        let lhs = commitment.0.into_projective() - self.powers_of_g[0].mul(evaluation);
+        let scalars = [(-alpha).into_bigint(), E::ScalarField::one().into_bigint()];
+        let ep = <E::G2 as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &scalars);
+        let lhs = commitment.0.into_group() - self.powers_of_g[0].mul(evaluation);
         let g2 = self.powers_of_g2[0];
 
         if E::pairing(lhs, g2) == E::pairing(proof.0, ep) {
@@ -198,21 +197,20 @@ impl<E: PairingEngine> VerifierKey<E> {
     pub fn verify_multi_points(
         &self,
         commitments: &[Commitment<E>],
-        eval_points: &[E::Fr],
-        evaluations: &[Vec<E::Fr>],
+        eval_points: &[E::ScalarField],
+        evaluations: &[Vec<E::ScalarField>],
         proof: &EvaluationProof<E>,
-        open_chal: &E::Fr,
+        open_chal: &E::ScalarField,
     ) -> VerificationResult {
         // Computing the vanishing polynomial over eval_points
         let zeros = vanishing_polynomial(eval_points);
         let zeros_repr = zeros.iter().map(|x| x.into_bigint()).collect::<Vec<_>>();
-        let zeros =
-            <E::G2Projective as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &zeros_repr);
+        let zeros = <E::G2 as VariableBaseMSM>::msm_bigint(&self.powers_of_g2, &zeros_repr);
 
         // Computing the inverse for the interpolation
         let mut sca_inverse = Vec::new();
         for (j, x_j) in eval_points.iter().enumerate() {
-            let mut sca = E::Fr::one();
+            let mut sca = E::ScalarField::one();
             for (k, x_k) in eval_points.iter().enumerate() {
                 if j == k {
                     continue;
@@ -226,12 +224,13 @@ impl<E: PairingEngine> VerifierKey<E> {
         // Computing the lagrange polynomial for the interpolation
         let mut lang = Vec::new();
         for (j, _x_j) in eval_points.iter().enumerate() {
-            let mut l_poly = DensePolynomial::from_coefficients_vec(vec![E::Fr::one()]);
+            let mut l_poly = DensePolynomial::from_coefficients_vec(vec![E::ScalarField::one()]);
             for (k, x_k) in eval_points.iter().enumerate() {
                 if j == k {
                     continue;
                 }
-                let tmp_poly = DensePolynomial::from_coefficients_vec(vec![-(*x_k), E::Fr::one()]);
+                let tmp_poly =
+                    DensePolynomial::from_coefficients_vec(vec![-(*x_k), E::ScalarField::one()]);
                 l_poly = l_poly.mul(&tmp_poly);
             }
             lang.push(l_poly);
@@ -250,11 +249,11 @@ impl<E: PairingEngine> VerifierKey<E> {
         // Gathering commitments
         let comm_vec = commitments.iter().map(|x| x.0).collect::<Vec<_>>();
         let etas_repr = etas.iter().map(|e| e.into_bigint()).collect::<Vec<_>>();
-        let f_comm = <E::G1Projective as VariableBaseMSM>::msm_bigint(&comm_vec, &etas_repr);
+        let f_comm = <E::G1 as VariableBaseMSM>::msm_bigint(&comm_vec, &etas_repr);
 
         let g2 = self.powers_of_g2[0];
 
-        if E::pairing(f_comm - i_comm.into_projective(), g2) == E::pairing(proof.0, zeros) {
+        if E::pairing(f_comm - i_comm.into_group(), g2) == E::pairing(proof.0, zeros) {
             Ok(())
         } else {
             Err(VerificationError)
@@ -262,13 +261,13 @@ impl<E: PairingEngine> VerifierKey<E> {
     }
 }
 
-fn interpolate_poly<E: PairingEngine>(
-    eval_points: &[E::Fr],
-    evals: &[E::Fr],
-    sca_inverse: &[E::Fr],
-    lang: &[DensePolynomial<E::Fr>],
-) -> DensePolynomial<E::Fr> {
-    let mut res = DensePolynomial::from_coefficients_vec(vec![E::Fr::zero()]);
+fn interpolate_poly<E: Pairing>(
+    eval_points: &[E::ScalarField],
+    evals: &[E::ScalarField],
+    sca_inverse: &[E::ScalarField],
+    lang: &[DensePolynomial<E::ScalarField>],
+) -> DensePolynomial<E::ScalarField> {
+    let mut res = DensePolynomial::from_coefficients_vec(vec![E::ScalarField::zero()]);
     for (j, (_x_j, y_j)) in eval_points.iter().zip(evals.iter()).enumerate() {
         let l_poly = lang[j].mul(sca_inverse[j] * y_j);
         res = (&res).add(&l_poly);
