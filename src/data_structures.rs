@@ -140,9 +140,13 @@ impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<F, P> {
         &self.label
     }
 
-    /// Retrieve the polynomial from `self`
+    /// Retrieve an immutable reference to the polynomial contained in `self`.
     pub fn polynomial(&self) -> &P {
         &self.polynomial
+    }
+    /// Retrieve a mutable reference to the polynomial contained in `self`
+    pub fn polynomial_mut(&mut self) -> &mut P {
+        &mut self.polynomial
     }
 
     /// Evaluate the polynomial in `self`.
