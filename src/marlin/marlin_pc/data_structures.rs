@@ -2,10 +2,10 @@ use crate::{
     DenseUVPolynomial, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey,
     PCRandomness, PCVerifierKey, Vec,
 };
-use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ec::pairing::Pairing;
+use ark_ec::Group;
 use ark_ff::{Field, PrimeField, ToConstraintField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
-use ark_std::io::{Read, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::ops::{Add, AddAssign};
 use ark_std::rand::RngCore;
 
@@ -22,7 +22,7 @@ pub type UniversalParams<E> = kzg10::UniversalParams<E>;
     Clone(bound = ""),
     Debug(bound = "")
 )]
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E: Pairing> {
     /// The key used to commit to polynomials.
     pub powers: Vec<E::G1Affine>,
 
@@ -42,7 +42,7 @@ pub struct CommitterKey<E: PairingEngine> {
     pub max_degree: usize,
 }
 
-impl<E: PairingEngine> CommitterKey<E> {
+impl<E: Pairing> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
     pub fn powers<'a>(&'a self) -> kzg10::Powers<'a, E> {
         kzg10::Powers {
@@ -82,7 +82,7 @@ impl<E: PairingEngine> CommitterKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
+impl<E: Pairing> PCCommitterKey for CommitterKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -95,7 +95,7 @@ impl<E: PairingEngine> PCCommitterKey for CommitterKey<E> {
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// The verification key for the underlying KZG10 scheme.
     pub vk: kzg10::VerifierKey<E>,
     /// Information required to enforce degree bounds. Each pair
@@ -111,7 +111,7 @@ pub struct VerifierKey<E: PairingEngine> {
     pub supported_degree: usize,
 }
 
-impl<E: PairingEngine> VerifierKey<E> {
+impl<E: Pairing> VerifierKey<E> {
     /// Find the appropriate shift for the degree bound.
     pub fn get_shift_power(&self, bound: usize) -> Option<E::G1Affine> {
         self.degree_bounds_and_shift_powers.as_ref().and_then(|v| {
@@ -122,7 +122,7 @@ impl<E: PairingEngine> VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
+impl<E: Pairing> PCVerifierKey for VerifierKey<E> {
     fn max_degree(&self) -> usize {
         self.max_degree
     }
@@ -132,18 +132,18 @@ impl<E: PairingEngine> PCVerifierKey for VerifierKey<E> {
     }
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for VerifierKey<E>
+impl<E: Pairing> ToConstraintField<<E::TargetField as Field>::BasePrimeField> for VerifierKey<E>
 where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
-    E::G2Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField>,
+    E::G2Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<E::TargetField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
         res.extend_from_slice(&self.vk.to_field_elements().unwrap());
 
         if let Some(degree_bounds_and_shift_powers) = &self.degree_bounds_and_shift_powers {
             for (d, shift_power) in degree_bounds_and_shift_powers.iter() {
-                let d_elem: <E::Fq as Field>::BasePrimeField = (*d as u64).into();
+                let d_elem: <E::TargetField as Field>::BasePrimeField = (*d as u64).into();
 
                 res.push(d_elem);
                 res.extend_from_slice(&shift_power.to_field_elements().unwrap());
@@ -157,7 +157,7 @@ where
 /// `PreparedVerifierKey` is used to check evaluation proofs for a given commitment.
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
-pub struct PreparedVerifierKey<E: PairingEngine> {
+pub struct PreparedVerifierKey<E: Pairing> {
     /// The verification key for the underlying KZG10 scheme.
     pub prepared_vk: kzg10::PreparedVerifierKey<E>,
     /// Information required to enforce degree bounds. Each pair
@@ -172,12 +172,12 @@ pub struct PreparedVerifierKey<E: PairingEngine> {
     pub supported_degree: usize,
 }
 
-impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
+impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E> {
     /// prepare `PreparedVerifierKey` from `VerifierKey`
     fn prepare(vk: &VerifierKey<E>) -> Self {
         let prepared_vk = kzg10::PreparedVerifierKey::<E>::prepare(&vk.vk);
 
-        let supported_bits = E::Fr::MODULUS_BIT_SIZE as usize;
+        let supported_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let prepared_degree_bounds_and_shift_powers: Option<Vec<(usize, Vec<E::G1Affine>)>> =
             if vk.degree_bounds_and_shift_powers.is_some() {
@@ -189,7 +189,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
                 for (d, shift_power) in degree_bounds_and_shift_powers {
                     let mut prepared_shift_power = Vec::<E::G1Affine>::new();
 
-                    let mut cur = E::G1Projective::from(shift_power.clone());
+                    let mut cur = E::G1::from(shift_power.clone());
                     for _ in 0..supported_bits {
                         prepared_shift_power.push(cur.clone().into());
                         cur.double_in_place();
@@ -223,7 +223,7 @@ impl<E: PairingEngine> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifie
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Commitment<E: PairingEngine> {
+pub struct Commitment<E: Pairing> {
     /// A KZG10 commitment to the polynomial.
     pub comm: kzg10::Commitment<E>,
 
@@ -233,11 +233,11 @@ pub struct Commitment<E: PairingEngine> {
     pub shifted_comm: Option<kzg10::Commitment<E>>,
 }
 
-impl<E: PairingEngine> ToConstraintField<<E::Fq as Field>::BasePrimeField> for Commitment<E>
+impl<E: Pairing> ToConstraintField<<E::TargetField as Field>::BasePrimeField> for Commitment<E>
 where
-    E::G1Affine: ToConstraintField<<E::Fq as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField>,
 {
-    fn to_field_elements(&self) -> Option<Vec<<E::Fq as Field>::BasePrimeField>> {
+    fn to_field_elements(&self) -> Option<Vec<<E::TargetField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
         res.extend_from_slice(&self.comm.to_field_elements().unwrap());
 
@@ -249,7 +249,7 @@ where
     }
 }
 
-impl<E: PairingEngine> PCCommitment for Commitment<E> {
+impl<E: Pairing> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
         Self {
@@ -272,12 +272,12 @@ impl<E: PairingEngine> PCCommitment for Commitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct PreparedCommitment<E: PairingEngine> {
+pub struct PreparedCommitment<E: Pairing> {
     pub(crate) prepared_comm: kzg10::PreparedCommitment<E>,
     pub(crate) shifted_comm: Option<kzg10::Commitment<E>>,
 }
 
-impl<E: PairingEngine> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
     /// Prepare commitment to a polynomial that optionally enforces a degree bound.
     fn prepare(comm: &Commitment<E>) -> Self {
         let prepared_comm = kzg10::PreparedCommitment::<E>::prepare(&comm.comm);

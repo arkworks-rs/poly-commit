@@ -1,16 +1,16 @@
-use ark_ec::PairingEngine;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
+use ark_ec::pairing::Pairing;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::vec::Vec;
 #[allow(type_alias_bounds)]
 /// Evaluations over {0,1}^n for G1
-pub type EvaluationHyperCubeOnG1<E: PairingEngine> = Vec<E::G1Affine>;
+pub type EvaluationHyperCubeOnG1<E: Pairing> = Vec<E::G1Affine>;
 #[allow(type_alias_bounds)]
 /// Evaluations over {0,1}^n for G2
-pub type EvaluationHyperCubeOnG2<E: PairingEngine> = Vec<E::G2Affine>;
+pub type EvaluationHyperCubeOnG2<E: Pairing> = Vec<E::G2Affine>;
 
 /// Public Parameter used by prover
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
-pub struct UniversalParams<E: PairingEngine> {
+pub struct UniversalParams<E: Pairing> {
     /// number of variables
     pub num_vars: usize,
     /// `pp_{num_vars}`, `pp_{num_vars - 1}`, `pp_{num_vars - 2}`, ..., defined by XZZPD19
@@ -27,7 +27,7 @@ pub struct UniversalParams<E: PairingEngine> {
 
 /// Public Parameter used by prover
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
-pub struct CommitterKey<E: PairingEngine> {
+pub struct CommitterKey<E: Pairing> {
     /// number of variables
     pub nv: usize,
     /// pp_k defined by libra
@@ -42,7 +42,7 @@ pub struct CommitterKey<E: PairingEngine> {
 
 /// Public Parameter used by prover
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
-pub struct VerifierKey<E: PairingEngine> {
+pub struct VerifierKey<E: Pairing> {
     /// number of variables
     pub nv: usize,
     /// generator of G1
@@ -55,7 +55,7 @@ pub struct VerifierKey<E: PairingEngine> {
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 /// commitment
-pub struct Commitment<E: PairingEngine> {
+pub struct Commitment<E: Pairing> {
     /// number of variables
     pub nv: usize,
     /// product of g as described by the vRAM paper
@@ -64,7 +64,7 @@ pub struct Commitment<E: PairingEngine> {
 
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 /// proof of opening
-pub struct Proof<E: PairingEngine> {
+pub struct Proof<E: Pairing> {
     /// Evaluation of quotients
     pub proofs: Vec<E::G2Affine>,
 }
