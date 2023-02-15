@@ -165,10 +165,8 @@ impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
         compress: Compress,
         validate: Validate,
     ) -> Result<Self, SerializationError> {
-        let powers_of_g =
-            Vec::deserialize_with_mode(&mut reader, compress, validate)?;
-        let powers_of_gamma_g =
-            Vec::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_g = Vec::deserialize_with_mode(&mut reader, compress, validate)?;
+        let powers_of_gamma_g = Vec::deserialize_with_mode(&mut reader, compress, validate)?;
         let result = Self {
             powers_of_g: Cow::Owned(powers_of_g),
             powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
