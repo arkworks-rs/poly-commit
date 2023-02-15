@@ -79,22 +79,6 @@ impl<E: Pairing> CanonicalSerialize for UniversalParams<E> {
             + self.beta_h.serialized_size(compress)
             + self.neg_powers_of_h.serialized_size(compress)
     }
-
-    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        Self::serialize_with_mode(&self, writer, Compress::No)
-    }
-
-    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        Self::serialize_with_mode(&self, writer, Compress::Yes)
-    }
-
-    fn uncompressed_size(&self) -> usize {
-        self.powers_of_g.uncompressed_size()
-            + self.powers_of_gamma_g.uncompressed_size()
-            + self.h.uncompressed_size()
-            + self.beta_h.uncompressed_size()
-            + self.neg_powers_of_h.uncompressed_size()
-    }
 }
 
 impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
@@ -124,23 +108,6 @@ impl<E: Pairing> CanonicalDeserialize for UniversalParams<E> {
             prepared_h,
             prepared_beta_h,
         })
-    }
-
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_compressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_compressed_unchecked<R: Read>(
-        mut reader: R,
-    ) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::No)
-    }
-    fn deserialize_uncompressed_unchecked<R: Read>(
-        mut reader: R,
-    ) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::No)
     }
 }
 
@@ -191,19 +158,6 @@ impl<'a, E: Pairing> CanonicalSerialize for Powers<'a, E> {
         self.powers_of_g.serialized_size(compress)
             + self.powers_of_gamma_g.serialized_size(compress)
     }
-
-    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::Yes)
-    }
-    fn compressed_size(&self) -> usize {
-        self.serialized_size(Compress::Yes)
-    }
-    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::No)
-    }
-    fn uncompressed_size(&self) -> usize {
-        self.serialized_size(Compress::No)
-    }
 }
 
 impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
@@ -220,23 +174,6 @@ impl<'a, E: Pairing> CanonicalDeserialize for Powers<'a, E> {
             powers_of_g: Cow::Owned(powers_of_g),
             powers_of_gamma_g: Cow::Owned(powers_of_gamma_g),
         })
-    }
-
-    fn deserialize_compressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_compressed_unchecked<R: Read>(
-        mut reader: R,
-    ) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::Yes, ark_serialize::Validate::No)
-    }
-    fn deserialize_uncompressed<R: Read>(mut reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_uncompressed_unchecked<R: Read>(
-        mut reader: R,
-    ) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(&mut reader, Compress::No, ark_serialize::Validate::No)
     }
 }
 /// `VerifierKey` is used to check evaluation proofs for a given commitment.
@@ -289,18 +226,6 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
             + self.h.serialized_size(compress)
             + self.beta_h.serialized_size(compress)
     }
-    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::Yes)
-    }
-    fn compressed_size(&self) -> usize {
-        self.serialized_size(Compress::Yes)
-    }
-    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::No)
-    }
-    fn uncompressed_size(&self) -> usize {
-        self.serialized_size(Compress::No)
-    }
 }
 
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
@@ -325,18 +250,6 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
             prepared_h,
             prepared_beta_h,
         })
-    }
-    fn deserialize_compressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::Yes, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_compressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::Yes, ark_serialize::Validate::No)
-    }
-    fn deserialize_uncompressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::No, ark_serialize::Validate::Yes)
-    }
-    fn deserialize_uncompressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::No, ark_serialize::Validate::No)
     }
 }
 

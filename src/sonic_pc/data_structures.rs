@@ -210,19 +210,6 @@ impl<E: Pairing> CanonicalSerialize for VerifierKey<E> {
             + self.supported_degree.serialized_size(compress)
             + self.max_degree.serialized_size(compress)
     }
-
-    fn serialize_compressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::Yes)
-    }
-    fn compressed_size(&self) -> usize {
-        self.serialized_size(Compress::Yes)
-    }
-    fn serialize_uncompressed<W: Write>(&self, writer: W) -> Result<(), SerializationError> {
-        self.serialize_with_mode(writer, Compress::No)
-    }
-    fn uncompressed_size(&self) -> usize {
-        self.serialized_size(Compress::No)
-    }
 }
 
 impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
@@ -258,19 +245,6 @@ impl<E: Pairing> CanonicalDeserialize for VerifierKey<E> {
             supported_degree,
             max_degree,
         })
-    }
-
-    fn deserialize_compressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::Yes, Validate::Yes)
-    }
-    fn deserialize_compressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::Yes, Validate::No)
-    }
-    fn deserialize_uncompressed<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::No, Validate::Yes)
-    }
-    fn deserialize_uncompressed_unchecked<R: Read>(reader: R) -> Result<Self, SerializationError> {
-        Self::deserialize_with_mode(reader, Compress::No, Validate::No)
     }
 }
 
