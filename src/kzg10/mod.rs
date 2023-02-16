@@ -45,9 +45,9 @@ where
     /// use ark_bls12_381::Bls12_381;
     /// use ark_bls12_381::Fr;
     /// use ark_poly::univariate::DensePolynomial;
-    /// use ark_ec::PairingEngine;
+    /// use ark_ec::pairing::Pairing;
     /// use ark_std::test_rng;
-    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as Pairing>::ScalarField>;
     ///
     /// let rng = &mut test_rng();
     /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
@@ -154,10 +154,11 @@ where
     /// use ark_bls12_381::Fr;
     /// use ark_poly::DenseUVPolynomial;
     /// use ark_poly::univariate::DensePolynomial;
-    /// use ark_ec::PairingEngine;
+    /// use ark_ec::pairing::Pairing;
+    /// use ark_ec::AffineRepr;
     /// use ark_std::test_rng;
     /// use ark_std::Zero;
-    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as PairingEngine>::Fr>;
+    /// type UniPoly_381 = DensePolynomial<<Bls12_381 as Pairing>::ScalarField>;
     ///
     /// let rng = &mut test_rng();
     /// let params = KZG10::<Bls12_381, UniPoly_381>::setup(10, false, rng).expect("Setup failed");
