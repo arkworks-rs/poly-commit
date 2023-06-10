@@ -114,7 +114,7 @@ use ark_crypto_primitives::sponge::{CryptographicSponge, FieldElementSize};
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
 ///
 /// [pst]: https://eprint.iacr.org/2011/587.pdf
-/// [marlin]: https://eprint.iacr.org/2019/104
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub use marlin::marlin_pst13_pc;
 
 /// Streaming polynomial commitment based on the construction in

@@ -27,7 +27,7 @@ pub use data_structures::*;
 /// as detailed in [[CHMMVW20]][marlin].
 ///
 /// [kzg]: http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf
-/// [marlin]: https://eprint.iacr.org/2019/104
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct MarlinKZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,

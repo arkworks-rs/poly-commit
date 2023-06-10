@@ -24,7 +24,7 @@ pub mod marlin_pc;
 /// by the univariate scheme in [[CHMMVW20, "Marlin"]][marlin]
 ///
 /// [pst]: https://eprint.iacr.org/2011/587.pdf
-/// [marlin]: https://eprint.iacr.org/2019/104
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub mod marlin_pst13_pc;
 
 /// Common functionalities between `marlin_pc` and `marlin_pst13_pc`
