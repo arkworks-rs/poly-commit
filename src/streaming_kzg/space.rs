@@ -234,9 +234,8 @@ where
             } // XXX. skip the 0th elements automatically
 
             let base = folded_bases[i - 1].next().unwrap();
-            let coefficient = coefficient.borrow();
             let quotient_coefficient = remainders[i - 1].pop_front().unwrap();
-            remainders[i - 1].push_back(*coefficient);
+            remainders[i - 1].push_back(coefficient);
             (0..points.len()).for_each(|j| {
                 remainders[i - 1][j] -= zeros.coeffs[zeros.degree() - j - 1] * quotient_coefficient;
             });
