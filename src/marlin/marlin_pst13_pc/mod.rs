@@ -30,7 +30,7 @@ use rayon::prelude::*;
 /// in [[CHMMVW20, "Marlin"]][marlin]
 ///
 /// [pst]: https://eprint.iacr.org/2011/587
-/// [marlin]: https://eprint.iacr.org/2019/104
+/// [marlin]: https://eprint.iacr.org/2019/1047
 pub struct MarlinPST13<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge> {
     _engine: PhantomData<E>,
     _poly: PhantomData<P>,
