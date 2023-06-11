@@ -45,9 +45,12 @@ Lastly, this library is instrumented with profiling infrastructure that prints d
 
 ### [`PolynomialCommitment`](https://github.com/arkworks-rs/poly-commit/blob/master/src/lib.rs#L145)
 
+This trait defines the interface for a polynomial commitment scheme. It is recommended to use the schemes from this crate that implement the `PolynomialCommitment` trait
+(e.g. the [vanilla KZG scheme](./src/kzg10/mod.rs) does not implement this trait, but the [Marlin scheme](./src/marlin/mod.rs) which uses it under the hood, does).
+
 ```rust
-// In this example, we will commit to a single polynomial, open it at two points, and finally verify the proof.
-// We will use the KZG10 polynomial commitment scheme from Marlin: src/marlin/marlin_pc/mod.rs
+// In this example, we will commit to a single polynomial, open it first at one point, and then batched at two points, and finally verify the proofs.
+// We will use the KZG10 polynomial commitment scheme, following the approach from Marlin.
 
 use ark_poly_commit::{Polynomial, marlin_pc::MarlinKZG10, LabeledPolynomial, PolynomialCommitment, QuerySet, Evaluations, challenge::ChallengeGenerator};
 use ark_bls12_377::Bls12_377;
@@ -129,7 +132,7 @@ let mut challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarFi
 let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &rands, None).unwrap(); 
 
 // 5a. PolynomialCommitment::check
-// Verifying the proof at a single point.
+// Verifying the proof at a single point, given the commitment, the point, the claimed evaluation, and the proof.
 assert!(PCS::check(&vk, &comms, &point_1, [secret_poly.evaluate(&point_1)], &proof_single, &mut (challenge_generator.clone()), Some(rng)).unwrap()); 
 
 let mut query_set = QuerySet::new();
