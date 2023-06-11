@@ -86,7 +86,8 @@ let labeled_poly = LabeledPolynomial::new(
    Some(2), // we will open a univariate poly at two points
 );
 
-pub(crate) fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
+// TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
+fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
    let full_rounds = 8;
    let partial_rounds = 31;
    let alpha = 17;
@@ -118,16 +119,18 @@ let mut test_sponge = test_sponge::<<Bls12_377 as Pairing>::ScalarField>();
 let (ck, vk) = PCS::trim(&pp, degree, 2, Some(&[degree])).unwrap(); 
 
 // 3. PolynomialCommitment::commit
-// The prover commits to the polynomial.
+// The prover commits to the polynomial using their committer key `ck`.
 let (comms, rands) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
 
 let mut challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarField, Sponge_Bls12_377> = ChallengeGenerator::new_univariate(&mut test_sponge);
 
 // 4a. PolynomialCommitment::open
-let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &rands, None).unwrap(); // opening proof at a single point
+// Opening proof at a single point.
+let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &rands, None).unwrap(); 
 
 // 5a. PolynomialCommitment::check
-assert!(PCS::check(&vk, &comms, &point_1, [secret_poly.evaluate(&point_1)], &proof_single, &mut (challenge_generator.clone()), Some(rng)).unwrap()); // verifying the proof at the point
+// Verifying the proof at a single point.
+assert!(PCS::check(&vk, &comms, &point_1, [secret_poly.evaluate(&point_1)], &proof_single, &mut (challenge_generator.clone()), Some(rng)).unwrap()); 
 
 let mut query_set = QuerySet::new();
 let mut values = Evaluations::new();
@@ -138,6 +141,7 @@ for (i, point) in [point_1, point_2].iter().enumerate() {
 }
 
 // 4b. PolynomialCommitment::batch_open
+// Some schemes support batch opening proofs. Generate a single proof for opening the polynomial at multiple points.
 let proof_batched = PCS::batch_open(
    &ck,
    [&labeled_poly],
