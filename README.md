@@ -125,7 +125,7 @@ let (ck, vk) = PCS::trim(&pp, degree, 2, Some(&[degree])).unwrap();
 // The prover commits to the polynomial using their committer key `ck`.
 let (comms, rands) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
 
-let mut challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarField, Sponge_Bls12_377> = ChallengeGenerator::new_univariate(&mut test_sponge);
+let challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarField, Sponge_Bls12_377> = ChallengeGenerator::new_univariate(&mut test_sponge);
 
 // 4a. PolynomialCommitment::open
 // Opening proof at a single point.
