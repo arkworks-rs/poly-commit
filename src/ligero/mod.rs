@@ -9,6 +9,8 @@ use crate::{
 
 use ark_std::rand::RngCore;
 
+mod utils;
+
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
 pub struct Ligero {}
@@ -146,6 +148,8 @@ impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> PolynomialCommitme
     where
         P: 'a,
     {
+        let f = polynomials.into_iter().next().unwrap();
+
         todo!()
     }
 
