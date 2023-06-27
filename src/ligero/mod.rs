@@ -10,6 +10,7 @@ use crate::{
 use ark_std::rand::RngCore;
 
 mod utils;
+use utils::Matrix;
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
@@ -148,7 +149,17 @@ impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> PolynomialCommitme
     where
         P: 'a,
     {
-        let f = polynomials.into_iter().next().unwrap();
+        let f = polynomials.into_iter().next().unwrap().polynomial();
+
+        let coeffs = f.coefficients(); // TODO f does not have a coefficients method
+    
+        let m = ceil(sqrt(f.degree() + 1));
+
+        // padding the coefficient vector with zeroes
+        // TODO is this the most efficient way to do it?
+        coeffs.resize(m * m, F::zero()); 
+
+        let M = Matrix::new_from_flat(coeffs, m, m);
 
         todo!()
     }
