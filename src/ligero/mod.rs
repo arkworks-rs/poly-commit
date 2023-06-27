@@ -1,6 +1,6 @@
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::PrimeField;
-use ark_poly::Polynomial;
+use ark_poly::DenseUVPolynomial;
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
@@ -95,7 +95,7 @@ impl PCRandomness for LigeroPCRandomness {
 
 type LigeroPCProof = ();
 
-impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> PolynomialCommitment<F, P, S>
+impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge> PolynomialCommitment<F, P, S>
     for Ligero
 {
     type UniversalParams = LigeroPCUniversalParams;
@@ -151,18 +151,19 @@ impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> PolynomialCommitme
     {
         let f = polynomials.into_iter().next().unwrap().polynomial();
 
-        let coeffs = f.coefficients(); // TODO f does not have a coefficients method
-    
-        //let m = ceil(sqrt(f.degree() + 1));
-        //(f.degree() + 1)..sqrt();
+        let mut coeffs = f.coeffs().to_vec();
+
+        // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion 
+        let num_elems = f.degree() + 1;
+        // TODO move this check to the constructor?
+        assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
+        let m = (num_elems as f64).sqrt().ceil() as usize;
 
         // padding the coefficient vector with zeroes
         // TODO is this the most efficient way to do it?
         coeffs.resize(m * m, F::zero()); 
 
-        let M = Matrix::new_from_flat(coeffs, m, m);
-
-
+        let M = Matrix::new_from_flat( m, m, &coeffs);
 
         todo!()
     }

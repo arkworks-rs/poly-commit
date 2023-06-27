@@ -31,7 +31,7 @@ impl<F: PrimeField> Matrix<F> {
     pub(crate) fn new_from_row_list(n: usize, m: usize, row_list: Vec<Vec<F>>) -> Self {
         let mut m = row_list[0].len();
 
-        for row in row_list {
+        for row in row_list.iter() {
             assert_eq!(row.len(), m, "Invalid matrix construction: not all rows have the same length");
             m = row.len()
         }
