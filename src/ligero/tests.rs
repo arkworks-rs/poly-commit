@@ -44,6 +44,19 @@ mod tests {
     }
 
     #[test]
+    fn test_cols() {
+        let rows: Vec<Vec<F>> = vec!(
+            to_field(vec![4, 76]),
+            to_field(vec![14, 92,]),
+            to_field(vec![17, 89]),
+        );
+
+        let mat = Matrix::new_from_rows(rows);
+
+        assert_eq!(mat.cols()[1], to_field(vec![76, 92, 89]));
+    }
+
+    #[test]
     fn test_row_mul() {
         let rows: Vec<Vec<F>> = vec!(
             to_field(vec![10, 100, 4]),

@@ -6,7 +6,7 @@ use ark_poly::DenseUVPolynomial;
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCUniversalParams, PCVerifierKey, PolynomialCommitment, ligero::utils::reed_solomon,
+    PCUniversalParams, PCVerifierKey, PolynomialCommitment, ligero::utils::reed_solomon, LabeledCommitment, LabeledPolynomial,
 };
 
 use ark_std::rand::RngCore;
@@ -104,7 +104,13 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
     }
 }
 
-type LigeroPCCommitment = ();
+struct Commitment {
+    m: usize,   // number of rows of the square matrix containing the coefficients of the polynomial
+    r: (),      // TODO merkle tree root
+    // TODO transcript with the randomly selected colums/their hashes; is this the "randomness?"
+}
+
+type LigeroPCCommitment = Commitment;
 
 impl PCCommitment for LigeroPCCommitment {
     fn empty() -> Self {
@@ -198,12 +204,12 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         P: 'a,
     {
         // TODO loop over all polys
-        let f = polynomials.into_iter().next().unwrap().polynomial();
+        let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
 
-        let mut coeffs = f.coeffs().to_vec();
+        let mut coeffs = polynomial.coeffs().to_vec();
 
         // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion 
-        let num_elems = f.degree() + 1;
+        let num_elems = polynomial.degree() + 1;
         // TODO move this check to the constructor?
         assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
         let m = (num_elems as f64).sqrt().ceil() as usize;
@@ -215,14 +221,28 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
         // TODO rho_inv not part of self?
+        let rho_inv = 2; // self.rho_inv
         // applying Reed-Solomon code row-wise
+
         let ext_mat = Matrix::new_from_rows(
-            mat.rows().iter().map(|r| reed_solomon(r, self.rho_inv)).collect()
+            mat.rows().iter().map(|r| reed_solomon(r, rho_inv)).collect()
         );
 
-        
+        let col_hashes = Vec();
 
-        todo!()
+        for col in ext_mat.cols() {
+            // col_hashes.push(hash of col)
+        }
+
+        // let tree = Merkle tree from col_hashes (the library might take care of padding to a power of 2)
+        // let r = root of the tree
+        //
+
+        let commitment = LigeroPCCommitment::new(root: r);
+
+        Ok(LabeledCommitment::new(label, commitment, degree_bound))
+
+        // TODO when should this return Err?
     }
 
     fn open<'a>(
@@ -257,3 +277,5 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         todo!()
     }
 }
+
+// TODO start considering degree bound

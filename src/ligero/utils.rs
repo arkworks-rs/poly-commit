@@ -53,6 +53,11 @@ impl<F: Field> Matrix<F> {
         return self.entries.clone()
     }
 
+    /// Returns self as a list of columns
+    pub(crate) fn cols(&self) -> Vec<Vec<F>> {
+        (0..self.m).map(|col| (0..self.n).map(|row| self.entries[row][col]).collect()).collect()
+    }
+    
     /// Returns the product v * self, where v is interpreted as a row vector. In other words,
     /// it returns a linear combination of the rows of self with coefficients given by v.
     ///
