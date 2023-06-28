@@ -28,7 +28,7 @@ impl<F: PrimeField> Matrix<F> {
     ///
     /// # Panics
     /// Panics if the sub-lists do not all have the same length.
-    pub(crate) fn new_from_row_list(n: usize, m: usize, row_list: Vec<Vec<F>>) -> Self {
+    pub(crate) fn new_from_rows(row_list: Vec<Vec<F>>) -> Self {
         let m = row_list[0].len();
 
         for row in row_list.iter().skip(1) {
@@ -47,21 +47,26 @@ impl<F: PrimeField> Matrix<F> {
         return self.entries[i][j]
     }
 
-    /// Returns the product x * self, where x is interpreted as a row vector. In other words,
-    /// it returns a linear combination of the rows of self with coefficients given by f.
+    /// Returns the product v * self, where v is interpreted as a row vector. In other words,
+    /// it returns a linear combination of the rows of self with coefficients given by v.
     ///
-    /// Panics if the length of x is different from the number of rows of self.
-    pub(crate) fn row_mul(&self, x: &[F]) -> Vec<F> {
-        assert_eq!(x.len(), self.n, "Invalid row multiplication x has {} elements whereas the matrix has {}", x.len(), self.n);
+    /// Panics if the length of v is different from the number of rows of self.
+    pub(crate) fn row_mul(&self, v: &[F]) -> Vec<F> {
+        assert_eq!(v.len(), self.n, "Invalid row multiplication x has {} elements whereas the matrix has {}", v.len(), self.n);
         
         (0..self.m).map(|col| inner_product(
-            x, &(0..self.n).map(|row| self.entries[row][col]).collect::<Vec<F>>()
+            v, &(0..self.n).map(|row| self.entries[row][col]).collect::<Vec<F>>()
         )).collect()
     }
 
 }
 
 #[inline]
-fn inner_product<F: PrimeField>(v1: &[F], v2: &[F]) -> F {
+pub(crate) fn inner_product<F: PrimeField>(v1: &[F], v2: &[F]) -> F {
     ark_std::cfg_iter!(v1).zip(v2).map(|(li, ri)| *li * ri).sum()
+}
+
+#[inline]
+pub(crate) fn to_field<F: PrimeField>(v: Vec<u64>) -> Vec<F> {
+    v.iter().map(|x| F::from(*x)).collect::<Vec<F>>()
 }

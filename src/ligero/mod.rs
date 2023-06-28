@@ -11,6 +11,7 @@ use ark_std::rand::RngCore;
 
 mod utils;
 use utils::Matrix;
+mod tests;
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
@@ -163,7 +164,7 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge> PolynomialC
         // TODO is this the most efficient way to do it?
         coeffs.resize(m * m, F::zero()); 
 
-        let M = Matrix::new_from_flat( m, m, &coeffs);
+        let mat = Matrix::new_from_flat( m, m, &coeffs);
 
         todo!()
     }
