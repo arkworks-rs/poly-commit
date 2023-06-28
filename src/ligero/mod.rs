@@ -166,6 +166,9 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge> PolynomialC
 
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
+        // applying Reed-Solomon code row-wise
+        // let ext_mat =
+
         todo!()
     }
 

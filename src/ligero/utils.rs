@@ -1,14 +1,14 @@
-use ark_ff::PrimeField;
+use ark_ff::Field;
 
 use rayon::{iter::{ParallelIterator, IntoParallelRefIterator}, prelude::IndexedParallelIterator};
 
-pub(crate) struct Matrix<F: PrimeField> {
+pub(crate) struct Matrix<F: Field> {
     n: usize,
     m: usize,
     entries: Vec<Vec<F>>
 }
 
-impl<F: PrimeField> Matrix<F> {
+impl<F: Field> Matrix<F> {
     
     /// Returns a Matrix of dimensions n x m given a list of n * m field elements.
     /// The list should be ordered row-first, i.e. [a11, ..., a1m, a21, ..., a2m, ...].
@@ -61,12 +61,14 @@ impl<F: PrimeField> Matrix<F> {
 
 }
 
+//fn reed_solomon<F: PrimeField>()
+
 #[inline]
-pub(crate) fn inner_product<F: PrimeField>(v1: &[F], v2: &[F]) -> F {
+pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
     ark_std::cfg_iter!(v1).zip(v2).map(|(li, ri)| *li * ri).sum()
 }
 
 #[inline]
-pub(crate) fn to_field<F: PrimeField>(v: Vec<u64>) -> Vec<F> {
+pub(crate) fn to_field<F: Field>(v: Vec<u64>) -> Vec<F> {
     v.iter().map(|x| F::from(*x)).collect::<Vec<F>>()
 }
