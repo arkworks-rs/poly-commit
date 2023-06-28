@@ -1,4 +1,6 @@
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use core::marker::PhantomData;
+
+use ark_crypto_primitives::{crh::TwoToOneCRHScheme, sponge::CryptographicSponge};
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
 
@@ -11,7 +13,18 @@ use ark_std::rand::RngCore;
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
-pub struct Ligero {}
+pub struct Ligero<F: PrimeField, H: TwoToOneCRHScheme> {
+    /// one over the rate rho
+    rho_inv: usize,
+
+    /// security parameter, used to calculate `t`
+    sec_param: usize,
+
+    /// number of columns that the verifier queries
+    t: usize,
+
+    _phantom: PhantomData<(F, H)>,
+}
 
 type LigeroPCUniversalParams = ();
 
