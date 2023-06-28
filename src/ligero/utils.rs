@@ -1,6 +1,6 @@
 use ark_ff::{Field, FftField};
 
-use ark_poly::{GeneralEvaluationDomain, EvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
+use ark_poly::{GeneralEvaluationDomain, EvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial, Polynomial, domain::general::GeneralElements};
 use rayon::{iter::{ParallelIterator, IntoParallelRefIterator}, prelude::IndexedParallelIterator};
 
 pub(crate) struct Matrix<F: Field> {
@@ -74,7 +74,12 @@ impl<F: Field> Matrix<F> {
 
 // TODO batch for all rows? possibly minimal savings due to not having to create fft_domain every time
 // here we restrict F to PrimeField
-pub(crate) fn reed_solomon<F: FftField>(msg: &[F], rho_inverse: usize) -> Vec<F> {
+pub(crate) fn reed_solomon<F: FftField>(
+    msg: &[F],
+    rho_inverse: usize,
+    fft_domain: GeneralEvaluationDomain::<F>,
+    &mut domain_iter: GeneralElements::<F>
+) -> Vec<F> {
     
     // TODO is this check worth it?
     // rho_inverse = 0 should never happen; rho_inverse = 1 means no expansion
@@ -84,16 +89,17 @@ pub(crate) fn reed_solomon<F: FftField>(msg: &[F], rho_inverse: usize) -> Vec<F>
 
     let m = msg.len();
 
-    let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
-
     let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&fft_domain.ifft(msg));
 
     let mut encoding = msg.to_vec();
 
-    for zeta in m..rho_inverse * m {
-        // TODO better way? evaluate_over_domain, coset, ...?
-        // e.g. pass to the smallest subgroup containing these values, then trim?
-        encoding.push(pol.evaluate(&fft_domain.element(zeta)))
+    domain_iter.nth(m - 1);
+
+    for _ in 0..(rho_inverse - 1) * m {
+        // TODO make sure the domain has enough elements in the caller or check here
+        let zeta = domain_iter.next().unwrap();
+        encoding.push(pol.evaluate(zeta));
+        
     }
 
     encoding

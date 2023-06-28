@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use ark_crypto_primitives::{crh::TwoToOneCRHScheme, sponge::CryptographicSponge};
 use ark_ff::PrimeField;
-use ark_poly::DenseUVPolynomial;
+use ark_poly::{DenseUVPolynomial, GeneralEvaluationDomain};
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
@@ -104,13 +104,11 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
     }
 }
 
-struct Commitment {
+struct LigeroPCCommitment {
     m: usize,   // number of rows of the square matrix containing the coefficients of the polynomial
-    r: (),      // TODO merkle tree root
+    tree_root: (),      // TODO merkle tree root
     // TODO transcript with the randomly selected colums/their hashes; is this the "randomness?"
 }
-
-type LigeroPCCommitment = Commitment;
 
 impl PCCommitment for LigeroPCCommitment {
     fn empty() -> Self {
@@ -214,6 +212,8 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
         let m = (num_elems as f64).sqrt().ceil() as usize;
 
+        // TODO: check if fft_domain.compute_size_of_domain(m) is large enough
+
         // padding the coefficient vector with zeroes
         // TODO is this the most efficient way to do it?
         coeffs.resize(m * m, F::zero()); 
@@ -224,13 +224,23 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         let rho_inv = 2; // self.rho_inv
         // applying Reed-Solomon code row-wise
 
+        let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+        let domain_iter = fft_domain.elements();
+        
         let ext_mat = Matrix::new_from_rows(
-            mat.rows().iter().map(|r| reed_solomon(r, rho_inv)).collect()
+            mat.rows().iter().map(|r| reed_solomon(
+                r,
+                rho_inv,
+                fft_domain,
+                domain_iter
+            )).collect()
         );
 
-        let col_hashes = Vec();
+        let col_hashes = Vec::new();
 
-        for col in ext_mat.cols() {
+        let mat_cols = ext_mat.cols();
+
+        for col in mat_cols {
             // col_hashes.push(hash of col)
         }
 
@@ -238,10 +248,27 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
         // let r = root of the tree
         //
 
-        let commitment = LigeroPCCommitment::new(root: r);
+        // generating transcript for the verification of well-formedness
+        let random_lc_coeffs = // generate m coefficients by hashing the root
+        let random_lc = ext_mat.row_mul(random_lc_coeffs);
 
-        Ok(LabeledCommitment::new(label, commitment, degree_bound))
+        wf_transcript.random_lc = random_lc;
 
+        let queried_columns =; // generate t column indices by hashing random_lc (the last element in the transcript)
+
+        let mat_cols = mat.cols();
+
+        for i in queried_columns {
+            wf_transcript.colums.push(mat_cols[i]);
+            wf_transcript.column_proofs.push(merkle._tree_proof(i));
+        }
+
+        //...
+
+        let commitment = Commitment::new(m, root, wf_transcript);
+
+        Ok(LabeledCommitment::new(label, commitment, degree_bound));
+        
         // TODO when should this return Err?
     }
 
