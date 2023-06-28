@@ -1,4 +1,5 @@
 use core::{borrow::Borrow, marker::PhantomData};
+use jf_primitives::pcs::transcript::IOPTranscript;
 
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
@@ -59,6 +60,7 @@ where
         Self {
             _config: PhantomData,
             _field: PhantomData,
+            // TODO potentially can get rid of digest and sponge
             _digest: PhantomData,
             _sponge: PhantomData,
         }
@@ -69,7 +71,6 @@ where
         commitment: &LigeroPCCommitment<F, C>,
         leaf_hash_params: &LeafParam<C>,
         two_to_one_params: &TwoToOneParam<C>,
-        sponge: &mut S,
     ) -> Result<(), Error> {
         let t = calculate_t(rho_inv, sec_param);
 
@@ -96,21 +97,33 @@ where
         // 3. verify the random linear combinations
 
         // 4. Verify the Fiat-Shamir transformation
-        sponge.absorb(&commitment.root);
-        let verifiers_randomness: Vec<F> = sponge.squeeze_field_elements(t);
-        assert_eq!(verifiers_randomness, commitment.transcript.r);
+        // TODO replace unwraps by proper error handling
+        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"test");
+        transcript
+            .append_serializable_element(b"root", &commitment.root)
+            .unwrap();
+
+        let mut r = Vec::new();
+        for _ in 0..t {
+            r.push(transcript.get_and_append_challenge(b"r").unwrap());
+        }
         // Upon sending `v` to the Verifier, add it to the sponge
-        sponge.absorb(&commitment.transcript.v);
+        transcript
+            .append_serializable_element(b"v", &commitment.transcript.v)
+            .unwrap();
 
         // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
         // TODO check whether this is right
         let bytes_to_squeeze = ((commitment.m * rho_inv) >> 8) + 1;
         let mut indices = Vec::with_capacity(t);
         for _ in 0..t {
-            let ind = sponge.squeeze_bytes(bytes_to_squeeze);
+            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
+            let _ = transcript
+                .get_and_append_byte_challenge(b"i", &mut bytes)
+                .unwrap();
 
             // get the usize from Vec<u8>:
-            let ind = ind.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
+            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
             // modulo the number of columns in the encoded matrix
             indices.push(ind % (rho_inv * commitment.m));
         }
