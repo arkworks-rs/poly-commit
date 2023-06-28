@@ -2,11 +2,12 @@ use core::{borrow::Borrow, marker::PhantomData};
 
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
-    sponge::CryptographicSponge,
+    sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use digest::Digest;
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
@@ -17,14 +18,20 @@ use ark_std::rand::RngCore;
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
-pub struct Ligero<F: PrimeField, C: Config> {
+pub struct Ligero<
+    F: PrimeField,
+    C: Config,
+    D: Digest,
+    S: CryptographicSponge,
     /// one over the rate rho
-    rho_inv: usize,
-
-    /// number of columns that the verifier queries
-    t: usize,
-
-    _phantom: PhantomData<(F, C)>,
+    const rho_inv: usize,
+    /// security parameter, used in calculating t
+    const sec_param: usize,
+> {
+    _field: PhantomData<F>,
+    _config: PhantomData<C>,
+    _digest: PhantomData<D>,
+    _sponge: PhantomData<S>,
 }
 
 // TODO come up with reasonable defaults
@@ -37,25 +44,78 @@ fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
     t
 }
 
-impl<F: PrimeField, C: Config> Ligero<F, C> {
+impl<F, C, D, S, const rho_inv: usize, const sec_param: usize>
+    Ligero<F, C, D, S, rho_inv, sec_param>
+where
+    F: PrimeField + Borrow<<C as Config>::Leaf> + Absorb,
+    C: Config,
+    C::InnerDigest: Absorb,
+    D: Digest,
+    S: CryptographicSponge,
+{
     /// Create a new instance of Ligero.
     /// If either or both parameters are None, their default values are used.
-    pub fn new(rho_inv: Option<usize>, sec_param: Option<usize>) -> Self {
-        let rho_inv = rho_inv.unwrap_or(DEFAULT_RHO_INV);
-        let t = calculate_t(rho_inv, sec_param.unwrap_or(DEFAULT_SEC_PARAM));
-
+    pub fn new() -> Self {
         Self {
-            rho_inv,
-            t,
-            _phantom: PhantomData,
+            _config: PhantomData,
+            _field: PhantomData,
+            _digest: PhantomData,
+            _sponge: PhantomData,
         }
     }
-}
 
-impl<F: PrimeField, C: Config> Default for Ligero<F, C> {
-    /// Create an instance of Ligero with the default rho (inverse: DEFAULT_RHO_INV) and security parameter (DEFAULT_SEC_PARAM).
-    fn default() -> Self {
-        Self::new(Some(DEFAULT_RHO_INV), Some(DEFAULT_SEC_PARAM))
+    /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
+    fn verify(
+        commitment: &LigeroPCCommitment<F, C>,
+        leaf_hash_params: &LeafParam<C>,
+        two_to_one_params: &TwoToOneParam<C>,
+        sponge: &mut S,
+    ) -> Result<(), Error> {
+        let t = calculate_t(rho_inv, sec_param);
+
+        // 1. Hash the received columns, to get the leaf hashes
+        let col_hashes: Vec<F> = vec![F::zero(); t];
+        for c in commitment.transcript.columns.iter() {
+            // TODO some hashing, with the digest?
+        }
+
+        // 2. Verify the paths for each of the leaf hashes
+        // TODO need a way to relate the index to the leaf hash
+        for (i, leaf) in col_hashes.iter().enumerate() {
+            // TODO handle the error here
+            commitment.transcript.paths[i]
+                .verify(
+                    leaf_hash_params,
+                    two_to_one_params,
+                    &commitment.root,
+                    leaf.clone(),
+                )
+                .unwrap();
+        }
+
+        // 3. verify the random linear combinations
+
+        // 4. Verify the Fiat-Shamir transformation
+        sponge.absorb(&commitment.root);
+        let verifiers_randomness: Vec<F> = sponge.squeeze_field_elements(t);
+        assert_eq!(verifiers_randomness, commitment.transcript.r);
+        // Upon sending `v` to the Verifier, add it to the sponge
+        sponge.absorb(&commitment.transcript.v);
+
+        // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
+        // TODO check whether this is right
+        let bytes_to_squeeze = ((commitment.m * rho_inv) >> 8) + 1;
+        let mut indices = Vec::with_capacity(t);
+        for _ in 0..t {
+            let ind = sponge.squeeze_bytes(bytes_to_squeeze);
+
+            // get the usize from Vec<u8>:
+            let ind = ind.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
+            // modulo the number of columns in the encoded matrix
+            indices.push(ind % (rho_inv * commitment.m));
+        }
+
+        todo!()
     }
 }
 
@@ -112,6 +172,9 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
     /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
     paths: Vec<Path<C>>,
 
+    /// v, s.t. E(v) = w
+    v: Vec<F>,
+
     columns: Vec<Vec<F>>,
 }
 
@@ -122,45 +185,8 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
 pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
     // TODO is InnerDigest the right type?
     root: C::InnerDigest,
+    m: usize,
     transcript: CommitmentTranscript<F, C>,
-}
-
-impl<F, C> LigeroPCCommitment<F, C>
-where
-    F: PrimeField + Borrow<<C as Config>::Leaf>,
-    C: Config,
-{
-    /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
-    fn verify(
-        &self,
-        leaf_hash_params: &LeafParam<C>,
-        two_to_one_params: &TwoToOneParam<C>,
-    ) -> Result<(), Error> {
-        // 1. Hash the received columns, to get the leaf hashes
-        let col_hashes: Vec<F> = vec![F::zero(); self.transcript.columns.len()];
-        for c in self.transcript.columns.iter() {
-            // TODO some hashing
-        }
-
-        // 2. Verify the paths for each of the leaf hashes
-        for (i, leaf) in col_hashes.iter().enumerate() {
-            // TODO handle the error here
-            self.transcript.paths[i]
-                .verify(
-                    leaf_hash_params,
-                    two_to_one_params,
-                    &self.root,
-                    leaf.clone(),
-                )
-                .unwrap();
-        }
-
-        
-        // 3. verify the random linear combinations
-
-        // 4. Verify the Fiat-Shamir transformation
-        todo!()
-    }
 }
 
 impl<F: PrimeField, C: Config> PCCommitment for LigeroPCCommitment<F, C> {
@@ -200,12 +226,14 @@ impl PCRandomness for LigeroPCRandomness {
 
 type LigeroPCProof = ();
 
-impl<F, P, S, C> PolynomialCommitment<F, P, S> for Ligero<F, C>
+impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialCommitment<F, P, S>
+    for Ligero<F, C, D, S, rho_inv, sec_param>
 where
     F: PrimeField,
     P: Polynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
+    D: Digest,
 {
     type UniversalParams = LigeroPCUniversalParams;
 
