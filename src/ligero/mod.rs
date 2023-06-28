@@ -17,13 +17,42 @@ pub struct Ligero<F: PrimeField, H: TwoToOneCRHScheme> {
     /// one over the rate rho
     rho_inv: usize,
 
-    /// security parameter, used to calculate `t`
-    sec_param: usize,
-
     /// number of columns that the verifier queries
     t: usize,
 
     _phantom: PhantomData<(F, H)>,
+}
+
+// TODO come up with reasonable defaults
+const DEFAULT_RHO_INV: usize = 2;
+const DEFAULT_SEC_PARAM: usize = 128;
+
+fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
+    // TODO calculate t somehow
+    let t = 5;
+    t
+}
+
+impl<F: PrimeField, H: TwoToOneCRHScheme> Ligero<F, H> {
+    /// Create a new instance of Ligero.
+    /// If either or both parameters are None, their default values are used.
+    pub fn new(rho_inv: Option<usize>, sec_param: Option<usize>) -> Self {
+        let rho_inv = rho_inv.unwrap_or(DEFAULT_RHO_INV);
+        let t = calculate_t(rho_inv, sec_param.unwrap_or(DEFAULT_SEC_PARAM));
+
+        Self {
+            rho_inv,
+            t,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<F: PrimeField, H: TwoToOneCRHScheme> Default for Ligero<F, H> {
+    /// Create an instance of Ligero with the default rho (inverse: DEFAULT_RHO_INV) and security parameter (DEFAULT_SEC_PARAM).
+    fn default() -> Self {
+        Self::new(Some(DEFAULT_RHO_INV), Some(DEFAULT_SEC_PARAM))
+    }
 }
 
 type LigeroPCUniversalParams = ();
@@ -105,8 +134,8 @@ impl PCRandomness for LigeroPCRandomness {
 
 type LigeroPCProof = ();
 
-impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge> PolynomialCommitment<F, P, S>
-    for Ligero
+impl<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge, H: TwoToOneCRHScheme>
+    PolynomialCommitment<F, P, S> for Ligero<F, H>
 {
     type UniversalParams = LigeroPCUniversalParams;
 
