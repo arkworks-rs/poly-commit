@@ -1,4 +1,4 @@
-use ark_ff::Field;
+use ark_ff::{Field, FftField};
 
 use rayon::{iter::{ParallelIterator, IntoParallelRefIterator}, prelude::IndexedParallelIterator};
 
@@ -61,7 +61,10 @@ impl<F: Field> Matrix<F> {
 
 }
 
-//fn reed_solomon<F: PrimeField>()
+// here we restrict F to PrimeField
+pub(crate) fn reed_solomon<F: FftField>(msg: &[F], rho: usize) -> Vec<F> {
+    todo!()
+}
 
 #[inline]
 pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
