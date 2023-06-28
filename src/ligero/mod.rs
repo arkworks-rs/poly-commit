@@ -6,7 +6,7 @@ use ark_poly::DenseUVPolynomial;
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCUniversalParams, PCVerifierKey, PolynomialCommitment,
+    PCUniversalParams, PCVerifierKey, PolynomialCommitment, ligero::utils::reed_solomon,
 };
 
 use ark_std::rand::RngCore;
@@ -42,6 +42,11 @@ impl<F: PrimeField, H: TwoToOneCRHScheme> Ligero<F, H> {
     /// If either or both parameters are None, their default values are used.
     pub fn new(rho_inv: Option<usize>, sec_param: Option<usize>) -> Self {
         let rho_inv = rho_inv.unwrap_or(DEFAULT_RHO_INV);
+
+        if rho_inv == 0 {
+            panic!("rho_inv cannot be zero");
+        }
+
         let t = calculate_t(rho_inv, sec_param.unwrap_or(DEFAULT_SEC_PARAM));
 
         Self {
@@ -192,6 +197,7 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
     where
         P: 'a,
     {
+        // TODO loop over all polys
         let f = polynomials.into_iter().next().unwrap().polynomial();
 
         let mut coeffs = f.coeffs().to_vec();
@@ -208,10 +214,13 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>, S: CryptographicSponge, H: TwoToOne
 
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
+        // TODO rho_inv not part of self?
         // applying Reed-Solomon code row-wise
         let ext_mat = Matrix::new_from_rows(
-            mat.rows().map(|r| reed_solomon(row, self.rho_inv()))
+            mat.rows().iter().map(|r| reed_solomon(r, self.rho_inv)).collect()
         );
+
+        
 
         todo!()
     }

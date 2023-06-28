@@ -3,6 +3,7 @@
 mod tests {
 
     use ark_bls12_381::Fq as F;
+    use ark_poly::{domain::general::GeneralEvaluationDomain, EvaluationDomain, DenseUVPolynomial, univariate::DensePolynomial, Polynomial};
 
     use crate::ligero::utils::*;
 
@@ -55,6 +56,26 @@ mod tests {
         // by giving the result in the integers and then converting to F
         // we ensure the test will still pass even if F changes
         assert_eq!(mat.row_mul(&v), to_field::<F>(vec![4088, 4431, 543]));
+    }
+
+    #[test]
+    fn test_fft_interface() {
+
+        // we use this polynomial to generate the the values we will ask the fft to interpolate
+        let pol_coeffs: Vec<F> = to_field(vec![30, 2, 91]);
+        let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&pol_coeffs);
+        
+        let fft_domain = GeneralEvaluationDomain::<F>::new(pol_coeffs.len()).unwrap();
+
+        // generating the values
+        let mut vals = Vec::new();
+
+        for i in 0..4 {
+            vals.push(pol.evaluate(&fft_domain.element(i)));
+        }
+
+        // the fft should recover the original polynomial
+        assert_eq!(fft_domain.ifft(&vals), pol_coeffs);
     }
 
 }
