@@ -29,24 +29,13 @@ impl<F: PrimeField> Matrix<F> {
     /// # Panics
     /// Panics if the sub-lists do not all have the same length.
     pub(crate) fn new_from_row_list(n: usize, m: usize, row_list: Vec<Vec<F>>) -> Self {
-        let mut m = row_list[0].len();
+        let m = row_list[0].len();
 
-        for row in row_list.iter() {
+        for row in row_list.iter().skip(1) {
             assert_eq!(row.len(), m, "Invalid matrix construction: not all rows have the same length");
-            m = row.len()
         }
 
         Self {n: row_list.len(), m, entries: row_list}
-    }
-
-    // Returns the number of rows of self.
-    pub(crate) fn num_rows(&self) -> usize {
-        self.n
-    }
-
-    // Returns the number of columns of self.
-    pub(crate) fn num_cols(&self) -> usize {
-        self.m
     }
 
     /// Returns the entry in position (i, j). **Indexing starts at 0 in both coordinates**,
