@@ -1,7 +1,7 @@
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
 use ark_crypto_primitives::{
-    merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
+    merkle_tree::{Config, LeafParam, Path, TwoToOneParam, MerkleTree},
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
@@ -92,7 +92,7 @@ where
         }
 
         // TODO replace unwraps by proper error handling
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"test");
+        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
         transcript
             .append_serializable_element(b"root", &commitment.root)
             .unwrap();
@@ -124,7 +124,7 @@ where
             indices.push(ind % num_encoded_rows);
         }
 
-        // 3. Verify the paths for each of the leaf hashes
+        // 4. Verify the paths for each of the leaf hashes
         for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
             // TODO handle the error here
             let path = &commitment.transcript.paths[*i];
@@ -134,7 +134,7 @@ where
                 .unwrap();
         }
 
-        // 4. Compute the encoding of v, s.t. E(v) = w
+        // 5. Compute the encoding of v, s.t. E(v) = w
         let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
         let mut domain_iter = fft_domain.elements();
         let w = reed_solomon(
@@ -143,8 +143,8 @@ where
             fft_domain,
             &mut domain_iter,
         );
-
-        // 5. verify the random linear combinations
+        
+        // 6. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
             if inner_product(&r, &commitment.transcript.columns[transcript_index])
                 != w[matrix_index]
@@ -167,7 +167,11 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
-type LigeroPCCommitterKey = ();
+struct LigeroPCCommitterKey {
+    leaf_crh_params: (),
+    two_to_one_params: (),
+    t: usize, // number of columns to test the random linear combination at
+}
 
 impl PCCommitterKey for LigeroPCCommitterKey {
     fn max_degree(&self) -> usize {
@@ -202,7 +206,7 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 
-struct CommitmentTranscript<F: PrimeField, C: Config> {
+struct Proof<F: PrimeField, C: Config> {
     /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
     paths: Vec<Path<C>>,
 
@@ -217,11 +221,11 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
-    // TODO is InnerDigest the right type?
-    root: C::InnerDigest,
     // number of rows of the square matrix containing the coefficients of the polynomial
     m: usize,
-    transcript: CommitmentTranscript<F, C>,
+    // TODO is InnerDigest the right type?
+    root: C::InnerDigest,
+    proof: Proof<F, C>,
 }
 
 impl<F: PrimeField, C: Config> PCCommitment for LigeroPCCommitment<F, C> {
@@ -323,30 +327,30 @@ where
     where
         P: 'a,
     {
-        unimplemented!()
-        /*        // TODO loop over all polys
+
+        // TODO loop over all polynomials
         let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
 
         let mut coeffs = polynomial.coeffs().to_vec();
 
+        // 1. Computing parameters and initial matrix
         // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion
         let num_elems = polynomial.degree() + 1;
+
         // TODO move this check to the constructor?
         assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
         let m = (num_elems as f64).sqrt().ceil() as usize;
-
         // TODO: check if fft_domain.compute_size_of_domain(m) is large enough
 
         // padding the coefficient vector with zeroes
-        // TODO is this the most efficient way to do it?
+        // TODO is this the most efficient/safest way to do it?
         coeffs.resize(m * m, F::zero());
 
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
-        // TODO rho_inv not part of self?
+        // 2. Apply Reed-Solomon encoding row-wise
         let rho_inv = 2; // self.rho_inv
-        // applying Reed-Solomon code row-wise
-
+        
         let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
         let domain_iter = fft_domain.elements();
 
@@ -355,44 +359,83 @@ where
                 r,
                 rho_inv,
                 fft_domain,
-                domain_iter
+                &mut domain_iter
             )).collect()
         );
 
+        // 3. Create the Merkle tree from the hashes of the columns
         let col_hashes = Vec::new();
+        let ext_mat_cols = ext_mat.cols();
 
-        let mat_cols = ext_mat.cols();
-
-        for col in mat_cols {
-            // col_hashes.push(hash of col)
+        for col in ext_mat_cols {
+            col_hashes.push(hash_array(&col));
         }
 
-        // let tree = Merkle tree from col_hashes (the library might take care of padding to a power of 2)
-        // let r = root of the tree
-        //
+        let col_tree = MerkleTree::new::<C>(
+            &ck.leaf_crh_params, 
+            &ck.two_to_one_params,
+            col_hashes,
+        ).unwrap();
 
-        // generating transcript for the verification of well-formedness
-        let random_lc_coeffs = // generate m coefficients by hashing the root
-        let random_lc = ext_mat.row_mul(random_lc_coeffs);
+        let root = col_tree.root();
 
-        wf_transcript.random_lc = random_lc;
+        // 4. Add root to transcript and generate random linear combination with it
+        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
+        transcript
+            .append_serializable_element(b"root", root)
+            .unwrap();
 
-        let queried_columns =; // generate t column indices by hashing random_lc (the last element in the transcript)
+        // 5. Generate linear combination using the matrix and random coefficients
+        let mut r = Vec::new();
+        for _ in 0..ck.t {
+            r.push(transcript.get_and_append_challenge(b"r").unwrap());
+        }
+        
+        let v = mat.row_mul(r);
 
-        let mat_cols = mat.cols();
+        transcript
+            .append_serializable_element(b"v", v)
+            .unwrap();
 
-        for i in queried_columns {
-            wf_transcript.colums.push(mat_cols[i]);
-            wf_transcript.column_proofs.push(merkle._tree_proof(i));
+        // 6. Generate t column indices to test the linear combination on
+        let num_encoded_rows = m * rho_inv;
+        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
+        let mut indices = Vec::with_capacity(ck.t);
+        for _ in 0..ck.t {
+            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
+            let _ = transcript
+                .get_and_append_byte_challenge(b"i", &mut bytes)
+                .unwrap();
+
+            // get the usize from Vec<u8>:
+            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
+            // modulo the number of columns in the encoded matrix
+            indices.push(ind % num_encoded_rows);
         }
 
-        //...
+        // 7. Compute Merkle tree paths for the columns
+        let queried_columns = Vec::new();
+        let paths = Vec::new();
 
-        let commitment = Commitment::new(m, root, wf_transcript);
+        for i in indices {
+            queried_columns.push(ext_mat_cols[i]);
+            paths.push(col_tree.generate_proof(i));
+        }
+
+        let proof: Proof<F, C> = Proof {
+            paths,
+            v,
+            columns: queried_columns,
+        };
+
+        let commitment = LigeroPCCommitment::new(
+            m,
+            root,
+            proof,
+        );
 
         Ok(LabeledCommitment::new(label, commitment, degree_bound));
-
-        // TODO when should this return Err? */
+        // TODO when should this return Err?
     }
 
     fn open<'a>(

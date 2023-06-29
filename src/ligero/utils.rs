@@ -143,6 +143,17 @@ pub(crate) fn reed_solomon<F: FftField>(
     encoding
 }
 
+/* DummyCK<F> {
+    t: int;
+}
+
+impl<F: PrimeField> DummyCK<F> {
+    fn new() -> Self {
+        println!("WARNING: You are using dummy parameters"),
+
+    }
+}
+ */
 #[inline]
 pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
     ark_std::cfg_iter!(v1)
@@ -175,7 +186,7 @@ macro_rules! to_bytes {
 
 #[inline]
 pub(crate) fn hash_array<D: Digest, F: PrimeField + CanonicalSerialize>(array: &[F]) -> Vec<u8> {
-    
+
     let mut dig = D::new();
     for elem in array {
         dig.update(to_bytes!(elem).unwrap());
