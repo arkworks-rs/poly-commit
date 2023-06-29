@@ -6,16 +6,20 @@ use ark_crypto_primitives::{
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
-use ark_poly::Polynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use digest::Digest;
+use ark_poly::{DenseUVPolynomial, GeneralEvaluationDomain};
 
 use crate::{
     Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCUniversalParams, PCVerifierKey, PolynomialCommitment,
+    PCUniversalParams, PCVerifierKey, PolynomialCommitment, ligero::utils::reed_solomon, LabeledCommitment, LabeledPolynomial,
 };
 
 use ark_std::rand::RngCore;
+
+mod utils;
+use utils::Matrix;
+mod tests;
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
@@ -184,7 +188,7 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
 
     /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
     paths: Vec<Path<C>>,
-
+gg
     /// v, s.t. E(v) = w
     v: Vec<F>,
 
@@ -198,6 +202,7 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
 pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
     // TODO is InnerDigest the right type?
     root: C::InnerDigest,
+    // number of rows of the square matrix containing the coefficients of the polynomial
     m: usize,
     transcript: CommitmentTranscript<F, C>,
 }
@@ -243,7 +248,7 @@ impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialComm
     for Ligero<F, C, D, S, rho_inv, sec_param>
 where
     F: PrimeField,
-    P: Polynomial<F>,
+    P: P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
     D: Digest,
@@ -299,7 +304,75 @@ where
     where
         P: 'a,
     {
-        todo!()
+        // TODO loop over all polys
+        let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
+
+        let mut coeffs = polynomial.coeffs().to_vec();
+
+        // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion 
+        let num_elems = polynomial.degree() + 1;
+        // TODO move this check to the constructor?
+        assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
+        let m = (num_elems as f64).sqrt().ceil() as usize;
+
+        // TODO: check if fft_domain.compute_size_of_domain(m) is large enough
+
+        // padding the coefficient vector with zeroes
+        // TODO is this the most efficient way to do it?
+        coeffs.resize(m * m, F::zero()); 
+
+        let mat = Matrix::new_from_flat( m, m, &coeffs);
+
+        // TODO rho_inv not part of self?
+        let rho_inv = 2; // self.rho_inv
+        // applying Reed-Solomon code row-wise
+
+        let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+        let domain_iter = fft_domain.elements();
+        
+        let ext_mat = Matrix::new_from_rows(
+            mat.rows().iter().map(|r| reed_solomon(
+                r,
+                rho_inv,
+                fft_domain,
+                domain_iter
+            )).collect()
+        );
+
+        let col_hashes = Vec::new();
+
+        let mat_cols = ext_mat.cols();
+
+        for col in mat_cols {
+            // col_hashes.push(hash of col)
+        }
+
+        // let tree = Merkle tree from col_hashes (the library might take care of padding to a power of 2)
+        // let r = root of the tree
+        //
+
+        // generating transcript for the verification of well-formedness
+        let random_lc_coeffs = // generate m coefficients by hashing the root
+        let random_lc = ext_mat.row_mul(random_lc_coeffs);
+
+        wf_transcript.random_lc = random_lc;
+
+        let queried_columns =; // generate t column indices by hashing random_lc (the last element in the transcript)
+
+        let mat_cols = mat.cols();
+
+        for i in queried_columns {
+            wf_transcript.colums.push(mat_cols[i]);
+            wf_transcript.column_proofs.push(merkle._tree_proof(i));
+        }
+
+        //...
+
+        let commitment = Commitment::new(m, root, wf_transcript);
+
+        Ok(LabeledCommitment::new(label, commitment, degree_bound));
+        
+        // TODO when should this return Err?
     }
 
     fn open<'a>(
@@ -334,3 +407,5 @@ where
         todo!()
     }
 }
+
+// TODO start considering degree bound
