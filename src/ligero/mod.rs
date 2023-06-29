@@ -21,6 +21,8 @@ use ark_std::rand::RngCore;
 
 mod utils;
 use utils::Matrix;
+
+use self::utils::hash_array;
 mod tests;
 
 // TODO: Disclaimer: no hiding prop
@@ -54,7 +56,8 @@ fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
 impl<F, C, D, S, const rho_inv: usize, const sec_param: usize>
     Ligero<F, C, D, S, rho_inv, sec_param>
 where
-    F: PrimeField + Borrow<<C as Config>::Leaf> + Absorb,
+    F: PrimeField + Absorb,
+    Vec<u8>: Borrow<<C as Config>::Leaf>,
     C: Config,
     C::InnerDigest: Absorb,
     D: Digest,
@@ -81,8 +84,9 @@ where
         let t = calculate_t(rho_inv, sec_param);
 
         // 1. Hash the received columns, to get the leaf hashes
-        let col_hashes: Vec<F> = vec![F::zero(); t];
+        let mut col_hashes = Vec::new();
         for c in commitment.transcript.columns.iter() {
+            col_hashes.push(hash_array::<D, F>(c))
             // TODO some hashing, with the digest?
         }
 

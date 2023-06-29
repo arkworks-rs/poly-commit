@@ -4,6 +4,7 @@ use ark_poly::{
     domain::general::GeneralElements, univariate::DensePolynomial, DenseUVPolynomial,
     EvaluationDomain, GeneralEvaluationDomain, Polynomial,
 };
+use ark_serialize::CanonicalSerialize;
 use digest::Digest;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -160,9 +161,24 @@ pub(crate) fn get_num_bytes(n: usize) -> usize {
     ceil_div((usize::BITS - n.leading_zeros()) as usize, 8)
 }
 
-pub(crate) fn hash_array<D: Digest, F: PrimeField>(array: &[F]) -> Vec<u8> {
+/// Takes as input a struct, and converts them to a series of bytes. All traits
+/// that implement `CanonicalSerialize` can be automatically converted to bytes
+/// in this manner.
+/// From jellyfish lib
+#[macro_export]
+macro_rules! to_bytes {
+    ($x:expr) => {{
+        let mut buf = ark_std::vec![];
+        ark_serialize::CanonicalSerialize::serialize_compressed($x, &mut buf).map(|_| buf)
+    }};
+}
+
+#[inline]
+pub(crate) fn hash_array<D: Digest, F: PrimeField + CanonicalSerialize>(array: &[F]) -> Vec<u8> {
     
-    let data = array.to_bytes();
-    let dig = D::new();
-    D::digest(data).to_vec()
+    let mut dig = D::new();
+    for elem in array {
+        dig.update(to_bytes!(elem).unwrap());
+    }    
+    dig.finalize().to_vec()
 }
