@@ -6,12 +6,12 @@ use ark_crypto_primitives::{
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
-use ark_poly::{DenseUVPolynomial, GeneralEvaluationDomain};
+use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use digest::Digest;
 
 use crate::{
-    ligero::utils::{get_num_bytes, reed_solomon},
+    ligero::utils::{get_num_bytes, inner_product, reed_solomon},
     Error, LabeledCommitment, LabeledPolynomial, PCCommitment, PCCommitterKey,
     PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
     PolynomialCommitment,
@@ -125,23 +125,32 @@ where
             let path = &commitment.transcript.paths[*i];
             assert!(path.leaf_index == *i, "Path is for a different index!");
 
-            path.verify(
-                leaf_hash_params,
-                two_to_one_params,
-                &commitment.root,
-                leaf,
-            )
-            .unwrap();
+            path.verify(leaf_hash_params, two_to_one_params, &commitment.root, leaf)
+                .unwrap();
         }
 
-        // 4. verify the random linear combinations
-        // Compute the encoding of v, s.t. E(v) = w
-        let w = &commitment.transcript.v;
-        for index in indices {
-            // check that r.M_i = w_i
-            // transcript
+        // 4. Compute the encoding of v, s.t. E(v) = w
+        let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
+        let mut domain_iter = fft_domain.elements();
+        let w = reed_solomon(
+            &commitment.transcript.v,
+            rho_inv,
+            fft_domain,
+            &mut domain_iter,
+        );
+        
+        // 5. verify the random linear combinations
+        for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
+            if inner_product(&r, &commitment.transcript.columns[transcript_index])
+                != w[matrix_index]
+            {
+                // TODO return proper error
+                return Err(Error::IncorrectInputLength(
+                    "Incorrect linear combination".to_string(),
+                ));
+            }
         }
-        todo!()
+        Ok(())
     }
 }
 
