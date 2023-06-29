@@ -6,13 +6,15 @@ use ark_crypto_primitives::{
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
+use ark_poly::{DenseUVPolynomial, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use digest::Digest;
-use ark_poly::{DenseUVPolynomial, GeneralEvaluationDomain};
 
 use crate::{
-    Error, PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCUniversalParams, PCVerifierKey, PolynomialCommitment, ligero::utils::reed_solomon, LabeledCommitment, LabeledPolynomial,
+    ligero::utils::{get_num_bytes, reed_solomon},
+    Error, LabeledCommitment, LabeledPolynomial, PCCommitment, PCCommitterKey,
+    PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
+    PolynomialCommitment,
 };
 
 use ark_std::rand::RngCore;
@@ -71,7 +73,7 @@ where
     }
 
     /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
-    fn verify(
+    fn well_formedness_check(
         commitment: &LigeroPCCommitment<F, C>,
         leaf_hash_params: &LeafParam<C>,
         two_to_one_params: &TwoToOneParam<C>,
@@ -98,9 +100,7 @@ where
                 .unwrap();
         }
 
-        // 3. verify the random linear combinations
-
-        // 4. Verify the Fiat-Shamir transformation
+        // 3. Verify the Fiat-Shamir transformation
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"test");
         transcript
@@ -111,14 +111,16 @@ where
         for _ in 0..t {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
-        // Upon sending `v` to the Verifier, add it to the sponge
+        // Upon sending `v` to the Verifier, add it to the sponge. Claim is that v = r.M
         transcript
             .append_serializable_element(b"v", &commitment.transcript.v)
             .unwrap();
 
         // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
         // TODO check whether this is right
-        let bytes_to_squeeze = ((commitment.m * rho_inv) >> 8) + 1;
+
+        let num_encoded_rows = commitment.m * rho_inv;
+        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
         let mut indices = Vec::with_capacity(t);
         for _ in 0..t {
             let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
@@ -129,9 +131,10 @@ where
             // get the usize from Vec<u8>:
             let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
             // modulo the number of columns in the encoded matrix
-            indices.push(ind % (rho_inv * commitment.m));
+            indices.push(ind % num_encoded_rows);
         }
 
+        // 4. verify the random linear combinations
         todo!()
     }
 }
