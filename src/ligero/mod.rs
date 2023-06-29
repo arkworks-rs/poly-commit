@@ -4,6 +4,8 @@ use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam, MerkleTree},
     sponge::{Absorb, CryptographicSponge},
 };
+use ark_ff::BigInt;
+use ark_ff::BigInteger256;
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -51,6 +53,7 @@ const DEFAULT_SEC_PARAM: usize = 128;
 fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
     // TODO calculate t somehow
     let t = 5;
+    println!("WARNING: you are using dummy t = {t}");
     t
 }
 
@@ -79,14 +82,14 @@ where
     /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
     fn well_formedness_check(
         commitment: &LigeroPCCommitment<F, C>,
-        leaf_hash_params: &LeafParam<C>,
-        two_to_one_params: &TwoToOneParam<C>,
+        leaf_hash_param: &LeafParam<C>,
+        two_to_one_param: &TwoToOneParam<C>,
     ) -> Result<(), Error> {
         let t = calculate_t(rho_inv, sec_param);
 
         // 1. Hash the received columns, to get the leaf hashes
         let mut col_hashes: Vec<C::Leaf> = Vec::new();
-        for c in commitment.transcript.columns.iter() {
+        for c in commitment.proof.columns.iter() {
             col_hashes.push(hash_array::<D, F>(c).into());
             // TODO some hashing, with the digest?
         }
@@ -104,7 +107,7 @@ where
         }
         // Upon sending `v` to the Verifier, add it to the sponge. Claim is that v = r.M
         transcript
-            .append_serializable_element(b"v", &commitment.transcript.v)
+            .append_serializable_element(b"v", &commitment.proof.v)
             .unwrap();
 
         // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
@@ -125,12 +128,12 @@ where
         }
 
         // 4. Verify the paths for each of the leaf hashes
-        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
+        for (leaf, i) in col_hashes.into_iter().zip(indices.into_iter()) {
             // TODO handle the error here
-            let path = &commitment.transcript.paths[*i];
-            assert!(path.leaf_index == *i, "Path is for a different index!");
+            let path = &commitment.proof.paths[i];
+            assert!(path.leaf_index == i, "Path is for a different index!");
 
-            path.verify(leaf_hash_params, two_to_one_params, &commitment.root, leaf)
+            path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
                 .unwrap();
         }
 
@@ -138,7 +141,7 @@ where
         let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
         let mut domain_iter = fft_domain.elements();
         let w = reed_solomon(
-            &commitment.transcript.v,
+            &commitment.proof.v,
             rho_inv,
             fft_domain,
             &mut domain_iter,
@@ -146,7 +149,7 @@ where
         
         // 6. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
-            if inner_product(&r, &commitment.transcript.columns[transcript_index])
+            if inner_product(&r, &commitment.proof.columns[transcript_index])
                 != w[matrix_index]
             {
                 // TODO return proper error
@@ -167,11 +170,7 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
-struct LigeroPCCommitterKey {
-    leaf_crh_params: (),
-    two_to_one_params: (),
-    t: usize, // number of columns to test the random linear combination at
-}
+type LigeroPCCommitterKey = ();
 
 impl PCCommitterKey for LigeroPCCommitterKey {
     fn max_degree(&self) -> usize {
@@ -327,7 +326,12 @@ where
     where
         P: 'a,
     {
-
+        // 0. Recovering parameters
+        let t = calculate_t(rho_inv, sec_param);
+        let mut optional = crate::optional_rng::OptionalRng(rng); // TODO taken from Marlin code; change in the future?
+        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
+        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
+        
         // TODO loop over all polynomials
         let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
 
@@ -352,7 +356,7 @@ where
         let rho_inv = 2; // self.rho_inv
         
         let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
-        let domain_iter = fft_domain.elements();
+        let mut domain_iter = fft_domain.elements();
 
         let ext_mat = Matrix::new_from_rows(
             mat.rows().iter().map(|r| reed_solomon(
@@ -364,16 +368,16 @@ where
         );
 
         // 3. Create the Merkle tree from the hashes of the columns
-        let col_hashes = Vec::new();
+        let mut col_hashes = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols {
             col_hashes.push(hash_array(&col));
         }
 
-        let col_tree = MerkleTree::new::<C>(
-            &ck.leaf_crh_params, 
-            &ck.two_to_one_params,
+        let col_tree = MerkleTree::<C>::new(
+            &leaf_hash_param, 
+            &two_to_one_param,
             col_hashes,
         ).unwrap();
 
@@ -382,26 +386,26 @@ where
         // 4. Add root to transcript and generate random linear combination with it
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
         transcript
-            .append_serializable_element(b"root", root)
+            .append_serializable_element(b"root", &root)
             .unwrap();
 
         // 5. Generate linear combination using the matrix and random coefficients
         let mut r = Vec::new();
-        for _ in 0..ck.t {
+        for _ in 0..m {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
         
-        let v = mat.row_mul(r);
+        let v = mat.row_mul(&r);
 
         transcript
-            .append_serializable_element(b"v", v)
+            .append_serializable_element(b"v", &v)
             .unwrap();
 
         // 6. Generate t column indices to test the linear combination on
         let num_encoded_rows = m * rho_inv;
         let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
-        let mut indices = Vec::with_capacity(ck.t);
-        for _ in 0..ck.t {
+        let mut indices = Vec::with_capacity(t);
+        for _ in 0..t {
             let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
             let _ = transcript
                 .get_and_append_byte_challenge(b"i", &mut bytes)
@@ -414,12 +418,12 @@ where
         }
 
         // 7. Compute Merkle tree paths for the columns
-        let queried_columns = Vec::new();
-        let paths = Vec::new();
+        let mut queried_columns = Vec::new();
+        let mut paths = Vec::new();
 
         for i in indices {
             queried_columns.push(ext_mat_cols[i]);
-            paths.push(col_tree.generate_proof(i));
+            paths.push(col_tree.generate_proof(i).unwrap());
         }
 
         let proof: Proof<F, C> = Proof {
@@ -428,13 +432,13 @@ where
             columns: queried_columns,
         };
 
-        let commitment = LigeroPCCommitment::new(
+        let commitment = LigeroPCCommitment {
             m,
             root,
             proof,
-        );
+        };
 
-        Ok(LabeledCommitment::new(label, commitment, degree_bound));
+        Ok((vec![LabeledCommitment::new(label, commitment, degree_bound)], Vec::new()))
         // TODO when should this return Err?
     }
 
@@ -470,12 +474,12 @@ where
         let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
         // check if we've seen this commitment before. If not, we should verify it.
-        let leaf_hash_params = C::LeafHash::setup(&mut rng).unwrap();
-        let two_to_one_params = C::TwoToOneHash::setup(&mut rng).unwrap();
+        let leaf_hash_param = C::LeafHash::setup(&mut rng).unwrap();
+        let two_to_one_param = C::TwoToOneHash::setup(&mut rng).unwrap();
         Self::well_formedness_check(
             labeled_commitment.commitment(),
-            &leaf_hash_params,
-            &two_to_one_params,
+            &leaf_hash_param,
+            &two_to_one_param,
         );
         todo!()
     }
