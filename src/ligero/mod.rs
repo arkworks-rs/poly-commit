@@ -188,7 +188,7 @@ struct CommitmentTranscript<F: PrimeField, C: Config> {
 
     /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
     paths: Vec<Path<C>>,
-gg
+
     /// v, s.t. E(v) = w
     v: Vec<F>,
 
@@ -248,7 +248,7 @@ impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialComm
     for Ligero<F, C, D, S, rho_inv, sec_param>
 where
     F: PrimeField,
-    P: P: DenseUVPolynomial<F>,
+    P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
     D: Digest,
