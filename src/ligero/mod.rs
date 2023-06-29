@@ -9,10 +9,12 @@ use ark_ff::BigInteger256;
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use core::ops::Deref;
 use core::{borrow::Borrow, marker::PhantomData};
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
 
+use crate::PolynomialLabel;
 use crate::{
     ligero::utils::{get_num_bytes, inner_product, reed_solomon},
     Error, LabeledCommitment, LabeledPolynomial, PCCommitment, PCCommitterKey,
@@ -128,10 +130,10 @@ where
         }
 
         // 4. Verify the paths for each of the leaf hashes
-        for (leaf, i) in col_hashes.into_iter().zip(indices.into_iter()) {
+        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
             // TODO handle the error here
-            let path = &commitment.proof.paths[i];
-            assert!(path.leaf_index == i, "Path is for a different index!");
+            let path = &commitment.proof.paths[*i];
+            assert!(path.leaf_index == *i, "Path is for a different index!");
 
             path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
                 .unwrap();
@@ -333,7 +335,11 @@ where
         let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
         
         // TODO loop over all polynomials
-        let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
+        
+        // TODO decide what to do with label and degree bound (these are private! but the commitment also has them)
+        let labeled_polynomial = polynomials.into_iter().next().unwrap();
+
+        let polynomial = labeled_polynomial.polynomial();
 
         let mut coeffs = polynomial.coeffs().to_vec();
 
@@ -352,9 +358,7 @@ where
 
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
-        // 2. Apply Reed-Solomon encoding row-wise
-        let rho_inv = 2; // self.rho_inv
-        
+        // 2. Apply Reed-Solomon encoding row-wise   
         let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
         let mut domain_iter = fft_domain.elements();
 
@@ -371,8 +375,8 @@ where
         let mut col_hashes = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
-        for col in ext_mat_cols {
-            col_hashes.push(hash_array(&col));
+        for col in ext_mat_cols.iter() {
+            col_hashes.push(C::Leaf::from(hash_array::<D, F>(col)));
         }
 
         let col_tree = MerkleTree::<C>::new(
@@ -422,7 +426,7 @@ where
         let mut paths = Vec::new();
 
         for i in indices {
-            queried_columns.push(ext_mat_cols[i]);
+            queried_columns.push(ext_mat_cols[i].clone());
             paths.push(col_tree.generate_proof(i).unwrap());
         }
 
@@ -438,7 +442,11 @@ where
             proof,
         };
 
-        Ok((vec![LabeledCommitment::new(label, commitment, degree_bound)], Vec::new()))
+        Ok((vec![LabeledCommitment::new(
+            labeled_polynomial.label().clone(),
+            commitment,
+            None, // TODO think about this (degree_bound)
+        )], Vec::new()))
         // TODO when should this return Err?
     }
 
