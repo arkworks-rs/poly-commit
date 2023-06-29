@@ -86,27 +86,13 @@ where
             // TODO some hashing, with the digest?
         }
 
-        // 2. Verify the paths for each of the leaf hashes
-        // TODO need a way to relate the index to the leaf hash
-        for (i, leaf) in col_hashes.iter().enumerate() {
-            // TODO handle the error here
-            commitment.transcript.paths[i]
-                .verify(
-                    leaf_hash_params,
-                    two_to_one_params,
-                    &commitment.root,
-                    leaf.clone(),
-                )
-                .unwrap();
-        }
-
-        // 3. Verify the Fiat-Shamir transformation
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"test");
         transcript
             .append_serializable_element(b"root", &commitment.root)
             .unwrap();
 
+        // 2. Get the linear combination coefficients from the transcript
         let mut r = Vec::new();
         for _ in 0..t {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
@@ -117,8 +103,7 @@ where
             .unwrap();
 
         // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
-        // TODO check whether this is right
-
+        // 3. Compute t column indices to check the linear combination at
         let num_encoded_rows = commitment.m * rho_inv;
         let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
         let mut indices = Vec::with_capacity(t);
@@ -134,7 +119,28 @@ where
             indices.push(ind % num_encoded_rows);
         }
 
+        // 3. Verify the paths for each of the leaf hashes
+        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
+            // TODO handle the error here
+            let path = &commitment.transcript.paths[*i];
+            assert!(path.leaf_index == *i, "Path is for a different index!");
+
+            path.verify(
+                leaf_hash_params,
+                two_to_one_params,
+                &commitment.root,
+                leaf,
+            )
+            .unwrap();
+        }
+
         // 4. verify the random linear combinations
+        // Compute the encoding of v, s.t. E(v) = w
+        let w = &commitment.transcript.v;
+        for index in indices {
+            // check that r.M_i = w_i
+            // transcript
+        }
         todo!()
     }
 }
