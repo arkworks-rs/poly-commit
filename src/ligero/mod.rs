@@ -1,6 +1,5 @@
-use core::{borrow::Borrow, marker::PhantomData};
-use jf_primitives::pcs::transcript::IOPTranscript;
-
+use ark_crypto_primitives::crh::CRHScheme;
+use ark_crypto_primitives::crh::TwoToOneCRHScheme;
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -8,7 +7,9 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use core::{borrow::Borrow, marker::PhantomData};
 use digest::Digest;
+use jf_primitives::pcs::transcript::IOPTranscript;
 
 use crate::{
     ligero::utils::{get_num_bytes, inner_product, reed_solomon},
@@ -423,15 +424,16 @@ where
     where
         Self::Commitment: 'a,
     {
+        let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
-        // // check if we've seen this commitment before. If not, we should verify it.
-        // let leaf_hash_params = vk.leaf_hash_params;
-        // let two_to_one_params = vk.two_to_one_params;
-        // Self::well_formedness_check(
-        //     labeled_commitment.commitment(),
-        //     leaf_hash_params,
-        //     two_to_one_params,
-        // );
+        // check if we've seen this commitment before. If not, we should verify it.
+        let leaf_hash_params = C::LeafHash::setup(&mut rng).unwrap();
+        let two_to_one_params = C::TwoToOneHash::setup(&mut rng).unwrap();
+        Self::well_formedness_check(
+            labeled_commitment.commitment(),
+            &leaf_hash_params,
+            &two_to_one_params,
+        );
         todo!()
     }
 }
