@@ -425,13 +425,13 @@ where
     {
         let labeled_commitment = commitments.into_iter().next().unwrap();
         // // check if we've seen this commitment before. If not, we should verify it.
-        let leaf_hash_params = vk.leaf_hash_params;
-        let two_to_one_params = vk.two_to_one_params;
-        Self::well_formedness_check(
-            labeled_commitment.commitment(),
-            leaf_hash_params,
-            two_to_one_params,
-        );
+        // let leaf_hash_params = vk.leaf_hash_params;
+        // let two_to_one_params = vk.two_to_one_params;
+        // Self::well_formedness_check(
+        //     labeled_commitment.commitment(),
+        //     leaf_hash_params,
+        //     two_to_one_params,
+        // );
         todo!()
     }
 }
