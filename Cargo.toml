@@ -15,7 +15,7 @@ ark-serialize = { version = "^0.4.0", default-features = false, features = [ "de
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
 ark-poly = {version = "^0.4.0", default-features = false }
-ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "crh"] }
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge","merkle_tree" ] }
 ark-std = { version = "^0.4.0", default-features = false }
 
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
@@ -25,6 +25,7 @@ hashbrown = { version = "0.13", default-features = false, optional = true }
 digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
 rayon = { version = "1", optional = true }
+jf-primitives = { version = "0.4.0-pre.0", git = "https://github.com/tessico/jellyfish", branch = "make-iop-transcipt-pub" }
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
