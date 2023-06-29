@@ -322,12 +322,13 @@ where
     where
         P: 'a,
     {
-        // TODO loop over all polys
+        unimplemented!()
+        /*        // TODO loop over all polys
         let LabeledPolynomial{label, polynomial, degree_bound, ..} = *polynomials.into_iter().next().unwrap();
 
         let mut coeffs = polynomial.coeffs().to_vec();
 
-        // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion 
+        // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion
         let num_elems = polynomial.degree() + 1;
         // TODO move this check to the constructor?
         assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
@@ -337,7 +338,7 @@ where
 
         // padding the coefficient vector with zeroes
         // TODO is this the most efficient way to do it?
-        coeffs.resize(m * m, F::zero()); 
+        coeffs.resize(m * m, F::zero());
 
         let mat = Matrix::new_from_flat( m, m, &coeffs);
 
@@ -347,7 +348,7 @@ where
 
         let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
         let domain_iter = fft_domain.elements();
-        
+
         let ext_mat = Matrix::new_from_rows(
             mat.rows().iter().map(|r| reed_solomon(
                 r,
@@ -389,8 +390,8 @@ where
         let commitment = Commitment::new(m, root, wf_transcript);
 
         Ok(LabeledCommitment::new(label, commitment, degree_bound));
-        
-        // TODO when should this return Err?
+
+        // TODO when should this return Err? */
     }
 
     fn open<'a>(

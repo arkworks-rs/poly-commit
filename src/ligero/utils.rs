@@ -1,9 +1,10 @@
-use ark_ff::{FftField, Field};
+use ark_ff::{FftField, Field, PrimeField};
 
 use ark_poly::{
     domain::general::GeneralElements, univariate::DensePolynomial, DenseUVPolynomial,
     EvaluationDomain, GeneralEvaluationDomain, Polynomial,
 };
+use digest::Digest;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     prelude::IndexedParallelIterator,
@@ -157,4 +158,11 @@ pub(crate) fn to_field<F: Field>(v: Vec<u64>) -> Vec<F> {
 #[inline]
 pub(crate) fn get_num_bytes(n: usize) -> usize {
     ceil_div((usize::BITS - n.leading_zeros()) as usize, 8)
+}
+
+pub(crate) fn hash_array<D: Digest, F: PrimeField>(array: &[F]) -> Vec<u8> {
+    
+    let data = array.to_bytes();
+    let dig = D::new();
+    D::digest(data).to_vec()
 }
