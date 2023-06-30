@@ -486,7 +486,7 @@ where
                 .collect(),
         );
 
-        // 3. Create the Merkle tree from the hashes of the columns
+        // 4. Create the Merkle tree from the hashes of the columns
         let mut col_hashes: Vec<C::Leaf> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
@@ -497,9 +497,7 @@ where
         let col_tree =
             MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
 
-        let root = col_tree.root();
-
-        // 7. Compute Merkle tree paths for the columns
+        // 5. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
         let mut paths = Vec::new();
 
@@ -508,7 +506,12 @@ where
             paths.push(col_tree.generate_proof(i).unwrap());
         }
         
-        todo!()
+        Ok(
+            LigeroPCProof {
+                paths,
+                v,
+                columns: queried_columns,
+            })
     }
 
     fn check<'a>(
