@@ -10,10 +10,11 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
+use std::borrow::Borrow;
 
 use crate::LabeledPolynomial;
 use crate::{
-    ligero::utils::{get_num_bytes, inner_product, reed_solomon},
+    ligero::utils::{inner_product, reed_solomon},
     Error, LabeledCommitment, PCCommitment, PCCommitterKey, PCPreparedCommitment,
     PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey, PolynomialCommitment,
 };
@@ -24,7 +25,7 @@ mod utils;
 use utils::Matrix;
 
 use self::utils::get_indices_from_transcript;
-use self::utils::hash_array;
+use self::utils::hash_column;
 mod tests;
 
 // TODO: Disclaimer: no hiding prop
@@ -34,6 +35,7 @@ pub struct Ligero<
     C: Config,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
     /// one over the rate rho
     const rho_inv: usize,
     /// security parameter, used in calculating t
@@ -43,6 +45,7 @@ pub struct Ligero<
     _config: PhantomData<C>,
     _digest: PhantomData<D>,
     _sponge: PhantomData<S>,
+    _poly: PhantomData<P>,
 }
 
 // TODO come up with reasonable defaults
@@ -56,15 +59,16 @@ fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
     t
 }
 
-impl<F, C, D, S, const rho_inv: usize, const sec_param: usize>
-    Ligero<F, C, D, S, rho_inv, sec_param>
+impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
+    Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     C: Config,
-    C::Leaf: Sized + From<Vec<u8>>,
+    Vec<u8>: Borrow<C::Leaf>,
     C::InnerDigest: Absorb,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
 {
     /// Create a new instance of Ligero.
     /// If either or both parameters are None, their default values are used.
@@ -75,6 +79,7 @@ where
             // TODO potentially can get rid of digest and sponge
             _digest: PhantomData,
             _sponge: PhantomData,
+            _poly: PhantomData,
         }
     }
 
@@ -87,11 +92,12 @@ where
         let t = calculate_t(rho_inv, sec_param);
 
         // 1. Hash the received columns, to get the leaf hashes
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
-        for c in commitment.proof.columns.iter() {
-            col_hashes.push(hash_array::<D, F>(c).into());
-            // TODO some hashing, with the digest?
-        }
+        let col_hashes: Vec<_> = commitment
+            .proof
+            .columns
+            .iter()
+            .map(|col| hash_column::<D, F>(col))
+            .collect();
 
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
@@ -116,13 +122,18 @@ where
         let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
 
         // 4. Verify the paths for each of the leaf hashes
-        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
+        for (leaf, i) in col_hashes.iter().zip(indices.iter()) {
             // TODO handle the error here
             let path = &commitment.proof.paths[*i];
             assert!(path.leaf_index == *i, "Path is for a different index!");
 
-            path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
-                .unwrap();
+            path.verify(
+                leaf_hash_param,
+                two_to_one_param,
+                &commitment.root,
+                leaf.clone(),
+            )
+            .unwrap();
         }
 
         // 5. Compute the encoding of v, s.t. E(v) = w
@@ -246,13 +257,13 @@ impl PCRandomness for LigeroPCRandomness {
 type LigeroPCProof = ();
 
 impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialCommitment<F, P, S>
-    for Ligero<F, C, D, S, rho_inv, sec_param>
+    for Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
-    C::Leaf: Sized + From<Vec<u8>>,
+    Vec<u8>: Borrow<C::Leaf>,
     C::InnerDigest: Absorb,
     D: Digest,
 {
@@ -281,7 +292,7 @@ where
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        todo!()
+        Ok(LigeroPCUniversalParams::default())
     }
 
     fn trim(
@@ -353,12 +364,12 @@ where
         );
 
         // 3. Create the Merkle tree from the hashes of the columns
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
-        for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_array::<D, F>(col).into());
-        }
+        let col_hashes: Vec<_> = ext_mat_cols
+            .iter()
+            .map(|col| hash_column::<D, F>(col))
+            .collect();
 
         let col_tree =
             MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
@@ -383,19 +394,7 @@ where
 
         // 6. Generate t column indices to test the linear combination on
         let num_encoded_rows = m * rho_inv;
-        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
-        let mut indices = Vec::with_capacity(t);
-        for _ in 0..t {
-            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-            let _ = transcript
-                .get_and_append_byte_challenge(b"i", &mut bytes)
-                .unwrap();
-
-            // get the usize from Vec<u8>:
-            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
-            // modulo the number of columns in the encoded matrix
-            indices.push(ind % num_encoded_rows);
-        }
+        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
 
         // 7. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
@@ -463,7 +462,8 @@ where
             labeled_commitment.commitment(),
             &leaf_hash_param,
             &two_to_one_param,
-        ).unwrap();
+        )
+        .unwrap();
         todo!()
     }
 }
