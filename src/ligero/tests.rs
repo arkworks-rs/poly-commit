@@ -1,9 +1,11 @@
-
 #[cfg(test)]
 mod tests {
 
     use ark_bls12_381::Fq as F;
-    use ark_poly::{domain::general::GeneralEvaluationDomain, EvaluationDomain, DenseUVPolynomial, univariate::DensePolynomial, Polynomial};
+    use ark_poly::{
+        domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
+        EvaluationDomain, Polynomial,
+    };
 
     use crate::ligero::utils::*;
 
@@ -23,11 +25,11 @@ mod tests {
 
     #[test]
     fn test_matrix_constructor_rows() {
-        let rows: Vec<Vec<F>> = vec!(
+        let rows: Vec<Vec<F>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
-        );
+        ];
         let mat = Matrix::new_from_rows(rows);
         assert_eq!(mat.entry(2, 0), F::from(55));
     }
@@ -35,21 +37,21 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_matrix_constructor_rows_panic() {
-        let rows: Vec<Vec<F>> = vec!(
+        let rows: Vec<Vec<F>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58]),
-        );
+        ];
         Matrix::new_from_rows(rows);
     }
 
     #[test]
     fn test_cols() {
-        let rows: Vec<Vec<F>> = vec!(
+        let rows: Vec<Vec<F>> = vec![
             to_field(vec![4, 76]),
-            to_field(vec![14, 92,]),
+            to_field(vec![14, 92]),
             to_field(vec![17, 89]),
-        );
+        ];
 
         let mat = Matrix::new_from_rows(rows);
 
@@ -58,11 +60,11 @@ mod tests {
 
     #[test]
     fn test_row_mul() {
-        let rows: Vec<Vec<F>> = vec!(
+        let rows: Vec<Vec<F>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
-        );
+        ];
 
         let mat = Matrix::new_from_rows(rows);
         let v: Vec<F> = to_field(vec![12, 41, 55]);
@@ -73,11 +75,10 @@ mod tests {
 
     #[test]
     fn test_fft_interface() {
-
         // we use this polynomial to generate the the values we will ask the fft to interpolate
         let pol_coeffs: Vec<F> = to_field(vec![30, 2, 91]);
         let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&pol_coeffs);
-        
+
         let fft_domain = GeneralEvaluationDomain::<F>::new(pol_coeffs.len()).unwrap();
 
         // generating the values
@@ -102,7 +103,7 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
-/*     #[test]
+    /*     #[test]
     fn test_well_formedness {
         Ligero
     } */
