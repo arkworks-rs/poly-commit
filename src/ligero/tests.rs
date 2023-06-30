@@ -91,4 +91,19 @@ mod tests {
         assert_eq!(fft_domain.ifft(&vals), pol_coeffs);
     }
 
+    #[test]
+    fn test_get_num_bytes() {
+        assert_eq!(get_num_bytes(0), 0);
+        assert_eq!(get_num_bytes(1), 1);
+        assert_eq!(get_num_bytes(9), 1);
+        assert_eq!(get_num_bytes(1 << 11), 2);
+        assert_eq!(get_num_bytes(1 << 32 - 1), 4);
+        assert_eq!(get_num_bytes(1 << 32), 5);
+        assert_eq!(get_num_bytes(1 << 32 + 1), 5);
+    }
+
+/*     #[test]
+    fn test_well_formedness {
+        Ligero
+    } */
 }
