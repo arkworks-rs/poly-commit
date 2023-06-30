@@ -54,6 +54,13 @@ mod tests {
     }
 
     #[test]
+    fn test_matrix_constructor_flat_square() {
+        let entries: Vec<F> = to_field(vec![10, 100, 4, 67]);
+        let mat = Matrix::new_from_flat(2, 2, &entries);
+        assert_eq!(mat.entry(1, 1), F::from(67));
+    }
+
+    #[test]
     #[should_panic]
     fn test_matrix_constructor_flat_panic() {
         let entries: Vec<F> = to_field(vec![10, 100, 4, 67, 44]);
