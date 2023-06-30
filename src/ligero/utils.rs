@@ -6,6 +6,7 @@ use ark_poly::{
 };
 use ark_serialize::CanonicalSerialize;
 use digest::Digest;
+use jf_primitives::pcs::transcript::IOPTranscript;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     prelude::IndexedParallelIterator,
@@ -175,10 +176,30 @@ macro_rules! to_bytes {
 
 #[inline]
 pub(crate) fn hash_array<D: Digest, F: PrimeField + CanonicalSerialize>(array: &[F]) -> Vec<u8> {
-
     let mut dig = D::new();
     for elem in array {
         dig.update(to_bytes!(elem).unwrap());
-    }    
+    }
     dig.finalize().to_vec()
+}
+
+pub(crate) fn get_indices_from_transcript<F: PrimeField>(
+    n: usize,
+    t: usize,
+    transcript: &mut IOPTranscript<F>,
+) -> Vec<usize> {
+    let bytes_to_squeeze = get_num_bytes(n);
+    let mut indices = Vec::with_capacity(t);
+    for _ in 0..t {
+        let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
+        let _ = transcript
+            .get_and_append_byte_challenge(b"i", &mut bytes)
+            .unwrap();
+
+        // get the usize from Vec<u8>:
+        let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
+        // modulo the number of columns in the encoded matrix
+        indices.push(ind % n);
+    }
+    indices
 }

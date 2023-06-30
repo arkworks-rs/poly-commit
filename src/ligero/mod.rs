@@ -1,7 +1,7 @@
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
 use ark_crypto_primitives::{
-    merkle_tree::{Config, LeafParam, Path, TwoToOneParam, MerkleTree},
+    merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::BigInt;
@@ -27,6 +27,7 @@ use ark_std::rand::RngCore;
 mod utils;
 use utils::Matrix;
 
+use self::utils::get_indices_from_transcript;
 use self::utils::hash_array;
 mod tests;
 
@@ -115,19 +116,8 @@ where
         // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
         // 3. Compute t column indices to check the linear combination at
         let num_encoded_rows = commitment.m * rho_inv;
-        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
-        let mut indices = Vec::with_capacity(t);
-        for _ in 0..t {
-            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-            let _ = transcript
-                .get_and_append_byte_challenge(b"i", &mut bytes)
-                .unwrap();
 
-            // get the usize from Vec<u8>:
-            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
-            // modulo the number of columns in the encoded matrix
-            indices.push(ind % num_encoded_rows);
-        }
+        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
 
         // 4. Verify the paths for each of the leaf hashes
         for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
@@ -142,18 +132,11 @@ where
         // 5. Compute the encoding of v, s.t. E(v) = w
         let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
         let mut domain_iter = fft_domain.elements();
-        let w = reed_solomon(
-            &commitment.proof.v,
-            rho_inv,
-            fft_domain,
-            &mut domain_iter,
-        );
-        
+        let w = reed_solomon(&commitment.proof.v, rho_inv, fft_domain, &mut domain_iter);
+
         // 6. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
-            if inner_product(&r, &commitment.proof.columns[transcript_index])
-                != w[matrix_index]
-            {
+            if inner_product(&r, &commitment.proof.columns[transcript_index]) != w[matrix_index] {
                 // TODO return proper error
                 return Err(Error::IncorrectInputLength(
                     "Incorrect linear combination".to_string(),
@@ -333,9 +316,9 @@ where
         let mut optional = crate::optional_rng::OptionalRng(rng); // TODO taken from Marlin code; change in the future?
         let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
         let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
-        
+
         // TODO loop over all polynomials
-        
+
         // TODO decide what to do with label and degree bound (these are private! but the commitment also has them)
         let labeled_polynomial = polynomials.into_iter().next().unwrap();
 
@@ -348,7 +331,11 @@ where
         let num_elems = polynomial.degree() + 1;
 
         // TODO move this check to the constructor?
-        assert_eq!((num_elems as f64) as usize, num_elems, "Degree of polynomial + 1 cannot be converted to f64: aborting");
+        assert_eq!(
+            (num_elems as f64) as usize,
+            num_elems,
+            "Degree of polynomial + 1 cannot be converted to f64: aborting"
+        );
         let m = (num_elems as f64).sqrt().ceil() as usize;
         // TODO: check if fft_domain.compute_size_of_domain(m) is large enough
 
@@ -356,34 +343,29 @@ where
         // TODO is this the most efficient/safest way to do it?
         coeffs.resize(m * m, F::zero());
 
-        let mat = Matrix::new_from_flat( m, m, &coeffs);
+        let mat = Matrix::new_from_flat(m, m, &coeffs);
 
-        // 2. Apply Reed-Solomon encoding row-wise   
+        // 2. Apply Reed-Solomon encoding row-wise
         let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
         let mut domain_iter = fft_domain.elements();
 
         let ext_mat = Matrix::new_from_rows(
-            mat.rows().iter().map(|r| reed_solomon(
-                r,
-                rho_inv,
-                fft_domain,
-                &mut domain_iter
-            )).collect()
+            mat.rows()
+                .iter()
+                .map(|r| reed_solomon(r, rho_inv, fft_domain, &mut domain_iter))
+                .collect(),
         );
 
         // 3. Create the Merkle tree from the hashes of the columns
-        let mut col_hashes = Vec::new();
+        let mut col_hashes: Vec<C::Leaf> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols.iter() {
-            col_hashes.push(C::Leaf::from(hash_array::<D, F>(col)));
+            col_hashes.push(hash_array::<D, F>(col).into());
         }
 
-        let col_tree = MerkleTree::<C>::new(
-            &leaf_hash_param, 
-            &two_to_one_param,
-            col_hashes,
-        ).unwrap();
+        let col_tree =
+            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
 
         let root = col_tree.root();
 
@@ -398,12 +380,10 @@ where
         for _ in 0..m {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
-        
+
         let v = mat.row_mul(&r);
 
-        transcript
-            .append_serializable_element(b"v", &v)
-            .unwrap();
+        transcript.append_serializable_element(b"v", &v).unwrap();
 
         // 6. Generate t column indices to test the linear combination on
         let num_encoded_rows = m * rho_inv;
@@ -436,17 +416,16 @@ where
             columns: queried_columns,
         };
 
-        let commitment = LigeroPCCommitment {
-            m,
-            root,
-            proof,
-        };
+        let commitment = LigeroPCCommitment { m, root, proof };
 
-        Ok((vec![LabeledCommitment::new(
-            labeled_polynomial.label().clone(),
-            commitment,
-            None, // TODO think about this (degree_bound)
-        )], Vec::new()))
+        Ok((
+            vec![LabeledCommitment::new(
+                labeled_polynomial.label().clone(),
+                commitment,
+                None, // TODO think about this (degree_bound)
+            )],
+            Vec::new(),
+        ))
         // TODO when should this return Err?
     }
 
