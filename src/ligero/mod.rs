@@ -1,5 +1,4 @@
-use ark_crypto_primitives::crh::CRHScheme;
-use ark_crypto_primitives::crh::TwoToOneCRHScheme;
+use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -7,9 +6,11 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::fmt::Debug;
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
+use std::borrow::Borrow;
 
 use crate::LabeledPolynomial;
 use crate::{
@@ -24,7 +25,7 @@ mod utils;
 use utils::Matrix;
 
 use self::utils::get_indices_from_transcript;
-use self::utils::hash_array;
+use self::utils::hash_column;
 mod tests;
 
 // TODO: Disclaimer: no hiding prop
@@ -34,6 +35,7 @@ pub struct Ligero<
     C: Config,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
     /// one over the rate rho
     const rho_inv: usize,
     /// security parameter, used in calculating t
@@ -43,6 +45,7 @@ pub struct Ligero<
     _config: PhantomData<C>,
     _digest: PhantomData<D>,
     _sponge: PhantomData<S>,
+    _poly: PhantomData<P>,
 }
 
 // TODO come up with reasonable defaults
@@ -56,15 +59,16 @@ fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
     t
 }
 
-impl<F, C, D, S, const rho_inv: usize, const sec_param: usize>
-    Ligero<F, C, D, S, rho_inv, sec_param>
+impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
+    Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     C: Config,
-    C::Leaf: Sized + From<Vec<u8>>,
+    Vec<u8>: Borrow<C::Leaf>,
     C::InnerDigest: Absorb,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
 {
     /// Create a new instance of Ligero.
     /// If either or both parameters are None, their default values are used.
@@ -75,6 +79,7 @@ where
             // TODO potentially can get rid of digest and sponge
             _digest: PhantomData,
             _sponge: PhantomData,
+            _poly: PhantomData,
         }
     }
 
@@ -123,7 +128,7 @@ where
         // 1. Hash the received columns into leaf hashes
         let mut col_hashes: Vec<C::Leaf> = Vec::new();
         for c in commitment.proof.columns.iter() {
-            col_hashes.push(hash_array::<D, F>(c).into());
+            col_hashes.push(hash_column::<D, F>(c).into());
         }
     
         // 2. Compute t column indices to check the linear combination at
@@ -136,8 +141,13 @@ where
             let path = &commitment.proof.paths[*i];
             assert!(path.leaf_index == *i, "Path is for a different index!"); // TODO return an error
 
-            path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
-                .unwrap();
+            path.verify(
+                leaf_hash_param,
+                two_to_one_param,
+                &commitment.root,
+                leaf.clone(),
+            )
+            .unwrap();
         }
 
         // 4. Compute the encoding w = E(v)
@@ -168,9 +178,26 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
-type LigeroPCCommitterKey = ();
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    #[derivative(Debug = "ignore")]
+    leaf_hash_params: LeafParam<C>,
+    #[derivative(Debug = "ignore")]
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-impl PCCommitterKey for LigeroPCCommitterKey {
+impl<C> PCCommitterKey for LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -179,10 +206,25 @@ impl PCCommitterKey for LigeroPCCommitterKey {
         todo!()
     }
 }
+/// The verifier key which holds some scheme parameters
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    leaf_hash_params: LeafParam<C>,
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-type LigeroPCVerifierKey = ();
-
-impl PCVerifierKey for LigeroPCVerifierKey {
+impl<C> PCVerifierKey for LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -265,21 +307,23 @@ where
 }
 
 impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialCommitment<F, P, S>
-    for Ligero<F, C, D, S, rho_inv, sec_param>
+    for Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
-    C::Leaf: Sized + From<Vec<u8>>,
+    Vec<u8>: Borrow<C::Leaf>,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
     C::InnerDigest: Absorb,
     D: Digest,
 {
     type UniversalParams = LigeroPCUniversalParams;
 
-    type CommitterKey = LigeroPCCommitterKey;
+    type CommitterKey = LigeroPCCommitterKey<C>;
 
-    type VerifierKey = LigeroPCVerifierKey;
+    type VerifierKey = LigeroPCVerifierKey<C>;
 
     type PreparedVerifierKey = LigeroPCPreparedVerifierKey;
 
@@ -300,7 +344,7 @@ where
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        todo!()
+        Ok(LigeroPCUniversalParams::default())
     }
 
     fn trim(
@@ -380,7 +424,7 @@ where
         }
 
         let col_tree =
-            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
+            MerkleTree::<C>::new(&ck.leaf_hash_params, &ck.two_to_one_params, col_hashes).unwrap();
 
         let root = col_tree.root();
 
@@ -526,7 +570,6 @@ where
     where
         Self::Commitment: 'a,
     {
-        let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
         let commitment = labeled_commitment.commitment();
         
