@@ -183,6 +183,7 @@ pub(crate) fn hash_column<D: Digest, F: PrimeField + CanonicalSerialize>(array: 
     dig.finalize().to_vec()
 }
 
+/// Generate `t` (not necessarily distinct) random points in `[0, n)` using the current state of `transcript`
 pub(crate) fn get_indices_from_transcript<F: PrimeField>(
     n: usize,
     t: usize,
