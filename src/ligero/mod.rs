@@ -86,8 +86,8 @@ where
     /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
     fn check_well_formedness(
         commitment: &LigeroPCCommitment<F, C>,
-        leaf_hash_param: &LeafParam<C>,
-        two_to_one_param: &TwoToOneParam<C>,
+        leaf_hash_params: &LeafParam<C>,
+        two_to_one_params: &TwoToOneParam<C>,
     ) -> Result<(), Error> {
         let t = calculate_t(rho_inv, sec_param);
 
@@ -112,8 +112,8 @@ where
             commitment,
             t,
             &mut transcript,
-            leaf_hash_param,
-            two_to_one_param
+            leaf_hash_params,
+            two_to_one_params
         )
     }
     fn check_random_linear_combination(
@@ -121,12 +121,12 @@ where
         commitment: &LigeroPCCommitment<F, C>,
         t: usize,
         transcript: &mut IOPTranscript<F>,
-        leaf_hash_param: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
-        two_to_one_param: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters
+        leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
+        two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters
     ) -> Result<(), Error>
     {
         // 1. Hash the received columns into leaf hashes
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
+        let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         for c in commitment.proof.columns.iter() {
             col_hashes.push(hash_column::<D, F>(c).into());
         }
@@ -142,8 +142,8 @@ where
             assert!(path.leaf_index == *i, "Path is for a different index!"); // TODO return an error
 
             path.verify(
-                leaf_hash_param,
-                two_to_one_param,
+                leaf_hash_params,
+                two_to_one_params,
                 &commitment.root,
                 leaf.clone(),
             )
@@ -178,6 +178,7 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
+/// Ligero commitment structure
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCCommitterKey<C>
@@ -416,11 +417,11 @@ where
         );
 
         // 3. Create the Merkle tree from the hashes of the columns
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
+        let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_array::<D, F>(col).into());
+            col_hashes.push(hash_column::<D, F>(col).into());
         }
 
         let col_tree =
@@ -531,11 +532,11 @@ where
         );
 
         // 4. Create the Merkle tree from the hashes of the columns
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
+        let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_array::<D, F>(col).into());
+            col_hashes.push(hash_column::<D, F>(col).into());
         }
 
         let col_tree =
@@ -576,14 +577,11 @@ where
         let m = commitment.m;
         let t = calculate_t(rho_inv, sec_param);
 
-        let leaf_hash_param = C::LeafHash::setup(&mut rng).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut rng).unwrap();
-
         // check if we've seen this commitment before. If not, we should verify it.
         Self::check_well_formedness(
             commitment,
-            &leaf_hash_param,
-            &two_to_one_param,
+            &vk.leaf_hash_params,
+            &vk.two_to_one_params,
         ).unwrap();
 
         // 1. Seed the transcript with the point and generate t random indices
@@ -616,8 +614,8 @@ where
             commitment,
             t,
             &mut transcript,
-            &leaf_hash_param,
-            &two_to_one_param
+            &vk.leaf_hash_params,
+            &vk.two_to_one_params
         )?;
 
         return Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap());
