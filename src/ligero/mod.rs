@@ -1,5 +1,4 @@
-use ark_crypto_primitives::crh::CRHScheme;
-use ark_crypto_primitives::crh::TwoToOneCRHScheme;
+use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -7,6 +6,7 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::fmt::Debug;
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
@@ -162,9 +162,26 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
-type LigeroPCCommitterKey = ();
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    #[derivative(Debug = "ignore")]
+    leaf_hash_params: LeafParam<C>,
+    #[derivative(Debug = "ignore")]
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-impl PCCommitterKey for LigeroPCCommitterKey {
+impl<C> PCCommitterKey for LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -173,10 +190,25 @@ impl PCCommitterKey for LigeroPCCommitterKey {
         todo!()
     }
 }
+/// The verifier key which holds some scheme parameters
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    leaf_hash_params: LeafParam<C>,
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-type LigeroPCVerifierKey = ();
-
-impl PCVerifierKey for LigeroPCVerifierKey {
+impl<C> PCVerifierKey for LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -264,14 +296,16 @@ where
     S: CryptographicSponge,
     C: Config + 'static,
     Vec<u8>: Borrow<C::Leaf>,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
     C::InnerDigest: Absorb,
     D: Digest,
 {
     type UniversalParams = LigeroPCUniversalParams;
 
-    type CommitterKey = LigeroPCCommitterKey;
+    type CommitterKey = LigeroPCCommitterKey<C>;
 
-    type VerifierKey = LigeroPCVerifierKey;
+    type VerifierKey = LigeroPCVerifierKey<C>;
 
     type PreparedVerifierKey = LigeroPCPreparedVerifierKey;
 
@@ -320,9 +354,6 @@ where
     {
         // 0. Recovering parameters
         let t = calculate_t(rho_inv, sec_param);
-        let mut optional = crate::optional_rng::OptionalRng(rng); // TODO taken from Marlin code; change in the future?
-        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
 
         // TODO loop over all polynomials
 
@@ -372,7 +403,7 @@ where
             .collect();
 
         let col_tree =
-            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
+            MerkleTree::<C>::new(&ck.leaf_hash_params, &ck.two_to_one_params, col_hashes).unwrap();
 
         let root = col_tree.root();
 
@@ -453,15 +484,12 @@ where
     where
         Self::Commitment: 'a,
     {
-        let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
         // check if we've seen this commitment before. If not, we should verify it.
-        let leaf_hash_param = C::LeafHash::setup(&mut rng).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut rng).unwrap();
         Self::well_formedness_check(
             labeled_commitment.commitment(),
-            &leaf_hash_param,
-            &two_to_one_param,
+            &vk.leaf_hash_params,
+            &vk.two_to_one_params,
         )
         .unwrap();
         todo!()
