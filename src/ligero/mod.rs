@@ -4,22 +4,18 @@ use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
 };
-use ark_ff::BigInt;
-use ark_ff::BigInteger256;
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use core::ops::Deref;
-use core::{borrow::Borrow, marker::PhantomData};
+use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
 
-use crate::PolynomialLabel;
+use crate::LabeledPolynomial;
 use crate::{
     ligero::utils::{get_num_bytes, inner_product, reed_solomon},
-    Error, LabeledCommitment, LabeledPolynomial, PCCommitment, PCCommitterKey,
-    PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
-    PolynomialCommitment,
+    Error, LabeledCommitment, PCCommitment, PCCommitterKey, PCPreparedCommitment,
+    PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey, PolynomialCommitment,
 };
 
 use ark_std::rand::RngCore;
@@ -299,11 +295,11 @@ where
 
     fn commit<'a>(
         ck: &Self::CommitterKey,
-        polynomials: impl IntoIterator<Item = &'a crate::LabeledPolynomial<F, P>>,
+        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
-            Vec<crate::LabeledCommitment<Self::Commitment>>,
+            Vec<LabeledCommitment<Self::Commitment>>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -431,8 +427,8 @@ where
 
     fn open<'a>(
         ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a crate::LabeledPolynomial<F, P>>,
-        commitments: impl IntoIterator<Item = &'a crate::LabeledCommitment<Self::Commitment>>,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
@@ -448,7 +444,7 @@ where
 
     fn check<'a>(
         vk: &Self::VerifierKey,
-        commitments: impl IntoIterator<Item = &'a crate::LabeledCommitment<Self::Commitment>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
@@ -467,7 +463,7 @@ where
             labeled_commitment.commitment(),
             &leaf_hash_param,
             &two_to_one_param,
-        );
+        ).unwrap();
         todo!()
     }
 }
