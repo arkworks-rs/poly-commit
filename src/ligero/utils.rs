@@ -15,8 +15,8 @@ use rayon::{
 use crate::streaming_kzg::ceil_div;
 
 pub(crate) struct Matrix<F: Field> {
-    n: usize,
-    m: usize,
+    pub(crate) n: usize,
+    pub(crate) m: usize,
     entries: Vec<Vec<F>>,
 }
 
@@ -203,4 +203,12 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
         indices.push(ind % n);
     }
     indices
+}
+
+#[inline]
+pub(crate) fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
+    // TODO calculate t somehow
+    let t = 5;
+    println!("WARNING: you are using dummy t = {t}");
+    t
 }
