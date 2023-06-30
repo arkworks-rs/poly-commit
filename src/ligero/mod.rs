@@ -26,7 +26,7 @@ mod utils;
 use utils::Matrix;
 
 use self::utils::get_indices_from_transcript;
-use self::utils::hash_array;
+use self::utils::hash_column;
 mod tests;
 
 // TODO: Disclaimer: no hiding prop
@@ -98,7 +98,7 @@ where
             .proof
             .columns
             .iter()
-            .map(|col| hash_array::<D, F>(col))
+            .map(|col| hash_column::<D, F>(col))
             .collect();
 
         // TODO replace unwraps by proper error handling
@@ -372,7 +372,7 @@ where
 
         let col_hashes: Vec<_> = ext_mat_cols
             .iter()
-            .map(|col| hash_array::<D, F>(col))
+            .map(|col| hash_column::<D, F>(col))
             .collect();
 
         let col_tree =

@@ -175,7 +175,7 @@ macro_rules! to_bytes {
 }
 
 #[inline]
-pub(crate) fn hash_array<D: Digest, F: PrimeField + CanonicalSerialize>(array: &[F]) -> Vec<u8> {
+pub(crate) fn hash_column<D: Digest, F: PrimeField + CanonicalSerialize>(array: &[F]) -> Vec<u8> {
     let mut dig = D::new();
     for elem in array {
         dig.update(to_bytes!(elem).unwrap());
