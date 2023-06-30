@@ -38,7 +38,7 @@ impl<F: Field> Matrix<F> {
 
         // TODO more efficient to run linearly?
         let entries: Vec<Vec<F>> = (0..n)
-            .map(|row| (0..m).map(|col| entry_list[n * row + m]).collect())
+            .map(|row| (0..m).map(|col| entry_list[m * row + col]).collect())
             .collect();
 
         Self { n, m, entries }
