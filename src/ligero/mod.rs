@@ -383,19 +383,7 @@ where
 
         // 6. Generate t column indices to test the linear combination on
         let num_encoded_rows = m * rho_inv;
-        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
-        let mut indices = Vec::with_capacity(t);
-        for _ in 0..t {
-            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-            let _ = transcript
-                .get_and_append_byte_challenge(b"i", &mut bytes)
-                .unwrap();
-
-            // get the usize from Vec<u8>:
-            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
-            // modulo the number of columns in the encoded matrix
-            indices.push(ind % num_encoded_rows);
-        }
+        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
 
         // 7. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
