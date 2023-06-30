@@ -1,5 +1,4 @@
-use ark_crypto_primitives::crh::CRHScheme;
-use ark_crypto_primitives::crh::TwoToOneCRHScheme;
+use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -7,6 +6,7 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::fmt::Debug;
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
@@ -173,10 +173,25 @@ impl PCCommitterKey for LigeroPCCommitterKey {
         todo!()
     }
 }
+/// The verifier key which holds some scheme parameters
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    leaf_hash_params: LeafParam<C>,
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-type LigeroPCVerifierKey = ();
-
-impl PCVerifierKey for LigeroPCVerifierKey {
+impl<C> PCVerifierKey for LigeroPCVerifierKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -264,6 +279,8 @@ where
     S: CryptographicSponge,
     C: Config + 'static,
     Vec<u8>: Borrow<C::Leaf>,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
     C::InnerDigest: Absorb,
     D: Digest,
 {
@@ -271,7 +288,7 @@ where
 
     type CommitterKey = LigeroPCCommitterKey;
 
-    type VerifierKey = LigeroPCVerifierKey;
+    type VerifierKey = LigeroPCVerifierKey<C>;
 
     type PreparedVerifierKey = LigeroPCPreparedVerifierKey;
 
@@ -453,15 +470,12 @@ where
     where
         Self::Commitment: 'a,
     {
-        let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
         // check if we've seen this commitment before. If not, we should verify it.
-        let leaf_hash_param = C::LeafHash::setup(&mut rng).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut rng).unwrap();
         Self::well_formedness_check(
             labeled_commitment.commitment(),
-            &leaf_hash_param,
-            &two_to_one_param,
+            &vk.leaf_hash_params,
+            &vk.two_to_one_params,
         )
         .unwrap();
         todo!()
