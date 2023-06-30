@@ -13,7 +13,7 @@ use jf_primitives::pcs::transcript::IOPTranscript;
 
 use crate::LabeledPolynomial;
 use crate::{
-    ligero::utils::{get_num_bytes, inner_product, reed_solomon},
+    ligero::utils::{inner_product, reed_solomon},
     Error, LabeledCommitment, PCCommitment, PCCommitterKey, PCPreparedCommitment,
     PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey, PolynomialCommitment,
 };
@@ -79,19 +79,12 @@ where
     }
 
     /// The verifier can check the well-formedness of the commitment by taking random linear combinations.
-    fn well_formedness_check(
+    fn check_well_formedness(
         commitment: &LigeroPCCommitment<F, C>,
         leaf_hash_param: &LeafParam<C>,
         two_to_one_param: &TwoToOneParam<C>,
     ) -> Result<(), Error> {
         let t = calculate_t(rho_inv, sec_param);
-
-        // 1. Hash the received columns, to get the leaf hashes
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
-        for c in commitment.proof.columns.iter() {
-            col_hashes.push(hash_array::<D, F>(c).into());
-            // TODO some hashing, with the digest?
-        }
 
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
@@ -109,37 +102,61 @@ where
             .append_serializable_element(b"v", &commitment.proof.v)
             .unwrap();
 
-        // we want to squeeze enough bytes to get the indices in the range [0, rho_inv * m)
-        // 3. Compute t column indices to check the linear combination at
+        Self::check_random_linear_combination(
+            &r,
+            commitment,
+            t,
+            &mut transcript,
+            leaf_hash_param,
+            two_to_one_param
+        )
+    }
+    fn check_random_linear_combination(
+        coeffs: &[F],
+        commitment: &LigeroPCCommitment<F, C>,
+        t: usize,
+        transcript: &mut IOPTranscript<F>,
+        leaf_hash_param: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
+        two_to_one_param: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters
+    ) -> Result<(), Error>
+    {
+        // 1. Hash the received columns into leaf hashes
+        let mut col_hashes: Vec<C::Leaf> = Vec::new();
+        for c in commitment.proof.columns.iter() {
+            col_hashes.push(hash_array::<D, F>(c).into());
+        }
+    
+        // 2. Compute t column indices to check the linear combination at
         let num_encoded_rows = commitment.m * rho_inv;
+        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, transcript);
 
-        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
-
-        // 4. Verify the paths for each of the leaf hashes
+        // 3. Verify the paths for each of the leaf hashes
         for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
             // TODO handle the error here
             let path = &commitment.proof.paths[*i];
-            assert!(path.leaf_index == *i, "Path is for a different index!");
+            assert!(path.leaf_index == *i, "Path is for a different index!"); // TODO return an error
 
             path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
                 .unwrap();
         }
 
-        // 5. Compute the encoding of v, s.t. E(v) = w
+        // 4. Compute the encoding w = E(v)
         let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
         let mut domain_iter = fft_domain.elements();
         let w = reed_solomon(&commitment.proof.v, rho_inv, fft_domain, &mut domain_iter);
 
-        // 6. Verify the random linear combinations
+        // 5. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
-            if inner_product(&r, &commitment.proof.columns[transcript_index]) != w[matrix_index] {
+            if inner_product(coeffs, &commitment.proof.columns[transcript_index]) != w[matrix_index] {
                 // TODO return proper error
                 return Err(Error::IncorrectInputLength(
                     "Incorrect linear combination".to_string(),
                 ));
             }
         }
+
         Ok(())
+
     }
 }
 
@@ -183,19 +200,6 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
     }
 }
 
-#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
-#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-
-struct Proof<F: PrimeField, C: Config> {
-    /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
-    paths: Vec<Path<C>>,
-
-    /// v, s.t. E(v) = w
-    v: Vec<F>,
-
-    columns: Vec<Vec<F>>,
-}
-
 /// The commitment to a polynomial is a root of the merkle tree,
 /// where each node is a hash of the column of the encoded coefficient matrix U.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
@@ -205,7 +209,7 @@ pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
     m: usize,
     // TODO is InnerDigest the right type?
     root: C::InnerDigest,
-    proof: Proof<F, C>,
+    proof: LigeroPCProof<F, C>,
 }
 
 impl<F: PrimeField, C: Config> PCCommitment for LigeroPCCommitment<F, C> {
@@ -243,7 +247,22 @@ impl PCRandomness for LigeroPCRandomness {
     }
 }
 
-type LigeroPCProof = ();
+/// Ligero proof
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCProof<F, C> 
+where 
+    F: PrimeField, 
+    C: Config
+{
+    /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
+    paths: Vec<Path<C>>,
+
+    /// v, s.t. E(v) = w
+    v: Vec<F>,
+
+    columns: Vec<Vec<F>>,
+}
 
 impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialCommitment<F, P, S>
     for Ligero<F, C, D, S, rho_inv, sec_param>
@@ -270,7 +289,7 @@ where
 
     type Randomness = LigeroPCRandomness;
 
-    type Proof = LigeroPCProof;
+    type Proof = LigeroPCProof<F, C>;
 
     type BatchProof = Vec<Self::Proof>;
 
@@ -382,20 +401,7 @@ where
         transcript.append_serializable_element(b"v", &v).unwrap();
 
         // 6. Generate t column indices to test the linear combination on
-        let num_encoded_rows = m * rho_inv;
-        let bytes_to_squeeze = get_num_bytes(num_encoded_rows);
-        let mut indices = Vec::with_capacity(t);
-        for _ in 0..t {
-            let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-            let _ = transcript
-                .get_and_append_byte_challenge(b"i", &mut bytes)
-                .unwrap();
-
-            // get the usize from Vec<u8>:
-            let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
-            // modulo the number of columns in the encoded matrix
-            indices.push(ind % num_encoded_rows);
-        }
+        let indices = get_indices_from_transcript(m * rho_inv, t, &mut transcript);
 
         // 7. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
@@ -406,7 +412,7 @@ where
             paths.push(col_tree.generate_proof(i).unwrap());
         }
 
-        let proof: Proof<F, C> = Proof {
+        let proof = LigeroPCProof {
             paths,
             v,
             columns: queried_columns,
@@ -439,6 +445,69 @@ where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
+        let labeled_polynomial = labeled_polynomials.into_iter().next().unwrap();
+        let polynomial = labeled_polynomial.polynomial();
+        let num_elems = polynomial.degree() + 1;
+        let m = (num_elems as f64).sqrt().ceil() as usize;
+        let t = calculate_t(rho_inv, sec_param);
+        let mut optional = crate::optional_rng::OptionalRng(rng);
+        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
+        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
+
+        let mut coeffs = polynomial.coeffs().to_vec();
+        coeffs.resize(m * m, F::zero());
+        let mat = Matrix::new_from_flat(m, m, &coeffs);
+
+        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+
+        // 1. Generate vector b
+        let mut b = Vec::new();
+        let point_pow_m = point.pow([m as u64]);
+        let mut acc_b = F::one();
+        for _ in 0..m {
+            b.push(acc_b);
+            acc_b *= point_pow_m;
+        }
+
+        let v = mat.row_mul(&b);
+        transcript.append_serializable_element(b"v", &v).unwrap();
+
+        // 2. Generate t column indices to test the linear combination on
+        let indices = get_indices_from_transcript(m * rho_inv, t, &mut transcript);
+
+        // 3. Apply Reed-Solomon encoding row-wise
+        let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+        let mut domain_iter = fft_domain.elements();
+
+        let ext_mat = Matrix::new_from_rows(
+            mat.rows()
+                .iter()
+                .map(|r| reed_solomon(r, rho_inv, fft_domain, &mut domain_iter))
+                .collect(),
+        );
+
+        // 3. Create the Merkle tree from the hashes of the columns
+        let mut col_hashes: Vec<C::Leaf> = Vec::new();
+        let ext_mat_cols = ext_mat.cols();
+
+        for col in ext_mat_cols.iter() {
+            col_hashes.push(hash_array::<D, F>(col).into());
+        }
+
+        let col_tree =
+            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
+
+        let root = col_tree.root();
+
+        // 7. Compute Merkle tree paths for the columns
+        let mut queried_columns = Vec::new();
+        let mut paths = Vec::new();
+
+        for i in indices {
+            queried_columns.push(ext_mat_cols[i].clone());
+            paths.push(col_tree.generate_proof(i).unwrap());
+        }
+        
         todo!()
     }
 
@@ -456,14 +525,58 @@ where
     {
         let mut rng = rng.unwrap();
         let labeled_commitment = commitments.into_iter().next().unwrap();
-        // check if we've seen this commitment before. If not, we should verify it.
+        let commitment = labeled_commitment.commitment();
+        
+        let m = commitment.m;
+        let t = calculate_t(rho_inv, sec_param);
+
         let leaf_hash_param = C::LeafHash::setup(&mut rng).unwrap();
         let two_to_one_param = C::TwoToOneHash::setup(&mut rng).unwrap();
-        Self::well_formedness_check(
-            labeled_commitment.commitment(),
+
+        // check if we've seen this commitment before. If not, we should verify it.
+        Self::check_well_formedness(
+            commitment,
             &leaf_hash_param,
             &two_to_one_param,
         ).unwrap();
+
+        // 1. Seed the transcript with the point and generate t random indices
+        // TODO replace unwraps by proper error handling
+        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+        transcript
+            .append_serializable_element(b"point", point)
+            .unwrap();
+
+        let indices = get_indices_from_transcript(m * rho_inv, t, &mut transcript);;
+
+        // 2. Compute a and b
+        let mut a = Vec::new();
+        let mut acc_a = F::one();
+        for i in 0..m {
+            a.push(acc_a);
+            acc_a *= point;
+        }
+
+        // by now acc_a = point^m
+        let mut b = Vec::new();
+        let mut acc_b = F::one();
+        for i in 0..m {
+            b.push(acc_b);
+            acc_b *= acc_a;
+        }
+
+        Self::check_random_linear_combination(
+            &b,
+            commitment,
+            t,
+            &mut transcript,
+            &leaf_hash_param,
+            &two_to_one_param
+        )?;
+
+        return Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap());
+
+        // TODO what is "values"? does it contain the actual evaluations?
         todo!()
     }
 }
