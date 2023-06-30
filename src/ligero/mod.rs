@@ -1,5 +1,6 @@
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
+use ark_crypto_primitives::to_uncompressed_bytes;
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -10,6 +11,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
+use std::borrow::Borrow;
 
 use crate::LabeledPolynomial;
 use crate::{
@@ -34,6 +36,7 @@ pub struct Ligero<
     C: Config,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
     /// one over the rate rho
     const rho_inv: usize,
     /// security parameter, used in calculating t
@@ -43,6 +46,7 @@ pub struct Ligero<
     _config: PhantomData<C>,
     _digest: PhantomData<D>,
     _sponge: PhantomData<S>,
+    _poly: PhantomData<P>,
 }
 
 // TODO come up with reasonable defaults
@@ -56,15 +60,17 @@ fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
     t
 }
 
-impl<F, C, D, S, const rho_inv: usize, const sec_param: usize>
-    Ligero<F, C, D, S, rho_inv, sec_param>
+impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
+    Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     C: Config,
-    C::Leaf: Sized + From<Vec<u8>>,
+    Vec<u8>: Borrow<C::Leaf>,
+    // C::Leaf: Sized + From<Vec<u8>>,
     C::InnerDigest: Absorb,
     D: Digest,
     S: CryptographicSponge,
+    P: DenseUVPolynomial<F>,
 {
     /// Create a new instance of Ligero.
     /// If either or both parameters are None, their default values are used.
@@ -75,6 +81,7 @@ where
             // TODO potentially can get rid of digest and sponge
             _digest: PhantomData,
             _sponge: PhantomData,
+            _poly: PhantomData,
         }
     }
 
@@ -87,11 +94,12 @@ where
         let t = calculate_t(rho_inv, sec_param);
 
         // 1. Hash the received columns, to get the leaf hashes
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
-        for c in commitment.proof.columns.iter() {
-            col_hashes.push(hash_array::<D, F>(c).into());
-            // TODO some hashing, with the digest?
-        }
+        let col_hashes: Vec<_> = commitment
+            .proof
+            .columns
+            .iter()
+            .map(|col| hash_array::<D, F>(col))
+            .collect();
 
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
@@ -116,13 +124,18 @@ where
         let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, &mut transcript);
 
         // 4. Verify the paths for each of the leaf hashes
-        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
+        for (leaf, i) in col_hashes.iter().zip(indices.iter()) {
             // TODO handle the error here
             let path = &commitment.proof.paths[*i];
             assert!(path.leaf_index == *i, "Path is for a different index!");
 
-            path.verify(leaf_hash_param, two_to_one_param, &commitment.root, leaf)
-                .unwrap();
+            path.verify(
+                leaf_hash_param,
+                two_to_one_param,
+                &commitment.root,
+                leaf.clone(),
+            )
+            .unwrap();
         }
 
         // 5. Compute the encoding of v, s.t. E(v) = w
@@ -246,13 +259,15 @@ impl PCRandomness for LigeroPCRandomness {
 type LigeroPCProof = ();
 
 impl<F, P, S, C, D, const rho_inv: usize, const sec_param: usize> PolynomialCommitment<F, P, S>
-    for Ligero<F, C, D, S, rho_inv, sec_param>
+    for Ligero<F, C, D, S, P, rho_inv, sec_param>
 where
     F: PrimeField,
     P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
-    C::Leaf: Sized + From<Vec<u8>>,
+    // &[u8]: Borrow<<C as ark_crypto_primitives::merkle_tree::Config>::Leaf>,
+    Vec<u8>: Borrow<C::Leaf>,
+    // C::Leaf: Sized + From<Vec<u8>>,
     C::InnerDigest: Absorb,
     D: Digest,
 {
@@ -281,7 +296,7 @@ where
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        todo!()
+        Ok(LigeroPCUniversalParams::default())
     }
 
     fn trim(
@@ -353,12 +368,12 @@ where
         );
 
         // 3. Create the Merkle tree from the hashes of the columns
-        let mut col_hashes: Vec<C::Leaf> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
-        for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_array::<D, F>(col).into());
-        }
+        let col_hashes: Vec<_> = ext_mat_cols
+            .iter()
+            .map(|col| hash_array::<D, F>(col))
+            .collect();
 
         let col_tree =
             MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
@@ -451,7 +466,8 @@ where
             labeled_commitment.commitment(),
             &leaf_hash_param,
             &two_to_one_param,
-        ).unwrap();
+        )
+        .unwrap();
         todo!()
     }
 }

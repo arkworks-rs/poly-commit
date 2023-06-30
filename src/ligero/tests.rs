@@ -6,8 +6,45 @@ mod tests {
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
         EvaluationDomain, Polynomial,
     };
+    use ark_std::test_rng;
+    use blake2::Blake2s256;
 
-    use crate::ligero::utils::*;
+    use crate::ligero::{utils::*, Ligero, PolynomialCommitment};
+    use ark_crypto_primitives::{
+        crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
+        merkle_tree::{ByteDigestConverter, Config, LeafParam, Path, TwoToOneParam},
+        sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge},
+    };
+
+    type UniPoly = DensePolynomial<F>;
+    #[derive(Clone)]
+    pub(super) struct Window4x256;
+    impl pedersen::Window for Window4x256 {
+        const WINDOW_SIZE: usize = 4;
+        const NUM_WINDOWS: usize = 256;
+    }
+
+    type LeafH = Sha256; //::CRH<JubJub, Window4x256>;
+    type CompressH = Sha256; //pedersen::TwoToOneCRH<JubJub, Window4x256>;
+
+    struct MerkleTreeParams;
+
+    impl Config for MerkleTreeParams {
+        type Leaf = [u8];
+        // type Leaf = Vec<u8>;
+
+        type LeafDigest = <LeafH as CRHScheme>::Output;
+        type LeafInnerDigestConverter = ByteDigestConverter<Self::LeafDigest>;
+        type InnerDigest = <CompressH as TwoToOneCRHScheme>::Output;
+
+        type LeafHash = LeafH;
+        type TwoToOneHash = CompressH;
+    }
+
+    type MTConfig = MerkleTreeParams;
+    type Sponge = PoseidonSponge<F>;
+    type PC<F, C, D, S, P> = Ligero<F, C, D, S, P, 2, 128>;
+    type LigeroPCS = PC<F, MTConfig, Blake2s256, Sponge, UniPoly>;
 
     #[test]
     fn test_matrix_constructor_flat() {
@@ -103,8 +140,11 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
-    /*     #[test]
-    fn test_well_formedness {
-        Ligero
-    } */
+    #[test]
+    fn test_construction() {
+        let rng = &mut test_rng();
+        let pp = LigeroPCS::setup(2, None, rng).unwrap();
+        // This fails since trim is not implemented
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 2, Some(&[0])).unwrap();
+    }
 }
