@@ -2,14 +2,21 @@
 mod tests {
 
     use ark_bls12_381::Fq as F;
+    use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
         EvaluationDomain, Polynomial,
     };
     use ark_std::test_rng;
     use blake2::Blake2s256;
+    use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-    use crate::ligero::{utils::*, Ligero, PolynomialCommitment};
+    use crate::{
+        ligero::{
+            utils::*, Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, PolynomialCommitment,
+        },
+        LabeledPolynomial,
+    };
     use ark_crypto_primitives::{
         crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
         merkle_tree::{ByteDigestConverter, Config},
@@ -147,11 +154,47 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
+    fn rand_poly<F: PrimeField>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePolynomial<F> {
+        DensePolynomial::rand(degree, rng)
+    }
+
+    fn constant_poly<F: PrimeField>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePolynomial<F> {
+        DensePolynomial::from_coefficients_slice(&[F::rand(rng)])
+    }
+
     #[test]
     fn test_construction() {
-        let rng = &mut test_rng();
-        let pp = LigeroPCS::setup(2, None, rng).unwrap();
-        // This fails since trim is not implemented
-        let (ck, vk) = LigeroPCS::trim(&pp, 0, 2, Some(&[0])).unwrap();
+        let mut rng = &mut test_rng();
+        let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
+        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
+            .unwrap()
+            .clone();
+
+        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+
+        let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
+        // let  = ChaCha20Rng::from_seed([0u8; 32]);
+        let labeled_poly = LabeledPolynomial::new(
+            "test".to_string(),
+            rand_poly(4, None, rand_chacha),
+            None,
+            None,
+        );
+        let c = LigeroPCS::commit(&ck, &[labeled_poly], None).unwrap();
     }
 }
