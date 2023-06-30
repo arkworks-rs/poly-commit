@@ -12,8 +12,8 @@ mod tests {
     use crate::ligero::{utils::*, Ligero, PolynomialCommitment};
     use ark_crypto_primitives::{
         crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
-        merkle_tree::{ByteDigestConverter, Config, LeafParam, Path, TwoToOneParam},
-        sponge::{poseidon::PoseidonSponge, Absorb, CryptographicSponge},
+        merkle_tree::{ByteDigestConverter, Config},
+        sponge::poseidon::PoseidonSponge,
     };
 
     type UniPoly = DensePolynomial<F>;

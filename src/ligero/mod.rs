@@ -1,6 +1,5 @@
 use ark_crypto_primitives::crh::CRHScheme;
 use ark_crypto_primitives::crh::TwoToOneCRHScheme;
-use ark_crypto_primitives::to_uncompressed_bytes;
 use ark_crypto_primitives::{
     merkle_tree::{Config, LeafParam, MerkleTree, Path, TwoToOneParam},
     sponge::{Absorb, CryptographicSponge},
@@ -15,7 +14,7 @@ use std::borrow::Borrow;
 
 use crate::LabeledPolynomial;
 use crate::{
-    ligero::utils::{get_num_bytes, inner_product, reed_solomon},
+    ligero::utils::{inner_product, reed_solomon},
     Error, LabeledCommitment, PCCommitment, PCCommitterKey, PCPreparedCommitment,
     PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey, PolynomialCommitment,
 };
@@ -66,7 +65,6 @@ where
     F: PrimeField,
     C: Config,
     Vec<u8>: Borrow<C::Leaf>,
-    // C::Leaf: Sized + From<Vec<u8>>,
     C::InnerDigest: Absorb,
     D: Digest,
     S: CryptographicSponge,
@@ -265,9 +263,7 @@ where
     P: DenseUVPolynomial<F>,
     S: CryptographicSponge,
     C: Config + 'static,
-    // &[u8]: Borrow<<C as ark_crypto_primitives::merkle_tree::Config>::Leaf>,
     Vec<u8>: Borrow<C::Leaf>,
-    // C::Leaf: Sized + From<Vec<u8>>,
     C::InnerDigest: Absorb,
     D: Digest,
 {
