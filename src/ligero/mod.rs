@@ -113,7 +113,7 @@ where
             t,
             &mut transcript,
             leaf_hash_params,
-            two_to_one_params
+            two_to_one_params,
         )
     }
     fn check_random_linear_combination(
@@ -122,15 +122,14 @@ where
         t: usize,
         transcript: &mut IOPTranscript<F>,
         leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
-        two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters
-    ) -> Result<(), Error>
-    {
+        two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
+    ) -> Result<(), Error> {
         // 1. Hash the received columns into leaf hashes
         let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         for c in commitment.proof.columns.iter() {
             col_hashes.push(hash_column::<D, F>(c).into());
         }
-    
+
         // 2. Compute t column indices to check the linear combination at
         let num_encoded_rows = commitment.m * rho_inv;
         let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, transcript);
@@ -157,7 +156,8 @@ where
 
         // 5. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
-            if inner_product(coeffs, &commitment.proof.columns[transcript_index]) != w[matrix_index] {
+            if inner_product(coeffs, &commitment.proof.columns[transcript_index]) != w[matrix_index]
+            {
                 // TODO return proper error
                 return Err(Error::IncorrectInputLength(
                     "Incorrect linear combination".to_string(),
@@ -166,7 +166,6 @@ where
         }
 
         Ok(())
-
     }
 }
 
@@ -293,10 +292,10 @@ impl PCRandomness for LigeroPCRandomness {
 /// Ligero proof
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct LigeroPCProof<F, C> 
-where 
-    F: PrimeField, 
-    C: Config
+pub struct LigeroPCProof<F, C>
+where
+    F: PrimeField,
+    C: Config,
 {
     /// For each of the indices in q, `paths` contains the path from the root of the merkle tree to the leaf
     paths: Vec<Path<C>>,
@@ -354,7 +353,7 @@ where
         supported_hiding_bound: usize,
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        todo!()
+        todo!();
     }
 
     fn commit<'a>(
@@ -373,9 +372,6 @@ where
     {
         // 0. Recovering parameters
         let t = calculate_t(rho_inv, sec_param);
-        let mut optional = crate::optional_rng::OptionalRng(rng); // TODO taken from Marlin code; change in the future?
-        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
 
         // TODO loop over all polynomials
 
@@ -495,9 +491,6 @@ where
         let num_elems = polynomial.degree() + 1;
         let m = (num_elems as f64).sqrt().ceil() as usize;
         let t = calculate_t(rho_inv, sec_param);
-        let mut optional = crate::optional_rng::OptionalRng(rng);
-        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
 
         let mut coeffs = polynomial.coeffs().to_vec();
         coeffs.resize(m * m, F::zero());
@@ -540,7 +533,7 @@ where
         }
 
         let col_tree =
-            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
+            MerkleTree::<C>::new(&ck.leaf_hash_params, &ck.two_to_one_params, col_hashes).unwrap();
 
         // 5. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
@@ -550,13 +543,12 @@ where
             queried_columns.push(ext_mat_cols[i].clone());
             paths.push(col_tree.generate_proof(i).unwrap());
         }
-        
-        Ok(
-            LigeroPCProof {
-                paths,
-                v,
-                columns: queried_columns,
-            })
+
+        Ok(LigeroPCProof {
+            paths,
+            v,
+            columns: queried_columns,
+        })
     }
 
     fn check<'a>(
@@ -573,16 +565,13 @@ where
     {
         let labeled_commitment = commitments.into_iter().next().unwrap();
         let commitment = labeled_commitment.commitment();
-        
+
         let m = commitment.m;
         let t = calculate_t(rho_inv, sec_param);
 
         // check if we've seen this commitment before. If not, we should verify it.
-        Self::check_well_formedness(
-            commitment,
-            &vk.leaf_hash_params,
-            &vk.two_to_one_params,
-        ).unwrap();
+        Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
+            .unwrap();
 
         // 1. Seed the transcript with the point and generate t random indices
         // TODO replace unwraps by proper error handling
@@ -591,7 +580,7 @@ where
             .append_serializable_element(b"point", point)
             .unwrap();
 
-        let indices = get_indices_from_transcript(m * rho_inv, t, &mut transcript);;
+        let indices = get_indices_from_transcript(m * rho_inv, t, &mut transcript);
 
         // 2. Compute a and b
         let mut a = Vec::new();
@@ -615,13 +604,10 @@ where
             t,
             &mut transcript,
             &vk.leaf_hash_params,
-            &vk.two_to_one_params
+            &vk.two_to_one_params,
         )?;
 
-        return Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap());
-
-        // TODO what is "values"? does it contain the actual evaluations?
-        todo!()
+        Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap())
     }
 }
 
