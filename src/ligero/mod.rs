@@ -162,9 +162,26 @@ impl PCUniversalParams for LigeroPCUniversalParams {
     }
 }
 
-type LigeroPCCommitterKey = ();
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
+    #[derivative(Debug = "ignore")]
+    leaf_hash_params: LeafParam<C>,
+    #[derivative(Debug = "ignore")]
+    two_to_one_params: TwoToOneParam<C>,
+}
 
-impl PCCommitterKey for LigeroPCCommitterKey {
+impl<C> PCCommitterKey for LigeroPCCommitterKey<C>
+where
+    C: Config,
+    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
+    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
+{
     fn max_degree(&self) -> usize {
         todo!()
     }
@@ -286,7 +303,7 @@ where
 {
     type UniversalParams = LigeroPCUniversalParams;
 
-    type CommitterKey = LigeroPCCommitterKey;
+    type CommitterKey = LigeroPCCommitterKey<C>;
 
     type VerifierKey = LigeroPCVerifierKey<C>;
 
@@ -337,9 +354,6 @@ where
     {
         // 0. Recovering parameters
         let t = calculate_t(rho_inv, sec_param);
-        let mut optional = crate::optional_rng::OptionalRng(rng); // TODO taken from Marlin code; change in the future?
-        let leaf_hash_param = C::LeafHash::setup(&mut optional).unwrap();
-        let two_to_one_param = C::TwoToOneHash::setup(&mut optional).unwrap();
 
         // TODO loop over all polynomials
 
@@ -389,7 +403,7 @@ where
             .collect();
 
         let col_tree =
-            MerkleTree::<C>::new(&leaf_hash_param, &two_to_one_param, col_hashes).unwrap();
+            MerkleTree::<C>::new(&ck.leaf_hash_params, &ck.two_to_one_params, col_hashes).unwrap();
 
         let root = col_tree.root();
 
