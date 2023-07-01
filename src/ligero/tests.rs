@@ -127,9 +127,6 @@ mod tests {
     #[test]
     fn test_reed_solomon() {
         // we use this polynomial to generate the the values we will ask the fft to interpolate
-        // let pol_evals: Vec<F> = to_field(vec![30, 2, 91, 4, 8]);
-        // TODO try for different values of m
-        // for i in 0..16
 
         let rho_inv = 3;
         // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
@@ -165,7 +162,6 @@ mod tests {
 
             // The rest of the elements should agree with the domain
             for j in 0..((rho_inv - 1) * m) {
-                println!("j: {:?}", j);
                 assert_eq!(pol.evaluate(&large_domain.element(j)), encoded[j + m]);
             }
         }
