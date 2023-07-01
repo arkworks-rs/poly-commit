@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use ark_bls12_381::Fq as F;
+    use ark_bls12_377::Fq;
     use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
@@ -23,7 +23,7 @@ mod tests {
         sponge::poseidon::PoseidonSponge,
     };
 
-    type UniPoly = DensePolynomial<F>;
+    type UniPoly = DensePolynomial<Fq>;
     #[derive(Clone)]
     pub(super) struct Window4x256;
     impl pedersen::Window for Window4x256 {
@@ -49,46 +49,48 @@ mod tests {
     }
 
     type MTConfig = MerkleTreeParams;
-    type Sponge = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<Fq>;
     type PC<F, C, D, S, P, const rho_inv: usize> = Ligero<F, C, D, S, P, rho_inv, 128>;
-    type LigeroPCS<const rho_inv: usize> = PC<F, MTConfig, Blake2s256, Sponge, UniPoly, rho_inv>;
+    type LigeroPCS<const rho_inv: usize> = PC<Fq, MTConfig, Blake2s256, Sponge, UniPoly, rho_inv>;
+    type LigeroPCS_F<const rho_inv: usize, F> =
+        PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>, rho_inv>;
 
     #[test]
     fn test_matrix_constructor_flat() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67, 44, 50]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44, 50]);
         let mat = Matrix::new_from_flat(2, 3, &entries);
-        assert_eq!(mat.entry(1, 2), F::from(50));
+        assert_eq!(mat.entry(1, 2), Fq::from(50));
     }
 
     #[test]
     fn test_matrix_constructor_flat_square() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67]);
         let mat = Matrix::new_from_flat(2, 2, &entries);
-        assert_eq!(mat.entry(1, 1), F::from(67));
+        assert_eq!(mat.entry(1, 1), Fq::from(67));
     }
 
     #[test]
     #[should_panic]
     fn test_matrix_constructor_flat_panic() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67, 44]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44]);
         Matrix::new_from_flat(2, 3, &entries);
     }
 
     #[test]
     fn test_matrix_constructor_rows() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
         let mat = Matrix::new_from_rows(rows);
-        assert_eq!(mat.entry(2, 0), F::from(55));
+        assert_eq!(mat.entry(2, 0), Fq::from(55));
     }
 
     #[test]
     #[should_panic]
     fn test_matrix_constructor_rows_panic() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58]),
@@ -98,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_cols() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![4, 76]),
             to_field(vec![14, 92]),
             to_field(vec![17, 89]),
@@ -111,17 +113,17 @@ mod tests {
 
     #[test]
     fn test_row_mul() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
 
         let mat = Matrix::new_from_rows(rows);
-        let v: Vec<F> = to_field(vec![12, 41, 55]);
-        // by giving the result in the integers and then converting to F
-        // we ensure the test will still pass even if F changes
-        assert_eq!(mat.row_mul(&v), to_field::<F>(vec![4088, 4431, 543]));
+        let v: Vec<Fq> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fq
+        // we ensure the test will still pass even if Fq changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fq>(vec![4088, 4431, 543]));
     }
 
     #[test]
@@ -132,7 +134,7 @@ mod tests {
         // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
         for i in 1..10 {
             let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-            let pol = rand_poly::<F>(i - 1, None, rand_chacha);
+            let pol = rand_poly::<Fq>(i - 1, None, rand_chacha);
 
             let coeffs = &pol.coeffs;
             assert_eq!(
@@ -142,7 +144,7 @@ mod tests {
             );
             assert_eq!(coeffs.len(), i, "length of coeffs and m mismatch");
 
-            let small_domain = GeneralEvaluationDomain::<F>::new(i).unwrap();
+            let small_domain = GeneralEvaluationDomain::<Fq>::new(i).unwrap();
 
             // size of evals might be larger than i (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
             let evals = small_domain.fft(&coeffs);
@@ -158,7 +160,7 @@ mod tests {
             // first elements of encoded should be itself, since the code is systematic
             assert_eq!(encoded[..m], evals);
 
-            let large_domain = GeneralEvaluationDomain::<F>::new(m * (rho_inv - 1)).unwrap();
+            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * (rho_inv - 1)).unwrap();
 
             // The rest of the elements should agree with the domain
             for j in 0..((rho_inv - 1) * m) {
@@ -173,7 +175,7 @@ mod tests {
         let rho = 2;
         for m in 1..10 {
             // rand poly of degree m
-            let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+            let domain = GeneralEvaluationDomain::<Fq>::new(m).unwrap();
             let poly = UniPoly::rand(m - 1, &mut test_rng());
             // get its evaluations at the entire domain
             let evals = (0..domain.size())
@@ -188,7 +190,7 @@ mod tests {
             assert_eq!(evals[..m], evals2[..m]);
 
             // now we try with a larger domain
-            let large_domain = GeneralEvaluationDomain::<F>::new(m * rho).unwrap();
+            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho).unwrap();
 
             let evals3 = large_domain.fft(&coeffs.to_vec());
             let evals4: Vec<_> = (0..large_domain.size())
@@ -212,29 +214,32 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
-    fn rand_poly<F: PrimeField>(
+    fn rand_poly<Fq: PrimeField>(
         degree: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePolynomial<F> {
+    ) -> DensePolynomial<Fq> {
         DensePolynomial::rand(degree, rng)
     }
 
-    fn constant_poly<F: PrimeField>(
+    fn constant_poly<Fq: PrimeField>(
         _: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePolynomial<F> {
-        DensePolynomial::from_coefficients_slice(&[F::rand(rng)])
+    ) -> DensePolynomial<Fq> {
+        DensePolynomial::from_coefficients_slice(&[Fq::rand(rng)])
     }
 
     #[test]
     fn test_setup() {
         let rng = &mut test_rng();
-        let _ = LigeroPCS::<2>::setup(10, None, rng).unwrap();
+        let _ = LigeroPCS::<2>::setup(1 << 44, None, rng).unwrap();
 
-        // the field we use doesnt have such large domains
-        assert_eq!(LigeroPCS::<5>::setup(10, None, rng).is_err(), true);
+        assert_eq!(LigeroPCS::<5>::setup(1 << 45, None, rng).is_err(), true);
+
+        // but the base field of bls12_381 doesnt have such large domains
+        use ark_bls12_381::Fq as F_381;
+        assert_eq!(LigeroPCS_F::<5, F_381>::setup(10, None, rng).is_err(), true);
     }
 
     #[test]
