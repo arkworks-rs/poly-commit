@@ -125,22 +125,84 @@ mod tests {
     }
 
     #[test]
-    fn test_fft_interface() {
+    fn test_reed_solomon() {
         // we use this polynomial to generate the the values we will ask the fft to interpolate
-        let pol_coeffs: Vec<F> = to_field(vec![30, 2, 91]);
-        let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&pol_coeffs);
+        // let pol_evals: Vec<F> = to_field(vec![30, 2, 91, 4, 8]);
+        // TODO try for different values of m
+        // for i in 0..16
 
-        let fft_domain = GeneralEvaluationDomain::<F>::new(pol_coeffs.len()).unwrap();
+        let rho_inv = 3;
+        // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
+        for i in 1..10 {
+            let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
+            let pol = rand_poly::<F>(i - 1, None, rand_chacha);
 
-        // generating the values
-        let mut vals = Vec::new();
+            let coeffs = &pol.coeffs;
+            assert_eq!(
+                pol.degree(),
+                coeffs.len() - 1,
+                "degree of poly and coeffs mismatch"
+            );
+            assert_eq!(coeffs.len(), i, "length of coeffs and m mismatch");
 
-        for i in 0..4 {
-            vals.push(pol.evaluate(&fft_domain.element(i)));
+            let small_domain = GeneralEvaluationDomain::<F>::new(i).unwrap();
+
+            // size of evals might be larger than i (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
+            let evals = small_domain.fft(&coeffs);
+            let m = evals.len();
+
+            let coeffs_again = small_domain.ifft(&evals);
+            assert_eq!(coeffs_again[..i], *coeffs);
+
+            let encoded = reed_solomon(&evals, rho_inv);
+            // Assert that the encoded vector is of the right length
+            assert_eq!(encoded.len(), rho_inv * m);
+
+            // first elements of encoded should be itself, since the code is systematic
+            assert_eq!(encoded[..m], evals);
+
+            let large_domain = GeneralEvaluationDomain::<F>::new(m * (rho_inv - 1)).unwrap();
+
+            // The rest of the elements should agree with the domain
+            for j in 0..((rho_inv - 1) * m) {
+                println!("j: {:?}", j);
+                assert_eq!(pol.evaluate(&large_domain.element(j)), encoded[j + m]);
+            }
         }
+    }
 
-        // the fft should recover the original polynomial
-        assert_eq!(fft_domain.ifft(&vals), pol_coeffs);
+    #[test]
+    fn test_fft_interface() {
+        // This test is probably too verbose, and should be merged with the RS test
+        let rho = 2;
+        for m in 1..10 {
+            // rand poly of degree m
+            let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+            let poly = UniPoly::rand(m - 1, &mut test_rng());
+            // get its evaluations at the entire domain
+            let evals = (0..domain.size())
+                .map(|i| poly.evaluate(&domain.element(i)))
+                .collect::<Vec<_>>();
+
+            // convert back to the coefficients
+            let coeffs = domain.ifft(&evals);
+            assert_eq!(coeffs[..m], poly.coeffs);
+
+            let evals2 = domain.fft(&coeffs.to_vec());
+            assert_eq!(evals[..m], evals2[..m]);
+
+            // now we try with a larger domain
+            let large_domain = GeneralEvaluationDomain::<F>::new(m * rho).unwrap();
+
+            let evals3 = large_domain.fft(&coeffs.to_vec());
+            let evals4: Vec<_> = (0..large_domain.size())
+                .map(|i| poly.evaluate(&large_domain.element(i)))
+                .collect::<Vec<_>>();
+
+            assert_eq!(evals3[..m], evals4[..m]);
+
+            let coeffs2 = large_domain.ifft(&evals3);
+        }
     }
 
     #[test]
