@@ -50,8 +50,8 @@ mod tests {
 
     type MTConfig = MerkleTreeParams;
     type Sponge = PoseidonSponge<F>;
-    type PC<F, C, D, S, P> = Ligero<F, C, D, S, P, 2, 128>;
-    type LigeroPCS = PC<F, MTConfig, Blake2s256, Sponge, UniPoly>;
+    type PC<F, C, D, S, P, const rho_inv: usize> = Ligero<F, C, D, S, P, rho_inv, 128>;
+    type LigeroPCS<const rho_inv: usize> = PC<F, MTConfig, Blake2s256, Sponge, UniPoly, rho_inv>;
 
     #[test]
     fn test_matrix_constructor_flat() {
@@ -233,8 +233,20 @@ mod tests {
     }
 
     #[test]
-    fn test_construction() {
+    fn test_setup() {
         let mut rng = &mut test_rng();
+        let _ = LigeroPCS::<2>::setup(10, None, rng).unwrap();
+
+        // the field we use doesnt have such large domains
+        assert_eq!(LigeroPCS::<5>::setup(10, None, rng).is_err(), true);
+    }
+
+    #[test]
+    fn test_construction() {
+        let degree = 4;
+        let mut rng = &mut test_rng();
+        // just to make sure we have the right degree given the FFT domain for our field
+        LigeroPCS::<2>::setup(degree, None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
@@ -250,13 +262,13 @@ mod tests {
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-        // let  = ChaCha20Rng::from_seed([0u8; 32]);
         let labeled_poly = LabeledPolynomial::new(
             "test".to_string(),
-            rand_poly(4, None, rand_chacha),
+            rand_poly(degree, None, rand_chacha),
             None,
             None,
         );
-        let c = LigeroPCS::commit(&ck, &[labeled_poly], None).unwrap();
+
+        let c = LigeroPCS::<2>::commit(&ck, &[labeled_poly], None).unwrap();
     }
 }

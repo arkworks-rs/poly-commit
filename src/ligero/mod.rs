@@ -260,6 +260,9 @@ where
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         assert!(rho_inv >= 1, "rho_inv is the inverse of the rate and must be at least 1");
+        // The domain will have size m * rho_inv, but we already have the first m elements
+        GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (rho_inv - 1)).ok_or(Error::UnsupportedDegreeBound(max_degree))?;
+
         Ok(LigeroPCUniversalParams::default())
     }
 
