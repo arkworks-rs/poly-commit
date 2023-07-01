@@ -116,10 +116,9 @@ impl<F: Field> Matrix<F> {
 // TODO batch for all rows? possibly minimal savings due to not having to create fft_domain every time
 // here we restrict F to PrimeField
 pub(crate) fn reed_solomon<F: FftField>(
+    // msg, of length m, is interpreted as a vector of coefficients of a polynomial of degree m - 1
     msg: &[F],
     rho_inverse: usize,
-    fft_domain: GeneralEvaluationDomain<F>,
-    domain_iter: &mut GeneralElements<F>,
 ) -> Vec<F> {
     // TODO is this check worth it?
     // rho_inverse = 0 should never happen; rho_inverse = 1 means no expansion
@@ -129,19 +128,16 @@ pub(crate) fn reed_solomon<F: FftField>(
 
     let m = msg.len();
 
-    let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&fft_domain.ifft(msg));
+    let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+    let poly_coeffs = domain.ifft(msg).to_vec();
+    let mut out = msg.to_vec();
+    assert!(out.len() == m);
 
-    let mut encoding = msg.to_vec();
-
-    domain_iter.nth(m - 1);
-
-    for _ in 0..(rho_inverse - 1) * m {
-        // TODO make sure the domain has enough elements in the caller or check here
-        let zeta = domain_iter.next().unwrap();
-        encoding.push(pol.evaluate(&zeta));
-    }
-
-    encoding
+    // TODO if rho_inv == 2, then with a systematic encoding the second half will be the same as first - is that an issue?
+    let domain = GeneralEvaluationDomain::<F>::new(m * (rho_inverse - 1)).unwrap();
+    let mut encoded = domain.fft(&poly_coeffs);
+    out.extend_from_slice(&encoded[..((rho_inverse - 1) * m)]);
+    out
 }
 
 #[inline]

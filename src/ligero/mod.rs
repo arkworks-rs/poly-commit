@@ -120,9 +120,7 @@ where
         }
 
         // 4. Compute the encoding w = E(v)
-        let fft_domain = GeneralEvaluationDomain::<F>::new(commitment.m).unwrap();
-        let mut domain_iter = fft_domain.elements();
-        let w = reed_solomon(&commitment.proof.v, rho_inv, fft_domain, &mut domain_iter);
+        let w = reed_solomon(&commitment.proof.v, rho_inv);
 
         // 5. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
@@ -161,13 +159,10 @@ where
         let mat = Matrix::new_from_flat(m, m, &coeffs);
 
         // 2. Apply Reed-Solomon encoding row-wise
-        let fft_domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
-        let mut domain_iter = fft_domain.elements();
-
         let ext_mat = Matrix::new_from_rows(
             mat.rows()
                 .iter()
-                .map(|r| reed_solomon(r, rho_inv, fft_domain, &mut domain_iter))
+                .map(|r| reed_solomon(r, rho_inv))
                 .collect(),
         );
 
