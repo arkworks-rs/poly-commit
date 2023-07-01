@@ -259,6 +259,7 @@ where
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
+        assert!(rho_inv >= 1, "rho_inv is the inverse of the rate and must be at least 1");
         Ok(LigeroPCUniversalParams::default())
     }
 

@@ -120,12 +120,6 @@ pub(crate) fn reed_solomon<F: FftField>(
     msg: &[F],
     rho_inverse: usize,
 ) -> Vec<F> {
-    // TODO is this check worth it?
-    // rho_inverse = 0 should never happen; rho_inverse = 1 means no expansion
-    if rho_inverse <= 1 {
-        return msg.to_vec();
-    }
-
     let m = msg.len();
 
     let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
