@@ -1,9 +1,6 @@
 use ark_ff::{FftField, Field, PrimeField};
 
-use ark_poly::{
-    domain::general::GeneralElements, univariate::DensePolynomial, DenseUVPolynomial,
-    EvaluationDomain, GeneralEvaluationDomain, Polynomial,
-};
+use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::CanonicalSerialize;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
@@ -129,7 +126,7 @@ pub(crate) fn reed_solomon<F: FftField>(
 
     // TODO if rho_inv == 2, then with a systematic encoding the second half will be the same as first - is that an issue?
     let domain = GeneralEvaluationDomain::<F>::new(m * (rho_inverse - 1)).unwrap();
-    let mut encoded = domain.fft(&poly_coeffs);
+    let encoded = domain.fft(&poly_coeffs);
     out.extend_from_slice(&encoded[..((rho_inverse - 1) * m)]);
     out
 }

@@ -11,10 +11,8 @@ use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
 use std::borrow::Borrow;
 
-use crate::{LabeledPolynomial, PolynomialCommitment, Error, LabeledCommitment};
-use crate::{
-    ligero::utils::{inner_product, reed_solomon},
-};
+use crate::ligero::utils::{inner_product, reed_solomon};
+use crate::{Error, LabeledCommitment, LabeledPolynomial, PolynomialCommitment};
 
 use ark_std::rand::RngCore;
 
@@ -26,7 +24,7 @@ use data_structures::*;
 
 pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
 
-use utils::{get_indices_from_transcript, calculate_t, hash_column};
+use utils::{calculate_t, get_indices_from_transcript, hash_column};
 mod tests;
 
 impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
@@ -136,7 +134,6 @@ where
         Ok(())
     }
     fn compute_matrices(polynomial: &P) -> (Matrix<F>, Matrix<F>) {
-
         let mut coeffs = polynomial.coeffs().to_vec();
 
         // 1. Computing parameters and initial matrix
@@ -172,8 +169,7 @@ where
         ext_mat: &Matrix<F>,
         leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
         two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
-    ) -> MerkleTree::<C> 
-    {
+    ) -> MerkleTree<C> {
         let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         let ext_mat_cols = ext_mat.cols();
 
@@ -188,11 +184,10 @@ where
         mat: &Matrix<F>,
         ext_mat: &Matrix<F>,
         col_tree: &MerkleTree<C>,
-        transcript: &mut IOPTranscript<F>
-     ) -> LigeroPCProof<F, C> {
-
+        transcript: &mut IOPTranscript<F>,
+    ) -> LigeroPCProof<F, C> {
         let m = mat.m;
-        let t =  calculate_t(rho_inv, sec_param);
+        let t = calculate_t(rho_inv, sec_param);
 
         // 1. Compute the linear combination using the random coefficients
         let v = mat.row_mul(coeffs);
@@ -259,9 +254,13 @@ where
         num_vars: Option<usize>,
         rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        assert!(rho_inv >= 1, "rho_inv is the inverse of the rate and must be at least 1");
+        assert!(
+            rho_inv >= 1,
+            "rho_inv is the inverse of the rate and must be at least 1"
+        );
         // The domain will have size m * rho_inv, but we already have the first m elements
-        GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (rho_inv - 1)).ok_or(Error::UnsupportedDegreeBound(max_degree))?;
+        GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (rho_inv - 1))
+            .ok_or(Error::UnsupportedDegreeBound(max_degree))?;
 
         Ok(LigeroPCUniversalParams::default())
     }
@@ -300,11 +299,8 @@ where
         let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
         // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree = Self::create_merkle_tree(
-            &ext_mat,
-            &ck.leaf_hash_params,
-            &ck.two_to_one_params
-        );
+        let col_tree =
+            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
         // 3. Add root to transcript and generate random linear combination with it
         let root = col_tree.root();
@@ -321,13 +317,7 @@ where
         }
 
         // 4. Generate the proof by choosing random columns and proving their paths in the tree
-        let proof = Self::generate_proof(
-            &r,
-            &mat,
-            &ext_mat,
-            &col_tree,
-            &mut transcript
-        );
+        let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
         let commitment = LigeroPCCommitment { m, root, proof };
 
@@ -363,11 +353,8 @@ where
         let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
         // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree = Self::create_merkle_tree(
-            &ext_mat,
-            &ck.leaf_hash_params,
-            &ck.two_to_one_params
-        );
+        let col_tree =
+            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
         // 3. Generate vector b and add v = b·M to the transcript
         let m = mat.m;
@@ -383,7 +370,9 @@ where
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
 
         let v = mat.row_mul(&b);
-        transcript.append_serializable_element(b"point", point).unwrap();
+        transcript
+            .append_serializable_element(b"point", point)
+            .unwrap();
         transcript.append_serializable_element(b"v", &v).unwrap();
 
         Ok(Self::generate_proof(
@@ -391,7 +380,7 @@ where
             &mat,
             &ext_mat,
             &col_tree,
-            &mut transcript
+            &mut transcript,
         ))
     }
 
@@ -439,7 +428,9 @@ where
         transcript
             .append_serializable_element(b"point", point)
             .unwrap();
-        transcript.append_serializable_element(b"v", &proof.v).unwrap();
+        transcript
+            .append_serializable_element(b"v", &proof.v)
+            .unwrap();
 
         // 3. Check the linear combination in the proof
         Self::check_random_linear_combination(

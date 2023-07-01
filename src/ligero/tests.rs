@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_setup() {
-        let mut rng = &mut test_rng();
+        let rng = &mut test_rng();
         let _ = LigeroPCS::<2>::setup(10, None, rng).unwrap();
 
         // the field we use doesnt have such large domains
