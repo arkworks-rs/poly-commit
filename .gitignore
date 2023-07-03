@@ -7,4 +7,3 @@ Cargo.lock
 *.pyc
 *.sage.py
 params
-.vscode/*
