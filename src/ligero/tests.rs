@@ -204,6 +204,40 @@ mod tests {
     }
 
     #[test]
+    fn test_merkle_tree() {
+        let mut rng = &mut test_rng();
+        let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
+        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
+            .unwrap()
+            .clone();
+
+        let rows: Vec<Vec<Fq>> = vec![
+            to_field(vec![4, 76]),
+            to_field(vec![14, 92]),
+            to_field(vec![17, 89]),
+        ];
+
+        let mat = Matrix::new_from_rows(rows);
+        let mt = LigeroPCS::<2>::create_merkle_tree(&mat, &leaf_hash_params, &two_to_one_params);
+
+        let root = mt.root();
+
+        for (i, col) in mat.cols().iter().enumerate() {
+            let col_hash = hash_column::<Blake2s256, Fq>(col);
+
+            let proof = mt.generate_proof(i).unwrap();
+            assert!(proof
+                .verify(
+                    &leaf_hash_params,
+                    &two_to_one_params,
+                    &root,
+                    col_hash.clone()
+                )
+                .unwrap());
+        }
+    }
+
+    #[test]
     fn test_get_num_bytes() {
         assert_eq!(get_num_bytes(0), 0);
         assert_eq!(get_num_bytes(1), 1);
