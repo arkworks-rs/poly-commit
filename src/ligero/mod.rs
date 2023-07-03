@@ -177,6 +177,10 @@ where
             col_hashes.push(hash_column::<D, F>(col).into());
         }
 
+        // pad the column hashes with zeroes
+        let next_pow_of_two = col_hashes.len().next_power_of_two();
+        col_hashes.resize(next_pow_of_two, vec![0; <D as Digest>::output_size()]);
+
         MerkleTree::<C>::new(leaf_hash_params, two_to_one_params, col_hashes).unwrap()
     }
     fn generate_proof(
