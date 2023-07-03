@@ -103,10 +103,15 @@ where
         let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, transcript);
 
         // 3. Verify the paths for each of the leaf hashes
-        for (leaf, i) in col_hashes.into_iter().zip(indices.iter()) {
+        for (i, (leaf, q_i)) in col_hashes.into_iter().zip(indices.iter()).enumerate() {
             // TODO handle the error here
-            let path = &commitment.proof.paths[*i];
-            assert!(path.leaf_index == *i, "Path is for a different index!"); // TODO return an error
+            let path = &commitment.proof.paths[i];
+            assert!(
+                path.leaf_index == *q_i,
+                "Path is for a different index: i: {}, leaf index: {}!",
+                q_i,
+                path.leaf_index
+            ); // TODO return an error
 
             path.verify(
                 leaf_hash_params,
