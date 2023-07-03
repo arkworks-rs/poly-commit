@@ -382,7 +382,6 @@ where
         transcript
             .append_serializable_element(b"point", point)
             .unwrap();
-        transcript.append_serializable_element(b"v", &v).unwrap();
 
         Ok(Self::generate_proof(
             &b,
