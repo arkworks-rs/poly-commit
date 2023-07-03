@@ -77,16 +77,21 @@ where
 
         Self::check_random_linear_combination(
             &r,
-            commitment,
+            &commitment.proof,
+            &commitment.root,
+            commitment.m,
             t,
             &mut transcript,
             leaf_hash_params,
             two_to_one_params,
         )
     }
+
     fn check_random_linear_combination(
         coeffs: &[F],
-        commitment: &LigeroPCCommitment<F, C>,
+        proof: &LigeroPCProof<F, C>,
+        root: &C::InnerDigest,
+        m: usize,
         t: usize,
         transcript: &mut IOPTranscript<F>,
         leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
@@ -94,18 +99,18 @@ where
     ) -> Result<(), Error> {
         // 1. Hash the received columns into leaf hashes
         let mut col_hashes: Vec<Vec<u8>> = Vec::new();
-        for c in commitment.proof.columns.iter() {
+        for c in proof.columns.iter() {
             col_hashes.push(hash_column::<D, F>(c).into());
         }
 
         // 2. Compute t column indices to check the linear combination at
-        let num_encoded_rows = commitment.m * rho_inv;
+        let num_encoded_rows = m * rho_inv;
         let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, transcript);
 
         // 3. Verify the paths for each of the leaf hashes
         for (i, (leaf, q_i)) in col_hashes.into_iter().zip(indices.iter()).enumerate() {
             // TODO handle the error here
-            let path = &commitment.proof.paths[i];
+            let path = &proof.paths[i];
             assert!(
                 path.leaf_index == *q_i,
                 "Path is for a different index: i: {}, leaf index: {}!",
@@ -113,22 +118,16 @@ where
                 path.leaf_index
             ); // TODO return an error
 
-            path.verify(
-                leaf_hash_params,
-                two_to_one_params,
-                &commitment.root,
-                leaf.clone(),
-            )
-            .unwrap();
+            path.verify(leaf_hash_params, two_to_one_params, root, leaf.clone())
+                .unwrap();
         }
 
         // 4. Compute the encoding w = E(v)
-        let w = reed_solomon(&commitment.proof.v, rho_inv);
+        let w = reed_solomon(&proof.v, rho_inv);
 
         // 5. Verify the random linear combinations
         for (transcript_index, matrix_index) in indices.into_iter().enumerate() {
-            if inner_product(coeffs, &commitment.proof.columns[transcript_index]) != w[matrix_index]
-            {
+            if inner_product(coeffs, &proof.columns[transcript_index]) != w[matrix_index] {
                 // TODO return proper error
                 return Err(Error::IncorrectInputLength(
                     "Incorrect linear combination".to_string(),
@@ -443,7 +442,9 @@ where
         // 3. Check the linear combination in the proof
         Self::check_random_linear_combination(
             &b,
-            commitment,
+            proof,
+            &commitment.root,
+            m,
             t,
             &mut transcript,
             &vk.leaf_hash_params,
