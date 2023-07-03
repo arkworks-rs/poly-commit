@@ -1,22 +1,29 @@
 #[cfg(test)]
 mod tests {
 
-    use ark_bls12_381::Fq as F;
+    use ark_bls12_377::Fq;
+    use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
         EvaluationDomain, Polynomial,
     };
     use ark_std::test_rng;
     use blake2::Blake2s256;
+    use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-    use crate::ligero::{utils::*, Ligero, PolynomialCommitment};
+    use crate::{
+        ligero::{
+            utils::*, Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, PolynomialCommitment,
+        },
+        LabeledPolynomial,
+    };
     use ark_crypto_primitives::{
         crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
         merkle_tree::{ByteDigestConverter, Config},
         sponge::poseidon::PoseidonSponge,
     };
 
-    type UniPoly = DensePolynomial<F>;
+    type UniPoly = DensePolynomial<Fq>;
     #[derive(Clone)]
     pub(super) struct Window4x256;
     impl pedersen::Window for Window4x256 {
@@ -42,46 +49,48 @@ mod tests {
     }
 
     type MTConfig = MerkleTreeParams;
-    type Sponge = PoseidonSponge<F>;
-    type PC<F, C, D, S, P> = Ligero<F, C, D, S, P, 2, 128>;
-    type LigeroPCS = PC<F, MTConfig, Blake2s256, Sponge, UniPoly>;
+    type Sponge = PoseidonSponge<Fq>;
+    type PC<F, C, D, S, P, const rho_inv: usize> = Ligero<F, C, D, S, P, rho_inv, 128>;
+    type LigeroPCS<const rho_inv: usize> = PC<Fq, MTConfig, Blake2s256, Sponge, UniPoly, rho_inv>;
+    type LigeroPCS_F<const rho_inv: usize, F> =
+        PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>, rho_inv>;
 
     #[test]
     fn test_matrix_constructor_flat() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67, 44, 50]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44, 50]);
         let mat = Matrix::new_from_flat(2, 3, &entries);
-        assert_eq!(mat.entry(1, 2), F::from(50));
+        assert_eq!(mat.entry(1, 2), Fq::from(50));
     }
 
     #[test]
     fn test_matrix_constructor_flat_square() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67]);
         let mat = Matrix::new_from_flat(2, 2, &entries);
-        assert_eq!(mat.entry(1, 1), F::from(67));
+        assert_eq!(mat.entry(1, 1), Fq::from(67));
     }
 
     #[test]
     #[should_panic]
     fn test_matrix_constructor_flat_panic() {
-        let entries: Vec<F> = to_field(vec![10, 100, 4, 67, 44]);
+        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44]);
         Matrix::new_from_flat(2, 3, &entries);
     }
 
     #[test]
     fn test_matrix_constructor_rows() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
         let mat = Matrix::new_from_rows(rows);
-        assert_eq!(mat.entry(2, 0), F::from(55));
+        assert_eq!(mat.entry(2, 0), Fq::from(55));
     }
 
     #[test]
     #[should_panic]
     fn test_matrix_constructor_rows_panic() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58]),
@@ -91,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_cols() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![4, 76]),
             to_field(vec![14, 92]),
             to_field(vec![17, 89]),
@@ -104,36 +113,94 @@ mod tests {
 
     #[test]
     fn test_row_mul() {
-        let rows: Vec<Vec<F>> = vec![
+        let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
 
         let mat = Matrix::new_from_rows(rows);
-        let v: Vec<F> = to_field(vec![12, 41, 55]);
-        // by giving the result in the integers and then converting to F
-        // we ensure the test will still pass even if F changes
-        assert_eq!(mat.row_mul(&v), to_field::<F>(vec![4088, 4431, 543]));
+        let v: Vec<Fq> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fq
+        // we ensure the test will still pass even if Fq changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fq>(vec![4088, 4431, 543]));
+    }
+
+    #[test]
+    fn test_reed_solomon() {
+        // we use this polynomial to generate the the values we will ask the fft to interpolate
+
+        let rho_inv = 3;
+        // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
+        for i in 1..10 {
+            let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
+            let pol = rand_poly::<Fq>(i - 1, None, rand_chacha);
+
+            let coeffs = &pol.coeffs;
+            assert_eq!(
+                pol.degree(),
+                coeffs.len() - 1,
+                "degree of poly and coeffs mismatch"
+            );
+            assert_eq!(coeffs.len(), i, "length of coeffs and m mismatch");
+
+            let small_domain = GeneralEvaluationDomain::<Fq>::new(i).unwrap();
+
+            // size of evals might be larger than i (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
+            let evals = small_domain.fft(&coeffs);
+            let m = evals.len();
+
+            let coeffs_again = small_domain.ifft(&evals);
+            assert_eq!(coeffs_again[..i], *coeffs);
+
+            let encoded = reed_solomon(&evals, rho_inv);
+            // Assert that the encoded vector is of the right length
+            assert_eq!(encoded.len(), rho_inv * m);
+
+            // first elements of encoded should be itself, since the code is systematic
+            assert_eq!(encoded[..m], evals);
+
+            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * (rho_inv - 1)).unwrap();
+
+            // The rest of the elements should agree with the domain
+            for j in 0..((rho_inv - 1) * m) {
+                assert_eq!(pol.evaluate(&large_domain.element(j)), encoded[j + m]);
+            }
+        }
     }
 
     #[test]
     fn test_fft_interface() {
-        // we use this polynomial to generate the the values we will ask the fft to interpolate
-        let pol_coeffs: Vec<F> = to_field(vec![30, 2, 91]);
-        let pol: DensePolynomial<F> = DensePolynomial::from_coefficients_slice(&pol_coeffs);
+        // This test is probably too verbose, and should be merged with the RS test
+        let rho = 2;
+        for m in 1..10 {
+            // rand poly of degree m
+            let domain = GeneralEvaluationDomain::<Fq>::new(m).unwrap();
+            let poly = UniPoly::rand(m - 1, &mut test_rng());
+            // get its evaluations at the entire domain
+            let evals = (0..domain.size())
+                .map(|i| poly.evaluate(&domain.element(i)))
+                .collect::<Vec<_>>();
 
-        let fft_domain = GeneralEvaluationDomain::<F>::new(pol_coeffs.len()).unwrap();
+            // convert back to the coefficients
+            let coeffs = domain.ifft(&evals);
+            assert_eq!(coeffs[..m], poly.coeffs);
 
-        // generating the values
-        let mut vals = Vec::new();
+            let evals2 = domain.fft(&coeffs.to_vec());
+            assert_eq!(evals[..m], evals2[..m]);
 
-        for i in 0..4 {
-            vals.push(pol.evaluate(&fft_domain.element(i)));
+            // now we try with a larger domain
+            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho).unwrap();
+
+            let evals3 = large_domain.fft(&coeffs.to_vec());
+            let evals4: Vec<_> = (0..large_domain.size())
+                .map(|i| poly.evaluate(&large_domain.element(i)))
+                .collect::<Vec<_>>();
+
+            assert_eq!(evals3[..m], evals4[..m]);
+
+            let coeffs2 = large_domain.ifft(&evals3);
         }
-
-        // the fft should recover the original polynomial
-        assert_eq!(fft_domain.ifft(&vals), pol_coeffs);
     }
 
     #[test]
@@ -147,11 +214,62 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
+    fn rand_poly<Fq: PrimeField>(
+        degree: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePolynomial<Fq> {
+        DensePolynomial::rand(degree, rng)
+    }
+
+    fn constant_poly<Fq: PrimeField>(
+        _: usize,
+        _: Option<usize>,
+        rng: &mut ChaCha20Rng,
+    ) -> DensePolynomial<Fq> {
+        DensePolynomial::from_coefficients_slice(&[Fq::rand(rng)])
+    }
+
+    #[test]
+    fn test_setup() {
+        let rng = &mut test_rng();
+        let _ = LigeroPCS::<2>::setup(1 << 44, None, rng).unwrap();
+
+        assert_eq!(LigeroPCS::<5>::setup(1 << 45, None, rng).is_err(), true);
+
+        // but the base field of bls12_381 doesnt have such large domains
+        use ark_bls12_381::Fq as F_381;
+        assert_eq!(LigeroPCS_F::<5, F_381>::setup(10, None, rng).is_err(), true);
+    }
+
     #[test]
     fn test_construction() {
-        let rng = &mut test_rng();
-        let pp = LigeroPCS::setup(2, None, rng).unwrap();
-        // This fails since trim is not implemented
-        let (ck, vk) = LigeroPCS::trim(&pp, 0, 2, Some(&[0])).unwrap();
+        let degree = 4;
+        let mut rng = &mut test_rng();
+        // just to make sure we have the right degree given the FFT domain for our field
+        LigeroPCS::<2>::setup(degree, None, rng).unwrap();
+        let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
+        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
+            .unwrap()
+            .clone();
+
+        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+
+        let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
+        let labeled_poly = LabeledPolynomial::new(
+            "test".to_string(),
+            rand_poly(degree, None, rand_chacha),
+            None,
+            None,
+        );
+
+        let c = LigeroPCS::<2>::commit(&ck, &[labeled_poly], None).unwrap();
     }
 }
