@@ -110,25 +110,33 @@ impl<F: Field> Matrix<F> {
     }
 }
 
-// TODO batch for all rows? possibly minimal savings due to not having to create fft_domain every time
-// here we restrict F to PrimeField
+/// apply reed-solomon encoding to msg
+/// assumes msg.len() is equal to the order of an FFT domain in F
+/// returns a vector of length equal to the smallest FFT domain of size at least msg.len() * rho_inv
 pub(crate) fn reed_solomon<F: FftField>(
     // msg, of length m, is interpreted as a vector of coefficients of a polynomial of degree m - 1
     msg: &[F],
-    rho_inverse: usize,
+    rho_inv: usize,
 ) -> Vec<F> {
     let m = msg.len();
 
     let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
+    assert_eq!(
+        m,
+        domain.size(),
+        "The evaluation vector has length {} elements \\
+        but the smallest FFT domain admitting that many elements has order {}",
+        m,
+        domain.size()
+    );
     let poly_coeffs = domain.ifft(msg).to_vec();
-    let mut out = msg.to_vec();
-    assert!(out.len() == m);
 
-    // TODO if rho_inv == 2, then with a systematic encoding the second half will be the same as first - is that an issue?
-    let domain = GeneralEvaluationDomain::<F>::new(m * (rho_inverse - 1)).unwrap();
-    let encoded = domain.fft(&poly_coeffs);
-    out.extend_from_slice(&encoded[..((rho_inverse - 1) * m)]);
-    out
+    let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).expect(&format!(
+        "The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
+        m * rho_inv
+    ));
+
+    extended_domain.fft(&poly_coeffs)
 }
 
 #[inline]
