@@ -135,7 +135,7 @@ mod tests {
 
         let rho_inv = 3;
         // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
-        for i in 2..10 {
+        for i in 1..10 {
             let deg = (1 << i) - 1;
 
             let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
