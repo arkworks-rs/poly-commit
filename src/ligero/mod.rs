@@ -67,7 +67,7 @@ where
 
         // 2. Get the linear combination coefficients from the transcript
         let mut r = Vec::new();
-        for _ in 0..t {
+        for _ in 0..commitment.m {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
         // Upon sending `v` to the Verifier, add it to the sponge. Claim is that v = r.M
