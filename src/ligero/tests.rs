@@ -339,18 +339,40 @@ mod tests {
 
         let point = Fq::rand(rand_chacha);
 
+        let value = labeled_poly.evaluate(&point);
+
         let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
+
+        assert!(
+            LigeroPCS::<2>::check_well_formedness(
+                &c[0].commitment(),
+                &leaf_hash_params,
+                &two_to_one_params
+            )
+            .is_ok(),
+            "Well formedness check failed"
+        );
 
         let proof = LigeroPCS::<2>::open(
             &ck,
             &[labeled_poly],
             &c,
             &point,
-            &mut challenge_generator,
+            &mut (challenge_generator.clone()),
             &rands,
             None,
         )
         .unwrap();
+        assert!(LigeroPCS::<2>::check(
+            &vk,
+            &c,
+            &point,
+            [value],
+            &proof,
+            &mut challenge_generator,
+            None
+        )
+        .unwrap());
     }
 }
