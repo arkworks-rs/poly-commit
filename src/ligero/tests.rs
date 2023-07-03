@@ -135,74 +135,44 @@ mod tests {
 
         let rho_inv = 3;
         // `i` is the min number of evaluations we need to interpolate a poly of degree `i - 1`
-        for i in 1..10 {
+        for i in 2..10 {
+            let deg = (1 << i) - 1;
+
             let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-            let pol = rand_poly::<Fq>(i - 1, None, rand_chacha);
+            let mut pol = rand_poly::<Fq>(deg, None, rand_chacha);
+
+            while pol.degree() != deg {
+                pol = rand_poly::<Fq>(deg, None, rand_chacha);
+            }
 
             let coeffs = &pol.coeffs;
-            assert_eq!(
-                pol.degree(),
-                coeffs.len() - 1,
-                "degree of poly and coeffs mismatch"
-            );
-            assert_eq!(coeffs.len(), i, "length of coeffs and m mismatch");
 
-            let small_domain = GeneralEvaluationDomain::<Fq>::new(i).unwrap();
+            let small_domain = GeneralEvaluationDomain::<Fq>::new(deg + 1).unwrap();
 
-            // size of evals might be larger than i (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
+            // size of evals might be larger than deg + 1 (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
             let evals = small_domain.fft(&coeffs);
             let m = evals.len();
 
+            // checking that ifft is really the inverse of fft
             let coeffs_again = small_domain.ifft(&evals);
-            assert_eq!(coeffs_again[..i], *coeffs);
+
+            assert_eq!(coeffs_again[..deg + 1], *coeffs);
 
             let encoded = reed_solomon(&evals, rho_inv);
-            // Assert that the encoded vector is of the right length
-            assert_eq!(encoded.len(), rho_inv * m);
+            let m_p = encoded.len();
 
-            // first elements of encoded should be itself, since the code is systematic
-            assert_eq!(encoded[..m], evals);
-
-            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * (rho_inv - 1)).unwrap();
-
-            // The rest of the elements should agree with the domain
-            for j in 0..((rho_inv - 1) * m) {
-                assert_eq!(pol.evaluate(&large_domain.element(j)), encoded[j + m]);
+            // the m original elements should be interleaved in the encoded message
+            let ratio = m_p / m;
+            for j in 0..m {
+                assert_eq!(evals[j], encoded[j * ratio]);
             }
-        }
-    }
 
-    #[test]
-    fn test_fft_interface() {
-        // This test is probably too verbose, and should be merged with the RS test
-        let rho = 2;
-        for m in 1..10 {
-            // rand poly of degree m
-            let domain = GeneralEvaluationDomain::<Fq>::new(m).unwrap();
-            let poly = UniPoly::rand(m - 1, &mut test_rng());
-            // get its evaluations at the entire domain
-            let evals = (0..domain.size())
-                .map(|i| poly.evaluate(&domain.element(i)))
-                .collect::<Vec<_>>();
+            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho_inv).unwrap();
 
-            // convert back to the coefficients
-            let coeffs = domain.ifft(&evals);
-            assert_eq!(coeffs[..m], poly.coeffs);
-
-            let evals2 = domain.fft(&coeffs.to_vec());
-            assert_eq!(evals[..m], evals2[..m]);
-
-            // now we try with a larger domain
-            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho).unwrap();
-
-            let evals3 = large_domain.fft(&coeffs.to_vec());
-            let evals4: Vec<_> = (0..large_domain.size())
-                .map(|i| poly.evaluate(&large_domain.element(i)))
-                .collect::<Vec<_>>();
-
-            assert_eq!(evals3[..m], evals4[..m]);
-
-            let coeffs2 = large_domain.ifft(&evals3);
+            // the encoded elements should agree with the evaluations of the polynomial in the larger domain
+            for j in 0..(rho_inv * m) {
+                assert_eq!(pol.evaluate(&large_domain.element(j)), encoded[j]);
+            }
         }
     }
 

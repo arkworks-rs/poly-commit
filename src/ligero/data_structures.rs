@@ -11,12 +11,11 @@ use core::marker::PhantomData;
 use digest::Digest;
 
 use crate::{
-    PCCommitment, PCCommitterKey, PCPreparedCommitment,
-    PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
+    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
+    PCUniversalParams, PCVerifierKey,
 };
 
 use ark_std::rand::RngCore;
-
 
 // TODO: Disclaimer: no hiding prop
 /// The Ligero polynomial commitment scheme.
