@@ -1,7 +1,22 @@
 #[cfg(test)]
 mod tests {
 
+    use crate::ark_std::UniformRand;
+    use crate::{
+        challenge::ChallengeGenerator,
+        ligero::{
+            utils::*, Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, PolynomialCommitment,
+        },
+        LabeledPolynomial,
+    };
     use ark_bls12_377::Fq;
+    use ark_crypto_primitives::sponge::poseidon::PoseidonConfig;
+    use ark_crypto_primitives::sponge::CryptographicSponge;
+    use ark_crypto_primitives::{
+        crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
+        merkle_tree::{ByteDigestConverter, Config},
+        sponge::poseidon::PoseidonSponge,
+    };
     use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
@@ -10,18 +25,6 @@ mod tests {
     use ark_std::test_rng;
     use blake2::Blake2s256;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
-
-    use crate::{
-        ligero::{
-            utils::*, Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, PolynomialCommitment,
-        },
-        LabeledPolynomial,
-    };
-    use ark_crypto_primitives::{
-        crh::{pedersen, sha256::Sha256, CRHScheme, TwoToOneCRHScheme},
-        merkle_tree::{ByteDigestConverter, Config},
-        sponge::poseidon::PoseidonSponge,
-    };
 
     type UniPoly = DensePolynomial<Fq>;
     #[derive(Clone)]
@@ -264,6 +267,33 @@ mod tests {
         DensePolynomial::from_coefficients_slice(&[Fq::rand(rng)])
     }
 
+    // TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
+    fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
+        let full_rounds = 8;
+        let partial_rounds = 31;
+        let alpha = 17;
+
+        let mds = vec![
+            vec![F::one(), F::zero(), F::one()],
+            vec![F::one(), F::one(), F::zero()],
+            vec![F::zero(), F::one(), F::one()],
+        ];
+
+        let mut v = Vec::new();
+        let mut ark_rng = test_rng();
+
+        for _ in 0..(full_rounds + partial_rounds) {
+            let mut res = Vec::new();
+
+            for _ in 0..3 {
+                res.push(F::rand(&mut ark_rng));
+            }
+            v.push(res);
+        }
+        let config = PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, v, 2, 1);
+        PoseidonSponge::new(&config)
+    }
+
     #[test]
     fn test_setup() {
         let rng = &mut test_rng();
@@ -304,6 +334,45 @@ mod tests {
             None,
         );
 
-        let c = LigeroPCS::<2>::commit(&ck, &[labeled_poly], None).unwrap();
+        let mut test_sponge = test_sponge::<Fq>();
+        let (c, rands) = LigeroPCS::<2>::commit(&ck, &[labeled_poly.clone()], None).unwrap();
+
+        let point = Fq::rand(rand_chacha);
+
+        let value = labeled_poly.evaluate(&point);
+
+        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+            ChallengeGenerator::new_univariate(&mut test_sponge);
+
+        assert!(
+            LigeroPCS::<2>::check_well_formedness(
+                &c[0].commitment(),
+                &leaf_hash_params,
+                &two_to_one_params
+            )
+            .is_ok(),
+            "Well formedness check failed"
+        );
+
+        let proof = LigeroPCS::<2>::open(
+            &ck,
+            &[labeled_poly],
+            &c,
+            &point,
+            &mut (challenge_generator.clone()),
+            &rands,
+            None,
+        )
+        .unwrap();
+        assert!(LigeroPCS::<2>::check(
+            &vk,
+            &c,
+            &point,
+            [value],
+            &proof,
+            &mut challenge_generator,
+            None
+        )
+        .unwrap());
     }
 }
