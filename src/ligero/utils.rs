@@ -11,6 +11,7 @@ use rayon::{
 
 use crate::streaming_kzg::ceil_div;
 
+#[derive(Debug)]
 pub(crate) struct Matrix<F: Field> {
     pub(crate) n: usize,
     pub(crate) m: usize,

@@ -24,9 +24,8 @@ use data_structures::*;
 
 pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
 
-use utils::{calculate_t, get_indices_from_transcript, hash_column};
+use utils::{calculate_t, get_indices_from_transcript, hash_column, compute_dimensions};
 
-use self::utils::compute_dimensions;
 mod tests;
 
 impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
@@ -77,7 +76,6 @@ where
             .append_serializable_element(b"v", &commitment.proof.v)
             .unwrap();
 
-        println!("* Calling check lc from check well formedness");
         Self::check_random_linear_combination(
             &r,
             &commitment.proof,
@@ -110,9 +108,6 @@ where
         let indices = get_indices_from_transcript::<F>(n_ext_cols, t, transcript);
 
         // 3. Verify the paths for each of the leaf hashes
-         println!("INDICES: {:?}", indices);
-        println!("LEAF INDICES: {:?}", proof.paths.iter().map(|p| p.leaf_index).collect::<Vec<usize>>());
-
         for (i, (leaf, q_i)) in col_hashes.into_iter().zip(indices.iter()).enumerate() {
             // TODO handle the error here
             let path = &proof.paths[i];
@@ -146,7 +141,7 @@ where
         let mut coeffs = polynomial.coeffs().to_vec();
 
         // 1. Computing parameters and initial matrix
-        let (n_rows, n_cols) = compute_dimensions::<F>(polynomial.degree() + 1);
+        let (n_rows, n_cols) = compute_dimensions::<F>(polynomial.degree() + 1); // for 6 coefficients, this is returning 4 x 2 with a row of 0s: fix
 
         // padding the coefficient vector with zeroes
         // TODO is this the most efficient/safest way to do it?
@@ -199,7 +194,6 @@ where
 
         // 2. Generate t column indices to test the linear combination on
         let indices = get_indices_from_transcript(ext_mat.m, t, transcript);
-        println!("INDICES T IN GENERATE_PROOF: {:?}", indices);
 
         // 3. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
@@ -324,7 +318,6 @@ where
         }
 
         // 4. Generate the proof by choosing random columns and proving their paths in the tree
-        println!("* Calling generate proof from commit");
         let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
         let commitment = LigeroPCCommitment { n_rows, n_cols, n_ext_cols, root, proof };
@@ -385,7 +378,6 @@ where
             .append_serializable_element(b"point", point)
             .unwrap();
 
-        println!("* Calling generate proof from open");
         Ok(Self::generate_proof(
             &b,
             &mat,
@@ -419,8 +411,6 @@ where
         Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
             .unwrap();
 
-        let point = F::from(2u64);
-
         // 1. Compute a and b
         let mut a = Vec::new();
         let mut acc_a = F::one();
@@ -437,21 +427,17 @@ where
             acc_b *= acc_a;
         }
 
-        println!("A: {a:?}");
-        println!("B: {b:?}");
-
         // 2. Seed the transcript with the point and generate t random indices
         // TODO replace unwraps by proper error handling
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
         transcript
-            .append_serializable_element(b"point", &point)
+            .append_serializable_element(b"point", point)
             .unwrap();
         transcript
             .append_serializable_element(b"v", &proof.v)
             .unwrap();
 
         // 3. Check the linear combination in the proof
-        println!("* Calling check lc from check");
         Self::check_random_linear_combination(
             &b,
             proof,
@@ -463,7 +449,7 @@ where
             &vk.two_to_one_params,
         )?;
 
-        Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap())
+        Ok(inner_product(&proof.v, &a) == values.into_iter().next().unwrap())
     }
 }
 
