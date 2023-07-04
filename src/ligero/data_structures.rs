@@ -123,9 +123,10 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
-    // number of rows of the square matrix containing the coefficients of the polynomial
-    pub(crate) m: usize,
-    // TODO is InnerDigest the right type?
+    // number of rows resp. columns of the square matrix containing the coefficients of the polynomial
+    pub(crate) n_rows: usize,
+    pub(crate) n_cols: usize,
+    pub(crate) n_ext_cols: usize,
     pub(crate) root: C::InnerDigest,
     pub(crate) proof: LigeroPCProof<F, C>,
 }
