@@ -297,27 +297,17 @@ mod tests {
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-/*         let labeled_poly = LabeledPolynomial::new(
+        let labeled_poly = LabeledPolynomial::new(
             "test".to_string(),
             rand_poly(degree, None, rand_chacha),
             None,
             None,
-        ); */
-
-        let labeled_poly = LabeledPolynomial::new(
-            "test".to_string(),
-            DensePolynomial::from_coefficients_vec(
-                vec![2, 1, 0, 0, 3, 2].iter().map(|x| Fq::from(*x as u64)).collect()
-            ),
-            None,
-            None,
-        ); // TODO REMOVE!
+        );
 
         let mut test_sponge = test_sponge::<Fq>();
         let (c, rands) = LigeroPCS::<2>::commit(&ck, &[labeled_poly.clone()], None).unwrap();
 
         let point = Fq::rand(rand_chacha);
-        let point = Fq::from(2u64); // TODO REMOVE!
 
         let value = labeled_poly.evaluate(&point);
 
