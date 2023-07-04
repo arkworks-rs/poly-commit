@@ -24,7 +24,7 @@ use data_structures::*;
 
 pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
 
-use utils::{calculate_t, get_indices_from_transcript, hash_column, compute_dimensions};
+use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
 
 mod tests;
 
@@ -320,7 +320,13 @@ where
         // 4. Generate the proof by choosing random columns and proving their paths in the tree
         let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
-        let commitment = LigeroPCCommitment { n_rows, n_cols, n_ext_cols, root, proof };
+        let commitment = LigeroPCCommitment {
+            n_rows,
+            n_cols,
+            n_ext_cols,
+            root,
+            proof,
+        };
 
         Ok((
             vec![LabeledCommitment::new(
@@ -404,7 +410,7 @@ where
 
         let t = calculate_t(rho_inv, sec_param);
 
-        // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols); 
+        // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
         //      could they be used to cheat?
 
         // check if we've seen this commitment before. If not, we should verify it.

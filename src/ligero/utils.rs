@@ -114,16 +114,19 @@ impl<F: Field> Matrix<F> {
 /// Compute the dimensions of an FFT-friendly (over F) matrix with at least n entries.
 /// The return pair (n, m) corresponds to the dimensions n x m.
 pub(crate) fn compute_dimensions<F: FftField>(n: usize) -> (usize, usize) {
+    assert_eq!(
+        (n as f64) as usize,
+        n,
+        "n cannot be converted to f64: aborting"
+    );
 
-    assert_eq!((n as f64) as usize, n, "n cannot be converted to f64: aborting");
-
-    let m0 = (n as f64).sqrt().ceil() as usize;
-    let m = GeneralEvaluationDomain::<F>::new(m0)
+    let aux = (n as f64).sqrt().ceil() as usize;
+    let n_cols = GeneralEvaluationDomain::<F>::new(aux)
         .expect("Field F does not admit FFT with m elements")
         .size();
 
-    (m, ceil_div(n, m))
-}    
+    (ceil_div(n, n_cols), n_cols)
+}
 
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of an FFT domain in F.
