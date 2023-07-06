@@ -241,7 +241,7 @@ where
 
     type Randomness = LigeroPCRandomness;
 
-    type Proof = LigeroPCProof<F, C>;
+    type Proof = LigeroPCProofArray<F, C>;
 
     type BatchProof = Vec<Self::Proof>;
 
@@ -347,54 +347,62 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
+        _challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
+        _rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        
-        let labeled_polynomial = labeled_polynomials.into_iter().next().unwrap();
-        let polynomial = labeled_polynomial.polynomial();
+        let proof_array = LigeroPCProofArray::new();
 
-        // TODO we receive a list of polynomials and a list of commitments
-        // are we to understand that the first commitment is for the first polynomial, ...etc?
+        for labeled_polynomial in labeled_polynomials.into_iter() {
 
-        // 1. Compute matrices
-        let (mat, ext_mat) = Self::compute_matrices(polynomial);
+            let polynomial = labeled_polynomial.polynomial();
 
-        // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree =
-            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+            // TODO we receive a list of polynomials and a list of commitments
+            // are we to understand that the first commitment is for the first polynomial, ...etc?
 
-        // 3. Generate vector b and add v = b·M to the transcript
-        let commitment = commitments.into_iter().next().unwrap().commitment();
+            // 1. Compute matrices
+            let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
-        let mut b = Vec::new();
-        let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
-        let mut acc_b = F::one();
-        for _ in 0..commitment.n_rows {
-            b.push(acc_b);
-            acc_b *= point_pow;
+            // 2. Create the Merkle tree from the hashes of the columns
+            let col_tree =
+                Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+
+            // 3. Generate vector b and add v = b·M to the transcript
+            let commitment = commitments.into_iter().next().unwrap().commitment();
+
+            let mut b = Vec::new();
+            let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
+            let mut acc_b = F::one();
+            for _ in 0..commitment.n_rows {
+                b.push(acc_b);
+                acc_b *= point_pow;
+            }
+
+            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+
+            let v = mat.row_mul(&b);
+            transcript
+                .append_serializable_element(b"point", point)
+                .unwrap();
+
+            proof_array.push(
+                Self::generate_proof(
+                    &b,
+                    &mat,
+                    &ext_mat,
+                    &col_tree,
+                    &mut transcript
+                )
+            )
         }
 
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+        Ok(proof_array)
 
-        let v = mat.row_mul(&b);
-        transcript
-            .append_serializable_element(b"point", point)
-            .unwrap();
-
-        Ok(Self::generate_proof(
-            &b,
-            &mat,
-            &ext_mat,
-            &col_tree,
-            &mut transcript,
-        ))
     }
 
     fn check<'a>(

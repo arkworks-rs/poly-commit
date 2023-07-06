@@ -182,3 +182,5 @@ where
 
     pub(crate) columns: Vec<Vec<F>>,
 }
+
+pub type LigeroPCProofArray<F, C> = Vec<LigeroPCProof<F, C>>;
