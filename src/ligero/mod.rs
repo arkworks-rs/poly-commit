@@ -286,56 +286,59 @@ where
     where
         P: 'a,
     {
-        // TODO loop over all polynomials
+        
+        let mut commitments = Vec::new();
 
-        // TODO decide what to do with label and degree bound (these are private! but the commitment also has them)
-        let labeled_polynomial = polynomials.into_iter().next().unwrap();
+        for labeled_polynomial in polynomials.into_iter() {
 
-        let polynomial = labeled_polynomial.polynomial();
+            let polynomial = labeled_polynomial.polynomial();
 
-        // 1. Compute matrices
-        let (mat, ext_mat) = Self::compute_matrices(polynomial);
+            // 1. Compute matrices
+            let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
-        // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree =
-            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+            // 2. Create the Merkle tree from the hashes of the columns
+            let col_tree =
+                Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
-        // 3. Add root to transcript and generate random linear combination with it
-        let root = col_tree.root();
+            // 3. Add root to transcript and generate random linear combination with it
+            let root = col_tree.root();
 
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
-        transcript
-            .append_serializable_element(b"root", &root)
-            .unwrap();
+            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
+            transcript
+                .append_serializable_element(b"root", &root)
+                .unwrap();
 
-        let n_rows = mat.n;
-        let n_cols = mat.m;
-        let n_ext_cols = ext_mat.m;
+            let n_rows = mat.n;
+            let n_cols = mat.m;
+            let n_ext_cols = ext_mat.m;
 
-        let mut r = Vec::new();
-        for _ in 0..n_rows {
-            r.push(transcript.get_and_append_challenge(b"r").unwrap());
-        }
+            let mut r = Vec::new();
+            for _ in 0..n_rows {
+                r.push(transcript.get_and_append_challenge(b"r").unwrap());
+            }
 
-        // 4. Generate the proof by choosing random columns and proving their paths in the tree
-        let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
+            // 4. Generate the proof by choosing random columns and proving their paths in the tree
+            let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
-        let commitment = LigeroPCCommitment {
-            n_rows,
-            n_cols,
-            n_ext_cols,
-            root,
-            proof,
-        };
+            let commitment = LigeroPCCommitment {
+                n_rows,
+                n_cols,
+                n_ext_cols,
+                root,
+                proof,
+            };
 
-        Ok((
-            vec![LabeledCommitment::new(
-                labeled_polynomial.label().clone(),
-                commitment,
-                None, // TODO think about this (degree_bound)
-            )],
-            Vec::new(),
-        ))
+            commitments.push(
+                LabeledCommitment::new(
+                    labeled_polynomial.label().clone(),
+                    commitment,
+                    None, // TODO think about this (degree_bound)
+                )
+            );
+        } 
+
+        // randomness is returned inside the proof, so we return an empty vector here
+        Ok((commitments, Vec::new()))
         // TODO when should this return Err?
     }
 
@@ -353,6 +356,7 @@ where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
+        
         let labeled_polynomial = labeled_polynomials.into_iter().next().unwrap();
         let polynomial = labeled_polynomial.polynomial();
 
