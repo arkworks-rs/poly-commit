@@ -24,7 +24,8 @@ use data_structures::*;
 
 pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
 
-use utils::{calculate_t, get_indices_from_transcript, hash_column};
+use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
+
 mod tests;
 
 impl<F, C, D, S, P, const rho_inv: usize, const sec_param: usize>
@@ -67,7 +68,7 @@ where
 
         // 2. Get the linear combination coefficients from the transcript
         let mut r = Vec::new();
-        for _ in 0..commitment.m {
+        for _ in 0..commitment.n_rows {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
         // Upon sending `v` to the Verifier, add it to the sponge. Claim is that v = r.M
@@ -79,7 +80,7 @@ where
             &r,
             &commitment.proof,
             &commitment.root,
-            commitment.m,
+            commitment.n_ext_cols,
             t,
             &mut transcript,
             leaf_hash_params,
@@ -91,7 +92,7 @@ where
         coeffs: &[F],
         proof: &LigeroPCProof<F, C>,
         root: &C::InnerDigest,
-        m: usize,
+        n_ext_cols: usize,
         t: usize,
         transcript: &mut IOPTranscript<F>,
         leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
@@ -104,8 +105,7 @@ where
         }
 
         // 2. Compute t column indices to check the linear combination at
-        let num_encoded_rows = m * rho_inv;
-        let indices = get_indices_from_transcript::<F>(num_encoded_rows, t, transcript);
+        let indices = get_indices_from_transcript::<F>(n_ext_cols, t, transcript);
 
         // 3. Verify the paths for each of the leaf hashes
         for (i, (leaf, q_i)) in col_hashes.into_iter().zip(indices.iter()).enumerate() {
@@ -141,23 +141,13 @@ where
         let mut coeffs = polynomial.coeffs().to_vec();
 
         // 1. Computing parameters and initial matrix
-        // want: ceil(sqrt(f.degree() + 1)); need to deal with usize -> f64 conversion
-        let num_elems = polynomial.degree() + 1;
-
-        // TODO move this check to the constructor?
-        assert_eq!(
-            (num_elems as f64) as usize,
-            num_elems,
-            "Degree of polynomial + 1 cannot be converted to f64: aborting"
-        );
-        let m = (num_elems as f64).sqrt().ceil() as usize;
-        // TODO: check if fft_domain.compute_size_of_domain(m) is large enough
+        let (n_rows, n_cols) = compute_dimensions::<F>(polynomial.degree() + 1); // for 6 coefficients, this is returning 4 x 2 with a row of 0s: fix
 
         // padding the coefficient vector with zeroes
         // TODO is this the most efficient/safest way to do it?
-        coeffs.resize(m * m, F::zero());
+        coeffs.resize(n_rows * n_cols, F::zero());
 
-        let mat = Matrix::new_from_flat(m, m, &coeffs);
+        let mat = Matrix::new_from_flat(n_rows, n_cols, &coeffs);
 
         // 2. Apply Reed-Solomon encoding row-wise
         let ext_mat = Matrix::new_from_rows(
@@ -194,8 +184,8 @@ where
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> LigeroPCProof<F, C> {
-        let m = mat.m;
-        let t = calculate_t(rho_inv, sec_param);
+        let n_rows = mat.n;
+        let t = calculate_t(rho_inv, sec_param); // TODO this function will now probably need to take into account the number of rows/cols of the extended matrix
 
         // 1. Compute the linear combination using the random coefficients
         let v = mat.row_mul(coeffs);
@@ -203,7 +193,7 @@ where
         transcript.append_serializable_element(b"v", &v).unwrap();
 
         // 2. Generate t column indices to test the linear combination on
-        let indices = get_indices_from_transcript(m * rho_inv, t, transcript);
+        let indices = get_indices_from_transcript(ext_mat.m, t, transcript);
 
         // 3. Compute Merkle tree paths for the columns
         let mut queried_columns = Vec::new();
@@ -318,16 +308,25 @@ where
             .append_serializable_element(b"root", &root)
             .unwrap();
 
-        let m = mat.m;
+        let n_rows = mat.n;
+        let n_cols = mat.m;
+        let n_ext_cols = ext_mat.m;
+
         let mut r = Vec::new();
-        for _ in 0..m {
+        for _ in 0..n_rows {
             r.push(transcript.get_and_append_challenge(b"r").unwrap());
         }
 
         // 4. Generate the proof by choosing random columns and proving their paths in the tree
         let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
-        let commitment = LigeroPCCommitment { m, root, proof };
+        let commitment = LigeroPCCommitment {
+            n_rows,
+            n_cols,
+            n_ext_cols,
+            root,
+            proof,
+        };
 
         Ok((
             vec![LabeledCommitment::new(
@@ -357,6 +356,9 @@ where
         let labeled_polynomial = labeled_polynomials.into_iter().next().unwrap();
         let polynomial = labeled_polynomial.polynomial();
 
+        // TODO we receive a list of polynomials and a list of commitments
+        // are we to understand that the first commitment is for the first polynomial, ...etc?
+
         // 1. Compute matrices
         let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
@@ -365,14 +367,14 @@ where
             Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
         // 3. Generate vector b and add v = b·M to the transcript
-        let m = mat.m;
+        let commitment = commitments.into_iter().next().unwrap().commitment();
 
         let mut b = Vec::new();
-        let point_pow_m = point.pow([m as u64]);
+        let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
         let mut acc_b = F::one();
-        for _ in 0..m {
+        for _ in 0..commitment.n_rows {
             b.push(acc_b);
-            acc_b *= point_pow_m;
+            acc_b *= point_pow;
         }
 
         let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
@@ -406,8 +408,10 @@ where
         let labeled_commitment = commitments.into_iter().next().unwrap();
         let commitment = labeled_commitment.commitment();
 
-        let m = commitment.m;
         let t = calculate_t(rho_inv, sec_param);
+
+        // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
+        //      could they be used to cheat?
 
         // check if we've seen this commitment before. If not, we should verify it.
         Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
@@ -416,15 +420,15 @@ where
         // 1. Compute a and b
         let mut a = Vec::new();
         let mut acc_a = F::one();
-        for _ in 0..m {
+        for _ in 0..commitment.n_cols {
             a.push(acc_a);
             acc_a *= point;
         }
 
-        // by now acc_a = point^m
+        // by now acc_a = point^n_cols
         let mut b = Vec::new();
         let mut acc_b = F::one();
-        for _ in 0..m {
+        for _ in 0..commitment.n_rows {
             b.push(acc_b);
             acc_b *= acc_a;
         }
@@ -444,14 +448,14 @@ where
             &b,
             proof,
             &commitment.root,
-            m,
+            commitment.n_ext_cols,
             t,
             &mut transcript,
             &vk.leaf_hash_params,
             &vk.two_to_one_params,
         )?;
 
-        Ok(inner_product(&commitment.proof.v, &a) == values.into_iter().next().unwrap())
+        Ok(inner_product(&proof.v, &a) == values.into_iter().next().unwrap())
     }
 }
 
