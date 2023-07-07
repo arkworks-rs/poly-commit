@@ -22,7 +22,7 @@ use utils::Matrix;
 mod data_structures;
 use data_structures::*;
 
-pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, LigeroPCProofArray};
+pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCProofArray, LigeroPCVerifierKey};
 
 use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
 
@@ -285,11 +285,9 @@ where
     where
         P: 'a,
     {
-        
         let mut commitments = Vec::new();
 
         for labeled_polynomial in polynomials.into_iter() {
-
             let polynomial = labeled_polynomial.polynomial();
 
             // 1. Compute matrices
@@ -302,7 +300,8 @@ where
             // 3. Add root to transcript and generate random linear combination with it
             let root = col_tree.root();
 
-            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
+            let mut transcript: IOPTranscript<F> =
+                IOPTranscript::new(b"well_formedness_transcript");
             transcript
                 .append_serializable_element(b"root", &root)
                 .unwrap();
@@ -327,16 +326,13 @@ where
                 proof,
             };
 
-            commitments.push(
-                LabeledCommitment::new(
-                    labeled_polynomial.label().clone(),
-                    commitment,
-                    None, // TODO think about this (degree_bound)
-                )
-            );
-        } 
+            commitments.push(LabeledCommitment::new(
+                labeled_polynomial.label().clone(),
+                commitment,
+                None, // TODO think about this (degree_bound)
+            ));
+        }
 
-        // randomness is returned inside the proof, so we return an empty vector here
         Ok((commitments, Vec::new()))
         // TODO when should this return Err?
     }
@@ -356,24 +352,28 @@ where
         Self::Commitment: 'a,
     {
         let mut proof_array = LigeroPCProofArray::new();
-        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> = commitments.into_iter().collect();
-        let labeled_polynomials: Vec<&'a LabeledPolynomial<F, P>> = labeled_polynomials.into_iter().collect();
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> =
+            commitments.into_iter().collect();
+        let labeled_polynomials: Vec<&'a LabeledPolynomial<F, P>> =
+            labeled_polynomials.into_iter().collect();
 
-        assert_eq!(labeled_commitments.len(), labeled_polynomials.len(),
+        assert_eq!(
+            labeled_commitments.len(),
+            labeled_polynomials.len(),
             // maybe return Err?
             "Mismatched lengths: {} commitments, {} polynomials",
-            labeled_commitments.len(), labeled_polynomials.len()
+            labeled_commitments.len(),
+            labeled_polynomials.len()
         );
 
         for i in 0..labeled_polynomials.len() {
-
             let polynomial = labeled_polynomials[i].polynomial();
             let commitment = labeled_commitments[i].commitment();
 
             // TODO we receive a list of polynomials and a list of commitments
             // are we to understand that the first commitment is for the first polynomial, ...etc?
 
-            // TODO we should maybe check that these two lists match,b ut that would imply recomputing merkle trees...
+            // TODO we should maybe check that these two lists match, but that would imply recomputing merkle trees...
             // at least check labels?
 
             // 1. Compute matrices
@@ -398,19 +398,16 @@ where
                 .append_serializable_element(b"point", point)
                 .unwrap();
 
-            proof_array.push(
-                Self::generate_proof(
-                    &b,
-                    &mat,
-                    &ext_mat,
-                    &col_tree,
-                    &mut transcript
-                )
-            )
+            proof_array.push(Self::generate_proof(
+                &b,
+                &mat,
+                &ext_mat,
+                &col_tree,
+                &mut transcript,
+            ))
         }
 
         Ok(proof_array)
-
     }
 
     fn check<'a>(
@@ -425,20 +422,19 @@ where
     where
         Self::Commitment: 'a,
     {
-
-        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> = commitments.into_iter().collect();
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> =
+            commitments.into_iter().collect();
         let values: Vec<F> = values.into_iter().collect();
 
         let t = calculate_t(rho_inv, sec_param); // TODO include in ck/vk?
 
         if labeled_commitments.len() != proof.len() || labeled_commitments.len() != values.len() {
             // maybe return Err?
-            panic!("Mismatched lengths: {} proofs of were provided for {} commitments with {} claimed values",
+            panic!("Mismatched lengths: {} proofs were provided for {} commitments with {} claimed values",
             labeled_commitments.len(), proof.len(), values.len());
         }
 
         for (i, labeled_commitment) in labeled_commitments.iter().enumerate() {
-
             let commitment = labeled_commitment.commitment();
 
             // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
@@ -446,9 +442,10 @@ where
 
             // check if we've seen this commitment before. If not, we should verify it.
             if Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
-                .is_err() {
-                    println!("Function check failed verification of well-formedness of commitment with index {i}");
-                    return Ok(false);
+                .is_err()
+            {
+                println!("Function check failed verification of well-formedness of commitment with index {i}");
+                return Ok(false);
             }
 
             // 1. Compute a and b
@@ -487,7 +484,9 @@ where
                 &mut transcript,
                 &vk.leaf_hash_params,
                 &vk.two_to_one_params,
-            ).is_err() {
+            )
+            .is_err()
+            {
                 // I think this can never be called since check_random_linear_combination will panick itself; must improve error handling
                 println!("Function check failed verification of opening with index {i}");
                 return Ok(false);

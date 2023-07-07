@@ -373,7 +373,7 @@ mod tests {
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
-        
+
         let point = Fq::rand(rand_chacha);
 
         for degree in degrees {
@@ -389,7 +389,7 @@ mod tests {
         }
 
         let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
-        
+
         let proof = LigeroPCS::<2>::open(
             &ck,
             &labeled_polys,
@@ -411,7 +411,6 @@ mod tests {
         )
         .unwrap());
     }
-
 
     #[test]
     #[should_panic]
@@ -443,7 +442,7 @@ mod tests {
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
-        
+
         let point = Fq::rand(rand_chacha);
 
         for degree in degrees {
@@ -459,7 +458,7 @@ mod tests {
         }
 
         let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
-        
+
         let proof = LigeroPCS::<2>::open(
             &ck,
             &labeled_polys,
@@ -511,7 +510,7 @@ mod tests {
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
-        
+
         let point = Fq::rand(rand_chacha);
 
         for degree in degrees {
@@ -527,7 +526,7 @@ mod tests {
         }
 
         let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
-        
+
         let mut proof = LigeroPCS::<2>::open(
             &ck,
             &labeled_polys,
@@ -584,7 +583,7 @@ mod tests {
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
-        
+
         let point = Fq::rand(rand_chacha);
 
         for degree in degrees {
@@ -600,7 +599,7 @@ mod tests {
         }
 
         let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
-        
+
         let proof = LigeroPCS::<2>::open(
             &ck,
             &labeled_polys,
@@ -626,5 +625,4 @@ mod tests {
         )
         .unwrap());
     }
-
 }
