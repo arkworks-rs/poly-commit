@@ -22,7 +22,7 @@ use utils::Matrix;
 mod data_structures;
 use data_structures::*;
 
-pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
+pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, LigeroPCProofArray};
 
 use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
 
@@ -356,14 +356,26 @@ where
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let proof_array = LigeroPCProofArray::new();
+        let mut proof_array = LigeroPCProofArray::new();
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> = commitments.into_iter().collect();
+        let labeled_polynomials: Vec<&'a LabeledPolynomial<F, P>> = labeled_polynomials.into_iter().collect();
 
-        for labeled_polynomial in labeled_polynomials.into_iter() {
+        assert_eq!(labeled_commitments.len(), labeled_polynomials.len(),
+            // maybe return Err?
+            "Mismatched lengths: {} commitments, {} polynomials",
+            labeled_commitments.len(), labeled_polynomials.len()
+        );
 
-            let polynomial = labeled_polynomial.polynomial();
+        for i in 0..labeled_polynomials.len() {
+
+            let polynomial = labeled_polynomials[i].polynomial();
+            let commitment = labeled_commitments[i].commitment();
 
             // TODO we receive a list of polynomials and a list of commitments
             // are we to understand that the first commitment is for the first polynomial, ...etc?
+
+            // TODO we should maybe check that these two lists match,b ut that would imply recomputing merkle trees...
+            // at least check labels?
 
             // 1. Compute matrices
             let (mat, ext_mat) = Self::compute_matrices(polynomial);
@@ -373,8 +385,6 @@ where
                 Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
             // 3. Generate vector b and add v = b·M to the transcript
-            let commitment = commitments.into_iter().next().unwrap().commitment();
-
             let mut b = Vec::new();
             let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
             let mut acc_b = F::one();
@@ -417,57 +427,80 @@ where
     where
         Self::Commitment: 'a,
     {
-        let labeled_commitment = commitments.into_iter().next().unwrap();
-        let commitment = labeled_commitment.commitment();
 
-        let t = calculate_t(rho_inv, sec_param);
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> = commitments.into_iter().collect();
+        let values: Vec<F> = values.into_iter().collect();
 
-        // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
-        //      could they be used to cheat?
+        let t = calculate_t(rho_inv, sec_param); // TODO include in ck/vk?
 
-        // check if we've seen this commitment before. If not, we should verify it.
-        Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
-            .unwrap();
-
-        // 1. Compute a and b
-        let mut a = Vec::new();
-        let mut acc_a = F::one();
-        for _ in 0..commitment.n_cols {
-            a.push(acc_a);
-            acc_a *= point;
+        if labeled_commitments.len() != proof.len() || labeled_commitments.len() != values.len() {
+            // maybe return Err?
+            panic!("Mismatched lengths: {} proofs of were provided for {} commitments with {} claimed values",
+            labeled_commitments.len(), proof.len(), values.len());
         }
 
-        // by now acc_a = point^n_cols
-        let mut b = Vec::new();
-        let mut acc_b = F::one();
-        for _ in 0..commitment.n_rows {
-            b.push(acc_b);
-            acc_b *= acc_a;
+        for (i, labeled_commitment) in labeled_commitments.iter().enumerate() {
+
+            let commitment = labeled_commitment.commitment();
+
+            // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
+            //      could they be used to cheat?
+
+            // check if we've seen this commitment before. If not, we should verify it.
+            if Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
+                .is_err() {
+                    println!("Function check failed verification of well-formedness of commitment with index {i}");
+                    return Ok(false);
+            }
+
+            // 1. Compute a and b
+            let mut a = Vec::new();
+            let mut acc_a = F::one();
+            for _ in 0..commitment.n_cols {
+                a.push(acc_a);
+                acc_a *= point;
+            }
+
+            // by now acc_a = point^n_cols
+            let mut b = Vec::new();
+            let mut acc_b = F::one();
+            for _ in 0..commitment.n_rows {
+                b.push(acc_b);
+                acc_b *= acc_a;
+            }
+
+            // 2. Seed the transcript with the point and generate t random indices
+            // TODO replace unwraps by proper error handling
+            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+            transcript
+                .append_serializable_element(b"point", point)
+                .unwrap();
+            transcript
+                .append_serializable_element(b"v", &proof[i].v)
+                .unwrap();
+
+            // 3. Check the linear combination in the proof
+            if Self::check_random_linear_combination(
+                &b,
+                &proof[i],
+                &commitment.root,
+                commitment.n_ext_cols,
+                t,
+                &mut transcript,
+                &vk.leaf_hash_params,
+                &vk.two_to_one_params,
+            ).is_err() {
+                println!("Function check failed verification of opening with index {i}");
+                return Ok(false);
+            }
+
+            if inner_product(&proof[i].v, &a) != values[i] {
+                println!("Funcion check: passed value at index {i} does not match prover's claimed value at the same infex");
+                return Ok(false);
+            }
         }
 
-        // 2. Seed the transcript with the point and generate t random indices
-        // TODO replace unwraps by proper error handling
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
-        transcript
-            .append_serializable_element(b"point", point)
-            .unwrap();
-        transcript
-            .append_serializable_element(b"v", &proof.v)
-            .unwrap();
-
-        // 3. Check the linear combination in the proof
-        Self::check_random_linear_combination(
-            &b,
-            proof,
-            &commitment.root,
-            commitment.n_ext_cols,
-            t,
-            &mut transcript,
-            &vk.leaf_hash_params,
-            &vk.two_to_one_params,
-        )?;
-
-        Ok(inner_product(&proof.v, &a) == values.into_iter().next().unwrap())
+        Ok(true)
     }
 }
 

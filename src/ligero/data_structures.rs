@@ -166,7 +166,7 @@ impl PCRandomness for LigeroPCRandomness {
     }
 }
 
-/// Ligero proof
+/// Proof of an individual Ligero well-formedness check or opening
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCProof<F, C>
@@ -183,4 +183,5 @@ where
     pub(crate) columns: Vec<Vec<F>>,
 }
 
+/// The Proof type for Ligero, which amounts to an array of individual ligero proofs
 pub type LigeroPCProofArray<F, C> = Vec<LigeroPCProof<F, C>>;
