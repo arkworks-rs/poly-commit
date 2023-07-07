@@ -184,7 +184,6 @@ where
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> LigeroPCProof<F, C> {
-        let n_rows = mat.n;
         let t = calculate_t(rho_inv, sec_param); // TODO this function will now probably need to take into account the number of rows/cols of the extended matrix
 
         // 1. Compute the linear combination using the random coefficients
@@ -395,7 +394,6 @@ where
 
             let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
 
-            let v = mat.row_mul(&b);
             transcript
                 .append_serializable_element(b"point", point)
                 .unwrap();

@@ -412,6 +412,76 @@ mod tests {
         .unwrap());
     }
 
+
+    #[test]
+    #[should_panic]
+    fn test_several_polynomials_mismatched_lengths() {
+        // here we go through the same motions as in test_several_polynomials,
+        // but pass to check() one fewer value than we should
+        let degrees = [4_usize, 13_usize, 30_usize];
+        let mut rng = &mut test_rng();
+
+        LigeroPCS::<2>::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
+        let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
+        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
+            .unwrap()
+            .clone();
+
+        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
+            leaf_hash_params,
+            two_to_one_params,
+        };
+
+        let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
+        let mut test_sponge = test_sponge::<Fq>();
+        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+            ChallengeGenerator::new_univariate(&mut test_sponge);
+
+        let mut labeled_polys = Vec::new();
+        let mut values = Vec::new();
+        
+        let point = Fq::rand(rand_chacha);
+
+        for degree in degrees {
+            let labeled_poly = LabeledPolynomial::new(
+                "test".to_string(),
+                rand_poly(degree, None, rand_chacha),
+                None,
+                None,
+            );
+
+            values.push(labeled_poly.evaluate(&point));
+            labeled_polys.push(labeled_poly);
+        }
+
+        let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
+        
+        let proof = LigeroPCS::<2>::open(
+            &ck,
+            &labeled_polys,
+            &commitments,
+            &point,
+            &mut (challenge_generator.clone()),
+            &randomness,
+            None,
+        )
+        .unwrap();
+        assert!(LigeroPCS::<2>::check(
+            &vk,
+            &commitments,
+            &point,
+            values[0..2].to_vec(),
+            &proof,
+            &mut challenge_generator,
+            None
+        )
+        .unwrap());
+    }
+
     #[test]
     #[should_panic]
     fn test_several_polynomials_swap_proofs() {
