@@ -490,6 +490,7 @@ where
                 &vk.leaf_hash_params,
                 &vk.two_to_one_params,
             ).is_err() {
+                // I think this can never be called since check_random_linear_combination will panick itself; must improve error handling
                 println!("Function check failed verification of opening with index {i}");
                 return Ok(false);
             }
