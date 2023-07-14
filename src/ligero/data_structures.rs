@@ -113,7 +113,7 @@ where
 pub(crate) type LigeroPCPreparedVerifierKey = ();
 
 impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPreparedVerifierKey {
-    fn prepare(vk: &Unprepared) -> Self {
+    fn prepare(_vk: &Unprepared) -> Self {
         todo!()
     }
 }
@@ -144,7 +144,7 @@ impl<F: PrimeField, C: Config> PCCommitment for LigeroPCCommitment<F, C> {
 pub(crate) type LigeroPCPreparedCommitment = ();
 
 impl<Unprepared: PCCommitment> PCPreparedCommitment<Unprepared> for LigeroPCPreparedCommitment {
-    fn prepare(cm: &Unprepared) -> Self {
+    fn prepare(_cm: &Unprepared) -> Self {
         todo!()
     }
 }
@@ -157,16 +157,16 @@ impl PCRandomness for LigeroPCRandomness {
     }
 
     fn rand<R: RngCore>(
-        num_queries: usize,
-        has_degree_bound: bool,
-        num_vars: Option<usize>,
-        rng: &mut R,
+        _num_queries: usize,
+        _has_degree_bound: bool,
+        _num_vars: Option<usize>,
+        _rng: &mut R,
     ) -> Self {
         todo!()
     }
 }
 
-/// Ligero proof
+/// Proof of an individual Ligero well-formedness check or opening
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCProof<F, C>
@@ -182,3 +182,6 @@ where
 
     pub(crate) columns: Vec<Vec<F>>,
 }
+
+/// The Proof type for Ligero, which amounts to an array of individual ligero proofs
+pub type LigeroPCProofArray<F, C> = Vec<LigeroPCProof<F, C>>;

@@ -22,7 +22,7 @@ use utils::Matrix;
 mod data_structures;
 use data_structures::*;
 
-pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey};
+pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCProofArray, LigeroPCVerifierKey};
 
 use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
 
@@ -101,7 +101,7 @@ where
         // 1. Hash the received columns into leaf hashes
         let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         for c in proof.columns.iter() {
-            col_hashes.push(hash_column::<D, F>(c).into());
+            col_hashes.push(hash_column::<D, F>(c));
         }
 
         // 2. Compute t column indices to check the linear combination at
@@ -168,7 +168,7 @@ where
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_column::<D, F>(col).into());
+            col_hashes.push(hash_column::<D, F>(col));
         }
 
         // pad the column hashes with zeroes
@@ -184,7 +184,6 @@ where
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> LigeroPCProof<F, C> {
-        let n_rows = mat.n;
         let t = calculate_t(rho_inv, sec_param); // TODO this function will now probably need to take into account the number of rows/cols of the extended matrix
 
         // 1. Compute the linear combination using the random coefficients
@@ -241,7 +240,7 @@ where
 
     type Randomness = LigeroPCRandomness;
 
-    type Proof = LigeroPCProof<F, C>;
+    type Proof = LigeroPCProofArray<F, C>;
 
     type BatchProof = Vec<Self::Proof>;
 
@@ -249,8 +248,8 @@ where
 
     fn setup<R: RngCore>(
         max_degree: usize,
-        num_vars: Option<usize>,
-        rng: &mut R,
+        _num_vars: Option<usize>,
+        _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         assert!(
             rho_inv >= 1,
@@ -260,14 +259,15 @@ where
         GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (rho_inv - 1))
             .ok_or(Error::UnsupportedDegreeBound(max_degree))?;
 
-        Ok(LigeroPCUniversalParams::default())
+        LigeroPCUniversalParams::default();
+        Ok(())
     }
 
     fn trim(
-        pp: &Self::UniversalParams,
-        supported_degree: usize,
-        supported_hiding_bound: usize,
-        enforced_degree_bounds: Option<&[usize]>,
+        _pp: &Self::UniversalParams,
+        _supported_degree: usize,
+        _supported_hiding_bound: usize,
+        _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         todo!();
     }
@@ -275,7 +275,7 @@ where
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
-        rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -286,56 +286,55 @@ where
     where
         P: 'a,
     {
-        // TODO loop over all polynomials
+        let mut commitments = Vec::new();
 
-        // TODO decide what to do with label and degree bound (these are private! but the commitment also has them)
-        let labeled_polynomial = polynomials.into_iter().next().unwrap();
+        for labeled_polynomial in polynomials.into_iter() {
+            let polynomial = labeled_polynomial.polynomial();
 
-        let polynomial = labeled_polynomial.polynomial();
+            // 1. Compute matrices
+            let (mat, ext_mat) = Self::compute_matrices(polynomial);
 
-        // 1. Compute matrices
-        let (mat, ext_mat) = Self::compute_matrices(polynomial);
+            // 2. Create the Merkle tree from the hashes of the columns
+            let col_tree =
+                Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
-        // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree =
-            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+            // 3. Add root to transcript and generate random linear combination with it
+            let root = col_tree.root();
 
-        // 3. Add root to transcript and generate random linear combination with it
-        let root = col_tree.root();
+            let mut transcript: IOPTranscript<F> =
+                IOPTranscript::new(b"well_formedness_transcript");
+            transcript
+                .append_serializable_element(b"root", &root)
+                .unwrap();
 
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"well_formedness_transcript");
-        transcript
-            .append_serializable_element(b"root", &root)
-            .unwrap();
+            let n_rows = mat.n;
+            let n_cols = mat.m;
+            let n_ext_cols = ext_mat.m;
 
-        let n_rows = mat.n;
-        let n_cols = mat.m;
-        let n_ext_cols = ext_mat.m;
+            let mut r = Vec::new();
+            for _ in 0..n_rows {
+                r.push(transcript.get_and_append_challenge(b"r").unwrap());
+            }
 
-        let mut r = Vec::new();
-        for _ in 0..n_rows {
-            r.push(transcript.get_and_append_challenge(b"r").unwrap());
-        }
+            // 4. Generate the proof by choosing random columns and proving their paths in the tree
+            let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
 
-        // 4. Generate the proof by choosing random columns and proving their paths in the tree
-        let proof = Self::generate_proof(&r, &mat, &ext_mat, &col_tree, &mut transcript);
+            let commitment = LigeroPCCommitment {
+                n_rows,
+                n_cols,
+                n_ext_cols,
+                root,
+                proof,
+            };
 
-        let commitment = LigeroPCCommitment {
-            n_rows,
-            n_cols,
-            n_ext_cols,
-            root,
-            proof,
-        };
-
-        Ok((
-            vec![LabeledCommitment::new(
+            commitments.push(LabeledCommitment::new(
                 labeled_polynomial.label().clone(),
                 commitment,
                 None, // TODO think about this (degree_bound)
-            )],
-            Vec::new(),
-        ))
+            ));
+        }
+
+        Ok((commitments, Vec::new()))
         // TODO when should this return Err?
     }
 
@@ -344,53 +343,72 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
+        _challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
+        _rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
-        let labeled_polynomial = labeled_polynomials.into_iter().next().unwrap();
-        let polynomial = labeled_polynomial.polynomial();
+        let mut proof_array = LigeroPCProofArray::new();
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> =
+            commitments.into_iter().collect();
+        let labeled_polynomials: Vec<&'a LabeledPolynomial<F, P>> =
+            labeled_polynomials.into_iter().collect();
 
-        // TODO we receive a list of polynomials and a list of commitments
-        // are we to understand that the first commitment is for the first polynomial, ...etc?
+        assert_eq!(
+            labeled_commitments.len(),
+            labeled_polynomials.len(),
+            // maybe return Err?
+            "Mismatched lengths: {} commitments, {} polynomials",
+            labeled_commitments.len(),
+            labeled_polynomials.len()
+        );
 
-        // 1. Compute matrices
-        let (mat, ext_mat) = Self::compute_matrices(polynomial);
+        for i in 0..labeled_polynomials.len() {
+            let polynomial = labeled_polynomials[i].polynomial();
+            let commitment = labeled_commitments[i].commitment();
 
-        // 2. Create the Merkle tree from the hashes of the columns
-        let col_tree =
-            Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+            // TODO we receive a list of polynomials and a list of commitments
+            // are we to understand that the first commitment is for the first polynomial, ...etc?
 
-        // 3. Generate vector b and add v = b·M to the transcript
-        let commitment = commitments.into_iter().next().unwrap().commitment();
+            // TODO we should maybe check that these two lists match, but that would imply recomputing merkle trees...
+            // at least check labels?
 
-        let mut b = Vec::new();
-        let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
-        let mut acc_b = F::one();
-        for _ in 0..commitment.n_rows {
-            b.push(acc_b);
-            acc_b *= point_pow;
+            // 1. Compute matrices
+            let (mat, ext_mat) = Self::compute_matrices(polynomial);
+
+            // 2. Create the Merkle tree from the hashes of the columns
+            let col_tree =
+                Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
+
+            // 3. Generate vector b and add v = b·M to the transcript
+            let mut b = Vec::new();
+            let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
+            let mut acc_b = F::one();
+            for _ in 0..commitment.n_rows {
+                b.push(acc_b);
+                acc_b *= point_pow;
+            }
+
+            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+
+            transcript
+                .append_serializable_element(b"point", point)
+                .unwrap();
+
+            proof_array.push(Self::generate_proof(
+                &b,
+                &mat,
+                &ext_mat,
+                &col_tree,
+                &mut transcript,
+            ))
         }
 
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
-
-        let v = mat.row_mul(&b);
-        transcript
-            .append_serializable_element(b"point", point)
-            .unwrap();
-
-        Ok(Self::generate_proof(
-            &b,
-            &mat,
-            &ext_mat,
-            &col_tree,
-            &mut transcript,
-        ))
+        Ok(proof_array)
     }
 
     fn check<'a>(
@@ -399,63 +417,89 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
-        challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
-        rng: Option<&mut dyn RngCore>,
+        _challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
     {
-        let labeled_commitment = commitments.into_iter().next().unwrap();
-        let commitment = labeled_commitment.commitment();
+        let labeled_commitments: Vec<&'a LabeledCommitment<Self::Commitment>> =
+            commitments.into_iter().collect();
+        let values: Vec<F> = values.into_iter().collect();
 
-        let t = calculate_t(rho_inv, sec_param);
+        let t = calculate_t(rho_inv, sec_param); // TODO include in ck/vk?
 
-        // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
-        //      could they be used to cheat?
-
-        // check if we've seen this commitment before. If not, we should verify it.
-        Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
-            .unwrap();
-
-        // 1. Compute a and b
-        let mut a = Vec::new();
-        let mut acc_a = F::one();
-        for _ in 0..commitment.n_cols {
-            a.push(acc_a);
-            acc_a *= point;
+        if labeled_commitments.len() != proof.len() || labeled_commitments.len() != values.len() {
+            // maybe return Err?
+            panic!("Mismatched lengths: {} proofs were provided for {} commitments with {} claimed values",
+            labeled_commitments.len(), proof.len(), values.len());
         }
 
-        // by now acc_a = point^n_cols
-        let mut b = Vec::new();
-        let mut acc_b = F::one();
-        for _ in 0..commitment.n_rows {
-            b.push(acc_b);
-            acc_b *= acc_a;
+        for (i, labeled_commitment) in labeled_commitments.iter().enumerate() {
+            let commitment = labeled_commitment.commitment();
+
+            // TODO maybe check that the parameters have been calculated honestly (n_rows/cols/ext_cols);
+            //      could they be used to cheat?
+
+            // check if we've seen this commitment before. If not, we should verify it.
+            if Self::check_well_formedness(commitment, &vk.leaf_hash_params, &vk.two_to_one_params)
+                .is_err()
+            {
+                println!("Function check failed verification of well-formedness of commitment with index {i}");
+                return Ok(false);
+            }
+
+            // 1. Compute a and b
+            let mut a = Vec::new();
+            let mut acc_a = F::one();
+            for _ in 0..commitment.n_cols {
+                a.push(acc_a);
+                acc_a *= point;
+            }
+
+            // by now acc_a = point^n_cols
+            let mut b = Vec::new();
+            let mut acc_b = F::one();
+            for _ in 0..commitment.n_rows {
+                b.push(acc_b);
+                acc_b *= acc_a;
+            }
+
+            // 2. Seed the transcript with the point and generate t random indices
+            // TODO replace unwraps by proper error handling
+            let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
+            transcript
+                .append_serializable_element(b"point", point)
+                .unwrap();
+            transcript
+                .append_serializable_element(b"v", &proof[i].v)
+                .unwrap();
+
+            // 3. Check the linear combination in the proof
+            if Self::check_random_linear_combination(
+                &b,
+                &proof[i],
+                &commitment.root,
+                commitment.n_ext_cols,
+                t,
+                &mut transcript,
+                &vk.leaf_hash_params,
+                &vk.two_to_one_params,
+            )
+            .is_err()
+            {
+                // I think this can never be called since check_random_linear_combination will panick itself; must improve error handling
+                println!("Function check failed verification of opening with index {i}");
+                return Ok(false);
+            }
+
+            if inner_product(&proof[i].v, &a) != values[i] {
+                println!("Function check: claimed value in position {i} does not match the evaluation of the committed polynomial in the same position");
+                return Ok(false);
+            }
         }
 
-        // 2. Seed the transcript with the point and generate t random indices
-        // TODO replace unwraps by proper error handling
-        let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"opening_transcript");
-        transcript
-            .append_serializable_element(b"point", point)
-            .unwrap();
-        transcript
-            .append_serializable_element(b"v", &proof.v)
-            .unwrap();
-
-        // 3. Check the linear combination in the proof
-        Self::check_random_linear_combination(
-            &b,
-            proof,
-            &commitment.root,
-            commitment.n_ext_cols,
-            t,
-            &mut transcript,
-            &vk.leaf_hash_params,
-            &vk.two_to_one_params,
-        )?;
-
-        Ok(inner_product(&proof.v, &a) == values.into_iter().next().unwrap())
+        Ok(true)
     }
 }
 

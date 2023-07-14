@@ -70,12 +70,12 @@ impl<F: Field> Matrix<F> {
     ///
     /// Index bound checks are waived for efficiency and behaviour under invalid indexing is undefined
     pub(crate) fn entry(&self, i: usize, j: usize) -> F {
-        return self.entries[i][j];
+        self.entries[i][j]
     }
 
     /// Returns self as a list of rows
     pub(crate) fn rows(&self) -> Vec<Vec<F>> {
-        return self.entries.clone();
+        self.entries.clone()
     }
 
     /// Returns self as a list of columns
@@ -149,10 +149,12 @@ pub(crate) fn reed_solomon<F: FftField>(
     );
     let poly_coeffs = domain.ifft(msg).to_vec();
 
-    let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).expect(&format!(
-        "The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
-        m * rho_inv
-    ));
+    let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).unwrap_or_else(|| {
+        panic!(
+            "The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
+            m * rho_inv
+        )
+    });
 
     extended_domain.fft(&poly_coeffs)
 }
@@ -206,7 +208,7 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
     let mut indices = Vec::with_capacity(t);
     for _ in 0..t {
         let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-        let _ = transcript
+        transcript
             .get_and_append_byte_challenge(b"i", &mut bytes)
             .unwrap();
 
@@ -219,7 +221,7 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
 }
 
 #[inline]
-pub(crate) fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
+pub(crate) fn calculate_t(_rho_inv: usize, _sec_param: usize) -> usize {
     // TODO calculate t somehow
     let t = 3;
     println!("WARNING: you are using dummy t = {t}");
