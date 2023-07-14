@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "dimensions are 2 x 3 but entry vector has 5 entries")]
     fn test_matrix_constructor_flat_panic() {
         let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44]);
         Matrix::new_from_flat(2, 3, &entries);
@@ -91,7 +91,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "not all rows have the same length")]
     fn test_matrix_constructor_rows_panic() {
         let rows: Vec<Vec<Fq>> = vec![
             to_field(vec![10, 100, 4]),
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Mismatched lengths")]
     fn test_several_polynomials_mismatched_lengths() {
         // here we go through the same motions as in test_several_polynomials,
         // but pass to check() one fewer value than we should
@@ -554,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic()]
     fn test_several_polynomials_swap_values() {
         // in this test we work with three polynomials and swap the second
         // and third values passed to the verifier externally

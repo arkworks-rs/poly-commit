@@ -101,7 +101,7 @@ where
         // 1. Hash the received columns into leaf hashes
         let mut col_hashes: Vec<Vec<u8>> = Vec::new();
         for c in proof.columns.iter() {
-            col_hashes.push(hash_column::<D, F>(c).into());
+            col_hashes.push(hash_column::<D, F>(c));
         }
 
         // 2. Compute t column indices to check the linear combination at
@@ -168,7 +168,7 @@ where
         let ext_mat_cols = ext_mat.cols();
 
         for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_column::<D, F>(col).into());
+            col_hashes.push(hash_column::<D, F>(col));
         }
 
         // pad the column hashes with zeroes
@@ -248,8 +248,8 @@ where
 
     fn setup<R: RngCore>(
         max_degree: usize,
-        num_vars: Option<usize>,
-        rng: &mut R,
+        _num_vars: Option<usize>,
+        _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
         assert!(
             rho_inv >= 1,
@@ -259,14 +259,15 @@ where
         GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (rho_inv - 1))
             .ok_or(Error::UnsupportedDegreeBound(max_degree))?;
 
-        Ok(LigeroPCUniversalParams::default())
+        LigeroPCUniversalParams::default();
+        Ok(())
     }
 
     fn trim(
-        pp: &Self::UniversalParams,
-        supported_degree: usize,
-        supported_hiding_bound: usize,
-        enforced_degree_bounds: Option<&[usize]>,
+        _pp: &Self::UniversalParams,
+        _supported_degree: usize,
+        _supported_hiding_bound: usize,
+        _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         todo!();
     }
@@ -274,7 +275,7 @@ where
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
-        rng: Option<&mut dyn RngCore>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
@@ -416,8 +417,8 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
-        challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
-        rng: Option<&mut dyn RngCore>,
+        _challenge_generator: &mut crate::challenge::ChallengeGenerator<F, S>,
+        _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
         Self::Commitment: 'a,
@@ -493,7 +494,7 @@ where
             }
 
             if inner_product(&proof[i].v, &a) != values[i] {
-                println!("Funcion check: passed value at index {i} does not match prover's claimed value at the same infex");
+                println!("Function check: claimed value in position {i} does not match the evaluation of the committed polynomial in the same position");
                 return Ok(false);
             }
         }
