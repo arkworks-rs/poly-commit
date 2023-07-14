@@ -149,8 +149,12 @@ pub(crate) fn reed_solomon<F: FftField>(
     );
     let poly_coeffs = domain.ifft(msg).to_vec();
 
-    let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).unwrap_or_else(|| panic!("The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
-        m * rho_inv));
+    let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).unwrap_or_else(|| {
+        panic!(
+            "The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
+            m * rho_inv
+        )
+    });
 
     extended_domain.fft(&poly_coeffs)
 }
