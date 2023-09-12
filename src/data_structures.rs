@@ -250,7 +250,7 @@ impl<'a> From<&'a str> for LCTerm {
     }
 }
 
-impl core::convert::TryInto<PolynomialLabel> for LCTerm {
+impl TryInto<PolynomialLabel> for LCTerm {
     type Error = ();
     fn try_into(self) -> Result<PolynomialLabel, ()> {
         match self {
@@ -260,7 +260,7 @@ impl core::convert::TryInto<PolynomialLabel> for LCTerm {
     }
 }
 
-impl<'a> core::convert::TryInto<&'a PolynomialLabel> for &'a LCTerm {
+impl<'a> TryInto<&'a PolynomialLabel> for &'a LCTerm {
     type Error = ();
 
     fn try_into(self) -> Result<&'a PolynomialLabel, ()> {
