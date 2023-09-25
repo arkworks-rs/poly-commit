@@ -53,10 +53,10 @@ mod tests {
 
     type MTConfig = MerkleTreeParams;
     type Sponge = PoseidonSponge<Fq>;
-    type PC<F, C, D, S, P, const rho_inv: usize> = Ligero<F, C, D, S, P, rho_inv, 128>;
-    type LigeroPCS<const rho_inv: usize> = PC<Fq, MTConfig, Blake2s256, Sponge, UniPoly, rho_inv>;
-    type LigeroPCS_F<const rho_inv: usize, F> =
-        PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>, rho_inv>;
+    type PC<F, C, D, S, P, const RHO_INV: usize> = Ligero<F, C, D, S, P, RHO_INV, 128>;
+    type LigeroPCS<const RHO_INV: usize> = PC<Fq, MTConfig, Blake2s256, Sponge, UniPoly, RHO_INV>;
+    type LigeroPcsF<const RHO_INV: usize, F> =
+        PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>, RHO_INV>;
 
     #[test]
     fn test_matrix_constructor_flat() {
@@ -273,7 +273,7 @@ mod tests {
 
         // but the base field of bls12_381 doesnt have such large domains
         use ark_bls12_381::Fq as F_381;
-        assert_eq!(LigeroPCS_F::<5, F_381>::setup(10, None, rng).is_err(), true);
+        assert_eq!(LigeroPcsF::<5, F_381>::setup(10, None, rng).is_err(), true);
     }
 
     #[test]
@@ -286,14 +286,17 @@ mod tests {
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
+        let check_well_formedness = true;
 
         let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
         let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -314,15 +317,15 @@ mod tests {
         let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
-        assert!(
-            LigeroPCS::<2>::check_well_formedness(
-                &c[0].commitment(),
-                &leaf_hash_params,
-                &two_to_one_params
-            )
-            .is_ok(),
-            "Well formedness check failed"
-        );
+        // assert!(
+        //     LigeroPCS::<2>::check_well_formedness(
+        //         &c[0].commitment(),
+        //         &leaf_hash_params,
+        //         &two_to_one_params
+        //     )
+        //     .is_ok(),
+        //     "Well formedness check failed"
+        // );
 
         let proof = LigeroPCS::<2>::open(
             &ck,
@@ -356,14 +359,17 @@ mod tests {
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
+        let check_well_formedness = true;
 
         let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
         let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -426,13 +432,16 @@ mod tests {
             .unwrap()
             .clone();
 
+        let check_well_formedness = true;
         let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
         let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -493,14 +502,17 @@ mod tests {
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
+        let check_well_formedness = true;
 
         let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
         let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -554,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic()]
+    #[should_panic]
     fn test_several_polynomials_swap_values() {
         // in this test we work with three polynomials and swap the second
         // and third values passed to the verifier externally
@@ -566,14 +578,17 @@ mod tests {
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
+        let check_well_formedness = true;
 
         let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
         let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
             leaf_hash_params,
             two_to_one_params,
+            check_well_formedness,
         };
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();

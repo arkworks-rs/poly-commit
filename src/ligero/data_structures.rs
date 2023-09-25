@@ -26,9 +26,9 @@ pub struct Ligero<
     S: CryptographicSponge,
     P: DenseUVPolynomial<F>,
     // one over the rate rho
-    const rho_inv: usize,
+    const RHO_INV: usize,
     // security parameter, used in calculating t
-    const sec_param: usize,
+    const SEC_PARAM: usize,
 > {
     pub(crate) _field: PhantomData<F>,
     pub(crate) _config: PhantomData<C>,
@@ -41,7 +41,14 @@ pub struct Ligero<
 const DEFAULT_RHO_INV: usize = 2;
 const DEFAULT_SEC_PARAM: usize = 128;
 
-pub(crate) type LigeroPCUniversalParams = ();
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCUniversalParams {
+    /// number of rows resp. columns of the square matrix containing the coefficients of the polynomial
+    pub(crate) num_rows: usize,
+    pub(crate) num_cols: usize,
+    pub(crate) num_ext_cols: usize,
+}
 
 impl PCUniversalParams for LigeroPCUniversalParams {
     fn max_degree(&self) -> usize {
@@ -64,6 +71,8 @@ where
     #[derivative(Debug = "ignore")]
     /// Parameters for hash function of Merke tree combining two nodes into one
     pub two_to_one_params: TwoToOneParam<C>,
+    /// This is a flag which determines if the random linear combination is done.
+    pub check_well_formedness: bool,
 }
 
 impl<C> PCCommitterKey for LigeroPCCommitterKey<C>
@@ -93,6 +102,8 @@ where
     pub leaf_hash_params: LeafParam<C>,
     /// Parameters for hash function of Merke tree combining two nodes into one
     pub two_to_one_params: TwoToOneParam<C>,
+    /// This is a flag which determines if the random linear combination is done.
+    pub check_well_formedness: bool,
 }
 
 impl<C> PCVerifierKey for LigeroPCVerifierKey<C>
@@ -122,16 +133,15 @@ impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LigeroPCPr
 /// where each node is a hash of the column of the encoded coefficient matrix U.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct LigeroPCCommitment<F: PrimeField, C: Config> {
+pub struct LigeroPCCommitment<C: Config> {
     // number of rows resp. columns of the square matrix containing the coefficients of the polynomial
     pub(crate) n_rows: usize,
     pub(crate) n_cols: usize,
     pub(crate) n_ext_cols: usize,
     pub(crate) root: C::InnerDigest,
-    pub(crate) proof: LigeroPCProof<F, C>,
 }
 
-impl<F: PrimeField, C: Config> PCCommitment for LigeroPCCommitment<F, C> {
+impl<C: Config> PCCommitment for LigeroPCCommitment<C> {
     fn empty() -> Self {
         todo!()
     }
@@ -169,7 +179,7 @@ impl PCRandomness for LigeroPCRandomness {
 /// Proof of an individual Ligero well-formedness check or opening
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub struct LigeroPCProof<F, C>
+pub(crate) struct LigeroPCProofSingle<F, C>
 where
     F: PrimeField,
     C: Config,
@@ -184,4 +194,16 @@ where
 }
 
 /// The Proof type for Ligero, which amounts to an array of individual ligero proofs
-pub type LigeroPCProofArray<F, C> = Vec<LigeroPCProof<F, C>>;
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+pub struct LigeroPCProof<F, C>
+where
+    F: PrimeField,
+    C: Config,
+{
+    pub(crate) opening: LigeroPCProofSingle<F, C>,
+    pub(crate) well_formedness: Option<Vec<F>>,
+}
+
+// Multiple poly at one point
+pub(crate) type LPCPArray<F, C> = Vec<LigeroPCProof<F, C>>;

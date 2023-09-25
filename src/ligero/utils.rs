@@ -10,6 +10,7 @@ use rayon::{
 };
 
 use crate::streaming_kzg::ceil_div;
+use crate::Error;
 
 #[derive(Debug)]
 pub(crate) struct Matrix<F: Field> {
@@ -130,7 +131,7 @@ pub(crate) fn compute_dimensions<F: FftField>(n: usize) -> (usize, usize) {
 
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of an FFT domain in F.
-/// Returns a vector of length equal to the smallest FFT domain of size at least msg.len() * rho_inv.
+/// Returns a vector of length equal to the smallest FFT domain of size at least msg.len() * RHO_INV.
 pub(crate) fn reed_solomon<F: FftField>(
     // msg, of length m, is interpreted as a vector of coefficients of a polynomial of degree m - 1
     msg: &[F],
@@ -151,7 +152,7 @@ pub(crate) fn reed_solomon<F: FftField>(
 
     let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).unwrap_or_else(|| {
         panic!(
-            "The field F cannot accomodate FFT for msg.len() * rho_inv = {} elements (too many)",
+            "The field F cannot accomodate FFT for msg.len() * RHO_INV = {} elements (too many)",
             m * rho_inv
         )
     });
@@ -203,27 +204,40 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
     n: usize,
     t: usize,
     transcript: &mut IOPTranscript<F>,
-) -> Vec<usize> {
+) -> Result<Vec<usize>, Error> {
     let bytes_to_squeeze = get_num_bytes(n);
     let mut indices = Vec::with_capacity(t);
     for _ in 0..t {
         let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
         transcript
             .get_and_append_byte_challenge(b"i", &mut bytes)
-            .unwrap();
+            .map_err(|_| Error::TranscriptError)?;
 
         // get the usize from Vec<u8>:
         let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
         // modulo the number of columns in the encoded matrix
         indices.push(ind % n);
     }
-    indices
+    Ok(indices)
 }
 
 #[inline]
-pub(crate) fn calculate_t(_rho_inv: usize, _sec_param: usize) -> usize {
-    // TODO calculate t somehow
-    let t = 3;
-    println!("WARNING: you are using dummy t = {t}");
-    t
+pub(crate) fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
+    // Double-check with BCI+20 if you can simply replace
+    // $\delta = \frac{1-\rho}{3}$ with $\frac{1-\rho}{2}$. In that case, we
+    // will find the smallest t such that
+    // $(1-\delta)^t + (\rho+\delta)^t + n/F < 2^(-\lambda)$. Since we do not
+    // have $n/F$ here and and it is negligible for security less than 230 bits,
+    // we eliminate it here. With \delta = \frac{1-\rho}{2}, the expreesion is
+    // 2 * (1-\delta)^t < 2^(-\lambda). Then
+    // $t * log2 (1-\delta) < - \lambda - 1$.
+
+    // TODO: Maybe we should not eliminate $n/F$. In original Ligero, this was
+    // $d/F$ for $\delta = \frac{1-\rho}{3}$. But from expression 1.1 from
+    // BCI+20, I wrote $n/F$ for $\delta = \frac{1-\rho}{3}$. It is negligible
+    // anyways.
+    let sec_param = sec_param as f64;
+    let nom = -sec_param - 1.0;
+    let denom = (0.5 + 0.5 / rho_inv as f64).log2();
+    (nom / denom).ceil() as usize // This is the `t`
 }

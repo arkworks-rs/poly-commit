@@ -93,6 +93,13 @@ pub enum Error {
         /// Index of the offending polynomial.
         label: String,
     },
+
+    /// This means a failure in verifying the commitment or the opening.
+    InvalidCommitment,
+
+    /// For PCS which rely on Fiat-Shamir to be rendered non-interactive,
+    /// these are errors that result from incorrect transcript manipulation.
+    TranscriptError,
 }
 
 impl core::fmt::Display for Error {
@@ -179,6 +186,8 @@ impl core::fmt::Display for Error {
                 support up to degree ({:?})", label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
+            Error::InvalidCommitment => write!(f, "Failed to verify the commitment"),
+            Error::TranscriptError => write!(f, "Incorrect transcript manipulation"),
         }
     }
 }
