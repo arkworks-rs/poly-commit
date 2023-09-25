@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reed_solomon() {
+    fn test_encoding() {
         // we use this polynomial to generate the the values we will ask the fft to interpolate
 
         let rho_inv = 3;
@@ -147,25 +147,10 @@ mod tests {
 
             let coeffs = &pol.coeffs;
 
-            let small_domain = GeneralEvaluationDomain::<Fq>::new(deg + 1).unwrap();
-
             // size of evals might be larger than deg + 1 (the min. number of evals needed to interpolate): we could still do R-S encoding on smaller evals, but the resulting polynomial will differ, so for this test to work we should pass it in full
-            let evals = small_domain.fft(&coeffs);
-            let m = evals.len();
+            let m = deg + 1;
 
-            // checking that ifft is really the inverse of fft
-            let coeffs_again = small_domain.ifft(&evals);
-
-            assert_eq!(coeffs_again[..deg + 1], *coeffs);
-
-            let encoded = reed_solomon(&evals, rho_inv);
-            let m_p = encoded.len();
-
-            // the m original elements should be interleaved in the encoded message
-            let ratio = m_p / m;
-            for j in 0..m {
-                assert_eq!(evals[j], encoded[j * ratio]);
-            }
+            let encoded = reed_solomon(&coeffs, rho_inv);
 
             let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho_inv).unwrap();
 

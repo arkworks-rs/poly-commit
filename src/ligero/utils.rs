@@ -139,17 +139,6 @@ pub(crate) fn reed_solomon<F: FftField>(
 ) -> Vec<F> {
     let m = msg.len();
 
-    let domain = GeneralEvaluationDomain::<F>::new(m).unwrap();
-    assert_eq!(
-        m,
-        domain.size(),
-        "The evaluation vector has length {} elements \\
-        but the smallest FFT domain admitting that many elements has order {}",
-        m,
-        domain.size()
-    );
-    let poly_coeffs = domain.ifft(msg).to_vec();
-
     let extended_domain = GeneralEvaluationDomain::<F>::new(m * rho_inv).unwrap_or_else(|| {
         panic!(
             "The field F cannot accomodate FFT for msg.len() * RHO_INV = {} elements (too many)",
@@ -157,7 +146,7 @@ pub(crate) fn reed_solomon<F: FftField>(
         )
     });
 
-    extended_domain.fft(&poly_coeffs)
+    extended_domain.fft(&msg)
 }
 
 #[inline]
