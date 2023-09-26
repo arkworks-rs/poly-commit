@@ -227,11 +227,11 @@ pub(crate) fn calculate_t<F: PrimeField>(
     let sec_param = sec_param as i32;
 
     let residual = codeword_len as f64 / 2.0_f64.powi(field_bits);
-    let rhs = 2.0_f64.powi(-sec_param) - residual;
-    if !(rhs > 0.0) {
+    let rhs = (2.0_f64.powi(-sec_param) - residual).log2();
+    if !(rhs.is_normal()) {
         return Err(Error::InvalidSecurityGuarantee);
     }
-    let nom = (2.0_f64.powi(-sec_param) - residual).log2() - 1.0;
+    let nom = rhs - 1.0;
     let denom = (0.5 + 0.5 / rho_inv as f64).log2();
     Ok((nom / denom).ceil() as usize) // This is the `t`
 }
