@@ -37,10 +37,6 @@ pub struct Ligero<
     pub(crate) _poly: PhantomData<P>,
 }
 
-// TODO come up with reasonable defaults
-const DEFAULT_RHO_INV: usize = 2;
-const DEFAULT_SEC_PARAM: usize = 128;
-
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct LigeroPCUniversalParams {

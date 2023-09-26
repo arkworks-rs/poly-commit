@@ -229,7 +229,7 @@ pub(crate) fn calculate_t<F: PrimeField>(
     let residual = codeword_len / 2.0_f64.powi(field_bits);
     let rhs = (2.0_f64.powi(-sec_param) - residual).log2();
     if !(rhs.is_normal()) {
-        return Err(Error::InvalidSecurityGuarantee);
+        return Err(Error::InvalidParameters("For the given codeword length and the required security guarantee, the field is not big enough.".to_string()));
     }
     let nom = rhs - 1.0;
     let denom = (0.5 + 0.5 / rho_inv as f64).log2();

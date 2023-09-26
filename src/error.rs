@@ -103,7 +103,7 @@ pub enum Error {
 
     /// This means the required soundness error bound is inherently impossible.
     /// E.g., the field is not big enough.
-    InvalidSecurityGuarantee,
+    InvalidParameters(String),
 }
 
 impl core::fmt::Display for Error {
@@ -192,7 +192,7 @@ impl core::fmt::Display for Error {
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
             Error::InvalidCommitment => write!(f, "Failed to verify the commitment"),
             Error::TranscriptError => write!(f, "Incorrect transcript manipulation"),
-            Error::InvalidSecurityGuarantee => write!(f, "The required bound on soundness error is impossible"),
+            Error::InvalidParameters(err) => write!(f, "{}", err),
         }
     }
 }

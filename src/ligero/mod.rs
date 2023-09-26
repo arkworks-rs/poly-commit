@@ -172,10 +172,11 @@ where
         _num_vars: Option<usize>,
         _rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        assert!(
-            RHO_INV >= 1,
-            "RHO_INV is the inverse of the rate and must be at least 1"
-        );
+        if RHO_INV <= 1 {
+            return Err(Error::InvalidParameters(format!(
+                "RHO_INV must be an interger greater than 1",
+            )));
+        }
         // The domain will have size m * RHO_INV, but we already have the first m elements
         GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (RHO_INV - 1))
             .ok_or(Error::UnsupportedDegreeBound(max_degree))?;
