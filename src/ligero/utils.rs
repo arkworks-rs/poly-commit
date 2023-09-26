@@ -211,22 +211,27 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
 }
 
 #[inline]
-pub(crate) fn calculate_t(rho_inv: usize, sec_param: usize) -> usize {
-    // Double-check with BCI+20 if you can simply replace
-    // $\delta = \frac{1-\rho}{3}$ with $\frac{1-\rho}{2}$. In that case, we
-    // will find the smallest t such that
-    // $(1-\delta)^t + (\rho+\delta)^t + n/F < 2^(-\lambda)$. Since we do not
-    // have $n/F$ here and and it is negligible for security less than 230 bits,
-    // we eliminate it here. With \delta = \frac{1-\rho}{2}, the expreesion is
-    // 2 * (1-\delta)^t < 2^(-\lambda). Then
-    // $t * log2 (1-\delta) < - \lambda - 1$.
+pub(crate) fn calculate_t<F: PrimeField>(
+    rho_inv: usize,
+    sec_param: usize,
+    codeword_len: usize,
+) -> Result<usize, Error> {
+    // Took from the analysis by BCI+20 and Ligero
+    // We will find the smallest $t$ such that
+    // $(1-\delta)^t + (\rho+\delta)^t + \frac{n}{F} < 2^{-\lambda}$.
+    // With $\delta = \frac{1-\rho}{2}$, the expreesion is
+    // $2 * (\frac{1+\rho}{2})^t + \frac{n}{F} < 2^(-\lambda)$.
 
-    // TODO: Maybe we should not eliminate $n/F$. In original Ligero, this was
-    // $d/F$ for $\delta = \frac{1-\rho}{3}$. But from expression 1.1 from
-    // BCI+20, I wrote $n/F$ for $\delta = \frac{1-\rho}{3}$. It is negligible
-    // anyways.
-    let sec_param = sec_param as f64;
-    let nom = -sec_param - 1.0;
+    let codeword_len = codeword_len as f64;
+    let field_bits = F::MODULUS_BIT_SIZE as i32;
+    let sec_param = sec_param as i32;
+
+    let residual = codeword_len / 2.0_f64.powi(field_bits);
+    let rhs = (2.0_f64.powi(-sec_param) - residual).log2();
+    if !(rhs.is_normal()) {
+        return Err(Error::InvalidSecurityGuarantee);
+    }
+    let nom = rhs - 1.0;
     let denom = (0.5 + 0.5 / rho_inv as f64).log2();
-    (nom / denom).ceil() as usize // This is the `t`
+    Ok((nom / denom).ceil() as usize) // This is the `t`
 }

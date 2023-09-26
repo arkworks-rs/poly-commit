@@ -100,6 +100,10 @@ pub enum Error {
     /// For PCS which rely on Fiat-Shamir to be rendered non-interactive,
     /// these are errors that result from incorrect transcript manipulation.
     TranscriptError,
+
+    /// This means the required soundness error bound is inherently impossible.
+    /// E.g., the field is not big enough.
+    InvalidSecurityGuarantee,
 }
 
 impl core::fmt::Display for Error {
@@ -188,6 +192,7 @@ impl core::fmt::Display for Error {
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
             Error::InvalidCommitment => write!(f, "Failed to verify the commitment"),
             Error::TranscriptError => write!(f, "Incorrect transcript manipulation"),
+            Error::InvalidSecurityGuarantee => write!(f, "The required bound on soundness error is impossible"),
         }
     }
 }

@@ -99,7 +99,7 @@ where
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<LigeroPCProofSingle<F, C>, Error> {
-        let t = calculate_t(RHO_INV, SEC_PARAM); // TODO this function will now probably need to take into account the number of rows/cols of the extended matrix
+        let t = calculate_t::<F>(RHO_INV, SEC_PARAM, ext_mat.n)?;
 
         // 1. Compute the linear combination using the random coefficients
         let v = mat.row_mul(coeffs);
@@ -415,7 +415,7 @@ where
                 b.push(acc_b);
                 acc_b *= acc_a;
             }
-            let t = calculate_t(RHO_INV, SEC_PARAM); // TODO include in ck/vk?
+            let t = calculate_t::<F>(RHO_INV, SEC_PARAM, commitment.n_ext_cols)?;
 
             // 2. Seed the transcript with the point and generate t random indices
             // TODO Consider removing the evaluation point from the transcript.
