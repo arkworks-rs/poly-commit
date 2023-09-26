@@ -625,4 +625,16 @@ mod tests {
         )
         .unwrap());
     }
+
+    #[test]
+    fn test_calculate_t_with_good_parameters() {
+        assert!(calculate_t::<Fq>(4, 128, 2_usize.pow(32)).unwrap() < 200);
+        assert!(calculate_t::<Fq>(4, 256, 2_usize.pow(32)).unwrap() < 400);
+    }
+
+    #[test]
+    fn test_calculate_t_with_bad_parameters() {
+        calculate_t::<Fq>(4, 317, 2_usize.pow(Fq::MODULUS_BIT_SIZE - 317)).unwrap_err();
+        calculate_t::<Fq>(4, 400, 2_usize.pow(32)).unwrap_err();
+    }
 }

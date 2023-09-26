@@ -222,11 +222,11 @@ pub(crate) fn calculate_t<F: PrimeField>(
     // With $\delta = \frac{1-\rho}{2}$, the expreesion is
     // $2 * (\frac{1+\rho}{2})^t + \frac{n}{F} < 2^(-\lambda)$.
 
-    let codeword_len = codeword_len as i32;
+    let codeword_len = codeword_len as f64;
     let field_bits = F::MODULUS_BIT_SIZE as i32;
     let sec_param = sec_param as i32;
 
-    let residual = codeword_len as f64 / 2.0_f64.powi(field_bits);
+    let residual = codeword_len / 2.0_f64.powi(field_bits);
     let rhs = (2.0_f64.powi(-sec_param) - residual).log2();
     if !(rhs.is_normal()) {
         return Err(Error::InvalidSecurityGuarantee);
