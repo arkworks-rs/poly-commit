@@ -214,20 +214,24 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
 pub(crate) fn calculate_t<F: PrimeField>(
     rho_inv: usize,
     sec_param: usize,
-    block_length: usize,
-) -> usize {
+    codeword_len: usize,
+) -> Result<usize, Error> {
     // Took from the analysis by BCI+20 and Ligero
     // We will find the smallest $t$ such that
     // $(1-\delta)^t + (\rho+\delta)^t + \frac{n}{F} < 2^{-\lambda}$.
     // With $\delta = \frac{1-\rho}{2}$, the expreesion is
     // $2 * (\frac{1+\rho}{2})^t + \frac{n}{F} < 2^(-\lambda)$.
 
-    let block_length = block_length as i32;
+    let codeword_len = codeword_len as i32;
     let field_bits = F::MODULUS_BIT_SIZE as i32;
     let sec_param = sec_param as i32;
 
-    let residual = block_length as f64 / 2.0_f64.powi(field_bits);
+    let residual = codeword_len as f64 / 2.0_f64.powi(field_bits);
+    let rhs = 2.0_f64.powi(-sec_param) - residual;
+    if !(rhs > 0.0) {
+        return Err(Error::InvalidSecurityGuarantee);
+    }
     let nom = (2.0_f64.powi(-sec_param) - residual).log2() - 1.0;
     let denom = (0.5 + 0.5 / rho_inv as f64).log2();
-    (nom / denom).ceil() as usize // This is the `t`
+    Ok((nom / denom).ceil() as usize) // This is the `t`
 }

@@ -99,7 +99,8 @@ where
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<LigeroPCProofSingle<F, C>, Error> {
-        let t = calculate_t::<F>(RHO_INV, SEC_PARAM, ext_mat.n);
+        let t = calculate_t::<F>(RHO_INV, SEC_PARAM, ext_mat.n)
+            .map_err(|_| Error::InvalidSecurityGuarantee)?;
 
         // 1. Compute the linear combination using the random coefficients
         let v = mat.row_mul(coeffs);
@@ -415,7 +416,8 @@ where
                 b.push(acc_b);
                 acc_b *= acc_a;
             }
-            let t = calculate_t::<F>(RHO_INV, SEC_PARAM, commitment.n_ext_cols);
+            let t = calculate_t::<F>(RHO_INV, SEC_PARAM, commitment.n_ext_cols)
+                .map_err(|_| Error::TranscriptError)?;
 
             // 2. Seed the transcript with the point and generate t random indices
             // TODO Consider removing the evaluation point from the transcript.
