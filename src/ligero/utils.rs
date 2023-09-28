@@ -212,8 +212,8 @@ pub(crate) fn get_indices_from_transcript<F: PrimeField>(
 
 #[inline]
 pub(crate) fn calculate_t<F: PrimeField>(
-    rho_inv: usize,
     sec_param: usize,
+    rho_inv: usize,
     codeword_len: usize,
 ) -> Result<usize, Error> {
     // Took from the analysis by BCI+20 and Ligero

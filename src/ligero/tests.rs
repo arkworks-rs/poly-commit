@@ -4,12 +4,13 @@ mod tests {
     use crate::ark_std::UniformRand;
     use crate::{
         challenge::ChallengeGenerator,
-        ligero::{
-            utils::*, Ligero, LigeroPCCommitterKey, LigeroPCVerifierKey, PolynomialCommitment,
-        },
+        ligero::{utils::*, Ligero, LigeroPCUniversalParams, PolynomialCommitment},
         LabeledPolynomial,
     };
-    use ark_bls12_377::Fq;
+    use ark_bls12_377::Fr;
+    use ark_bls12_377::{Bls12_377, Fq};
+    use ark_bls12_381::Bls12_381;
+    use ark_bls12_381::Fr as Fr381;
     use ark_crypto_primitives::sponge::poseidon::PoseidonConfig;
     use ark_crypto_primitives::sponge::CryptographicSponge;
     use ark_crypto_primitives::{
@@ -17,6 +18,7 @@ mod tests {
         merkle_tree::{ByteDigestConverter, Config},
         sponge::poseidon::PoseidonSponge,
     };
+    use ark_ec::pairing::Pairing;
     use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
@@ -24,9 +26,10 @@ mod tests {
     };
     use ark_std::test_rng;
     use blake2::Blake2s256;
+    use core::marker::PhantomData;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-    type UniPoly = DensePolynomial<Fq>;
+    type UniPoly = DensePolynomial<Fr>;
     #[derive(Clone)]
     pub(super) struct Window4x256;
     impl pedersen::Window for Window4x256 {
@@ -52,48 +55,47 @@ mod tests {
     }
 
     type MTConfig = MerkleTreeParams;
-    type Sponge = PoseidonSponge<Fq>;
-    type PC<F, C, D, S, P, const RHO_INV: usize> = Ligero<F, C, D, S, P, RHO_INV, 128>;
-    type LigeroPCS<const RHO_INV: usize> = PC<Fq, MTConfig, Blake2s256, Sponge, UniPoly, RHO_INV>;
-    type LigeroPcsF<const RHO_INV: usize, F> =
-        PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>, RHO_INV>;
+    type Sponge = PoseidonSponge<Fr>;
+    type PC<F, C, D, S, P> = Ligero<F, C, D, S, P>;
+    type LigeroPCS = PC<Fr, MTConfig, Blake2s256, Sponge, UniPoly>;
+    type LigeroPcsF<F> = PC<F, MTConfig, Blake2s256, Sponge, DensePolynomial<F>>;
 
     #[test]
     fn test_matrix_constructor_flat() {
-        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44, 50]);
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67, 44, 50]);
         let mat = Matrix::new_from_flat(2, 3, &entries);
-        assert_eq!(mat.entry(1, 2), Fq::from(50));
+        assert_eq!(mat.entry(1, 2), Fr::from(50));
     }
 
     #[test]
     fn test_matrix_constructor_flat_square() {
-        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67]);
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67]);
         let mat = Matrix::new_from_flat(2, 2, &entries);
-        assert_eq!(mat.entry(1, 1), Fq::from(67));
+        assert_eq!(mat.entry(1, 1), Fr::from(67));
     }
 
     #[test]
     #[should_panic(expected = "dimensions are 2 x 3 but entry vector has 5 entries")]
     fn test_matrix_constructor_flat_panic() {
-        let entries: Vec<Fq> = to_field(vec![10, 100, 4, 67, 44]);
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67, 44]);
         Matrix::new_from_flat(2, 3, &entries);
     }
 
     #[test]
     fn test_matrix_constructor_rows() {
-        let rows: Vec<Vec<Fq>> = vec![
+        let rows: Vec<Vec<Fr>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
         let mat = Matrix::new_from_rows(rows);
-        assert_eq!(mat.entry(2, 0), Fq::from(55));
+        assert_eq!(mat.entry(2, 0), Fr::from(55));
     }
 
     #[test]
     #[should_panic(expected = "not all rows have the same length")]
     fn test_matrix_constructor_rows_panic() {
-        let rows: Vec<Vec<Fq>> = vec![
+        let rows: Vec<Vec<Fr>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58]),
@@ -103,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_cols() {
-        let rows: Vec<Vec<Fq>> = vec![
+        let rows: Vec<Vec<Fr>> = vec![
             to_field(vec![4, 76]),
             to_field(vec![14, 92]),
             to_field(vec![17, 89]),
@@ -116,17 +118,17 @@ mod tests {
 
     #[test]
     fn test_row_mul() {
-        let rows: Vec<Vec<Fq>> = vec![
+        let rows: Vec<Vec<Fr>> = vec![
             to_field(vec![10, 100, 4]),
             to_field(vec![23, 1, 0]),
             to_field(vec![55, 58, 9]),
         ];
 
         let mat = Matrix::new_from_rows(rows);
-        let v: Vec<Fq> = to_field(vec![12, 41, 55]);
-        // by giving the result in the integers and then converting to Fq
-        // we ensure the test will still pass even if Fq changes
-        assert_eq!(mat.row_mul(&v), to_field::<Fq>(vec![4088, 4431, 543]));
+        let v: Vec<Fr> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fr
+        // we ensure the test will still pass even if Fr changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fr>(vec![4088, 4431, 543]));
     }
 
     #[test]
@@ -139,10 +141,10 @@ mod tests {
             let deg = (1 << i) - 1;
 
             let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-            let mut pol = rand_poly::<Fq>(deg, None, rand_chacha);
+            let mut pol = rand_poly::<Fr>(deg, None, rand_chacha);
 
             while pol.degree() != deg {
-                pol = rand_poly::<Fq>(deg, None, rand_chacha);
+                pol = rand_poly::<Fr>(deg, None, rand_chacha);
             }
 
             let coeffs = &pol.coeffs;
@@ -152,7 +154,7 @@ mod tests {
 
             let encoded = reed_solomon(&coeffs, rho_inv);
 
-            let large_domain = GeneralEvaluationDomain::<Fq>::new(m * rho_inv).unwrap();
+            let large_domain = GeneralEvaluationDomain::<Fr>::new(m * rho_inv).unwrap();
 
             // the encoded elements should agree with the evaluations of the polynomial in the larger domain
             for j in 0..(rho_inv * m) {
@@ -169,19 +171,19 @@ mod tests {
             .unwrap()
             .clone();
 
-        let rows: Vec<Vec<Fq>> = vec![
+        let rows: Vec<Vec<Fr>> = vec![
             to_field(vec![4, 76]),
             to_field(vec![14, 92]),
             to_field(vec![17, 89]),
         ];
 
         let mat = Matrix::new_from_rows(rows);
-        let mt = LigeroPCS::<2>::create_merkle_tree(&mat, &leaf_hash_params, &two_to_one_params);
+        let mt = LigeroPCS::create_merkle_tree(&mat, &leaf_hash_params, &two_to_one_params);
 
         let root = mt.root();
 
         for (i, col) in mat.cols().iter().enumerate() {
-            let col_hash = hash_column::<Blake2s256, Fq>(col);
+            let col_hash = hash_column::<Blake2s256, Fr>(col);
 
             let proof = mt.generate_proof(i).unwrap();
             assert!(proof
@@ -206,20 +208,20 @@ mod tests {
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
     }
 
-    fn rand_poly<Fq: PrimeField>(
+    fn rand_poly<Fr: PrimeField>(
         degree: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePolynomial<Fq> {
+    ) -> DensePolynomial<Fr> {
         DensePolynomial::rand(degree, rng)
     }
 
-    fn constant_poly<Fq: PrimeField>(
+    fn constant_poly<Fr: PrimeField>(
         _: usize,
         _: Option<usize>,
         rng: &mut ChaCha20Rng,
-    ) -> DensePolynomial<Fq> {
-        DensePolynomial::from_coefficients_slice(&[Fq::rand(rng)])
+    ) -> DensePolynomial<Fr> {
+        DensePolynomial::from_coefficients_slice(&[Fr::rand(rng)])
     }
 
     // TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
@@ -252,13 +254,10 @@ mod tests {
     #[test]
     fn test_setup() {
         let rng = &mut test_rng();
-        let _ = LigeroPCS::<2>::setup(1 << 44, None, rng).unwrap();
-
-        assert_eq!(LigeroPCS::<5>::setup(1 << 45, None, rng).is_err(), true);
-
+        let _ = LigeroPcsF::<Fq>::setup(1 << 44, None, rng).unwrap();
         // but the base field of bls12_381 doesnt have such large domains
         use ark_bls12_381::Fq as F_381;
-        assert_eq!(LigeroPcsF::<5, F_381>::setup(10, None, rng).is_err(), true);
+        assert_eq!(LigeroPcsF::<F_381>::setup(20, None, rng).is_err(), true);
     }
 
     #[test]
@@ -266,23 +265,23 @@ mod tests {
         let degree = 4;
         let mut rng = &mut test_rng();
         // just to make sure we have the right degree given the FFT domain for our field
-        LigeroPCS::<2>::setup(degree, None, rng).unwrap();
+        LigeroPCS::setup(degree, None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
         let check_well_formedness = true;
 
-        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-            check_well_formedness,
         };
-        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
-            leaf_hash_params,
-            two_to_one_params,
-            check_well_formedness,
-        };
+
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
 
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
         let labeled_poly = LabeledPolynomial::new(
@@ -292,18 +291,18 @@ mod tests {
             None,
         );
 
-        let mut test_sponge = test_sponge::<Fq>();
-        let (c, rands) = LigeroPCS::<2>::commit(&ck, &[labeled_poly.clone()], None).unwrap();
+        let mut test_sponge = test_sponge::<Fr>();
+        let (c, rands) = LigeroPCS::commit(&ck, &[labeled_poly.clone()], None).unwrap();
 
-        let point = Fq::rand(rand_chacha);
+        let point = Fr::rand(rand_chacha);
 
         let value = labeled_poly.evaluate(&point);
 
-        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
         // assert!(
-        //     LigeroPCS::<2>::check_well_formedness(
+        //     LigeroPCS::check_well_formedness(
         //         &c[0].commitment(),
         //         &leaf_hash_params,
         //         &two_to_one_params
@@ -312,7 +311,7 @@ mod tests {
         //     "Well formedness check failed"
         // );
 
-        let proof = LigeroPCS::<2>::open(
+        let proof = LigeroPCS::open(
             &ck,
             &[labeled_poly],
             &c,
@@ -322,7 +321,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert!(LigeroPCS::<2>::check(
+        assert!(LigeroPCS::check(
             &vk,
             &c,
             &point,
@@ -339,33 +338,33 @@ mod tests {
         let degrees = [4_usize, 13_usize, 30_usize];
         let mut rng = &mut test_rng();
 
-        LigeroPCS::<2>::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
+        LigeroPCS::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
         let check_well_formedness = true;
 
-        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-            check_well_formedness,
-        };
-        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
-            leaf_hash_params,
-            two_to_one_params,
-            check_well_formedness,
         };
 
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
+
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-        let mut test_sponge = test_sponge::<Fq>();
-        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+        let mut test_sponge = test_sponge::<Fr>();
+        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
 
-        let point = Fq::rand(rand_chacha);
+        let point = Fr::rand(rand_chacha);
 
         for degree in degrees {
             let labeled_poly = LabeledPolynomial::new(
@@ -379,9 +378,9 @@ mod tests {
             labeled_polys.push(labeled_poly);
         }
 
-        let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
+        let (commitments, randomness) = LigeroPCS::commit(&ck, &labeled_polys, None).unwrap();
 
-        let proof = LigeroPCS::<2>::open(
+        let proof = LigeroPCS::open(
             &ck,
             &labeled_polys,
             &commitments,
@@ -391,7 +390,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert!(LigeroPCS::<2>::check(
+        assert!(LigeroPCS::check(
             &vk,
             &commitments,
             &point,
@@ -411,33 +410,34 @@ mod tests {
         let degrees = [4_usize, 13_usize, 30_usize];
         let mut rng = &mut test_rng();
 
-        LigeroPCS::<2>::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
+        LigeroPCS::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
 
         let check_well_formedness = true;
-        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-            check_well_formedness,
-        };
-        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
-            leaf_hash_params,
-            two_to_one_params,
-            check_well_formedness,
         };
 
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
+
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-        let mut test_sponge = test_sponge::<Fq>();
-        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+        let mut test_sponge = test_sponge::<Fr>();
+        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
 
-        let point = Fq::rand(rand_chacha);
+        let point = Fr::rand(rand_chacha);
 
         for degree in degrees {
             let labeled_poly = LabeledPolynomial::new(
@@ -451,9 +451,9 @@ mod tests {
             labeled_polys.push(labeled_poly);
         }
 
-        let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
+        let (commitments, randomness) = LigeroPCS::commit(&ck, &labeled_polys, None).unwrap();
 
-        let proof = LigeroPCS::<2>::open(
+        let proof = LigeroPCS::open(
             &ck,
             &labeled_polys,
             &commitments,
@@ -463,7 +463,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert!(LigeroPCS::<2>::check(
+        assert!(LigeroPCS::check(
             &vk,
             &commitments,
             &point,
@@ -482,33 +482,33 @@ mod tests {
         let degrees = [4_usize, 13_usize, 30_usize];
         let mut rng = &mut test_rng();
 
-        LigeroPCS::<2>::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
+        LigeroPCS::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
         let check_well_formedness = true;
 
-        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-            check_well_formedness,
-        };
-        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
-            leaf_hash_params,
-            two_to_one_params,
-            check_well_formedness,
         };
 
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
+
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-        let mut test_sponge = test_sponge::<Fq>();
-        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+        let mut test_sponge = test_sponge::<Fr>();
+        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
 
-        let point = Fq::rand(rand_chacha);
+        let point = Fr::rand(rand_chacha);
 
         for degree in degrees {
             let labeled_poly = LabeledPolynomial::new(
@@ -522,9 +522,9 @@ mod tests {
             labeled_polys.push(labeled_poly);
         }
 
-        let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
+        let (commitments, randomness) = LigeroPCS::commit(&ck, &labeled_polys, None).unwrap();
 
-        let mut proof = LigeroPCS::<2>::open(
+        let mut proof = LigeroPCS::open(
             &ck,
             &labeled_polys,
             &commitments,
@@ -538,7 +538,7 @@ mod tests {
         // to do swap opening proofs
         proof.swap(0, 2);
 
-        assert!(LigeroPCS::<2>::check(
+        assert!(LigeroPCS::check(
             &vk,
             &commitments,
             &point,
@@ -558,33 +558,33 @@ mod tests {
         let degrees = [4_usize, 13_usize, 30_usize];
         let mut rng = &mut test_rng();
 
-        LigeroPCS::<2>::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
+        LigeroPCS::setup(*degrees.iter().max().unwrap(), None, rng).unwrap();
         let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
         let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
         let check_well_formedness = true;
 
-        let ck: LigeroPCCommitterKey<MTConfig> = LigeroPCCommitterKey {
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-            check_well_formedness,
-        };
-        let vk: LigeroPCVerifierKey<MTConfig> = LigeroPCVerifierKey {
-            leaf_hash_params,
-            two_to_one_params,
-            check_well_formedness,
         };
 
+        let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
+
         let rand_chacha = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
-        let mut test_sponge = test_sponge::<Fq>();
-        let mut challenge_generator: ChallengeGenerator<Fq, PoseidonSponge<Fq>> =
+        let mut test_sponge = test_sponge::<Fr>();
+        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
             ChallengeGenerator::new_univariate(&mut test_sponge);
 
         let mut labeled_polys = Vec::new();
         let mut values = Vec::new();
 
-        let point = Fq::rand(rand_chacha);
+        let point = Fr::rand(rand_chacha);
 
         for degree in degrees {
             let labeled_poly = LabeledPolynomial::new(
@@ -598,9 +598,9 @@ mod tests {
             labeled_polys.push(labeled_poly);
         }
 
-        let (commitments, randomness) = LigeroPCS::<2>::commit(&ck, &labeled_polys, None).unwrap();
+        let (commitments, randomness) = LigeroPCS::commit(&ck, &labeled_polys, None).unwrap();
 
-        let proof = LigeroPCS::<2>::open(
+        let proof = LigeroPCS::open(
             &ck,
             &labeled_polys,
             &commitments,
@@ -614,7 +614,7 @@ mod tests {
         // swap values externally passed to verifier
         values.swap(1, 2);
 
-        assert!(LigeroPCS::<2>::check(
+        assert!(LigeroPCS::check(
             &vk,
             &commitments,
             &point,
@@ -628,13 +628,36 @@ mod tests {
 
     #[test]
     fn test_calculate_t_with_good_parameters() {
-        assert!(calculate_t::<Fq>(4, 128, 2_usize.pow(32)).unwrap() < 200);
-        assert!(calculate_t::<Fq>(4, 256, 2_usize.pow(32)).unwrap() < 400);
+        assert!(calculate_t::<Fq>(128, 4, 2_usize.pow(32)).unwrap() < 200);
+        assert!(calculate_t::<Fq>(256, 4, 2_usize.pow(32)).unwrap() < 400);
     }
 
     #[test]
     fn test_calculate_t_with_bad_parameters() {
-        calculate_t::<Fq>(4, 317, 2_usize.pow(Fq::MODULUS_BIT_SIZE - 317)).unwrap_err();
-        calculate_t::<Fq>(4, 400, 2_usize.pow(32)).unwrap_err();
+        calculate_t::<Fq>((Fq::MODULUS_BIT_SIZE - 60) as usize, 4, 2_usize.pow(60)).unwrap_err();
+        calculate_t::<Fq>(400, 4, 2_usize.pow(32)).unwrap_err();
+    }
+
+    fn rand_point<E: Pairing>(_: Option<usize>, rng: &mut ChaCha20Rng) -> E::ScalarField {
+        E::ScalarField::rand(rng)
+    }
+
+    #[test]
+    fn single_poly_test() {
+        use crate::tests::*;
+        single_poly_test::<_, _, LigeroPCS, _>(
+            None,
+            rand_poly::<Fr>,
+            rand_point::<Bls12_377>,
+            poseidon_sponge_for_test,
+        )
+        .expect("test failed for bls12-377");
+        single_poly_test::<_, _, LigeroPcsF<Fr381>, _>(
+            None,
+            rand_poly::<Fr381>,
+            rand_point::<Bls12_381>,
+            poseidon_sponge_for_test,
+        )
+        .expect("test failed for bls12-381");
     }
 }

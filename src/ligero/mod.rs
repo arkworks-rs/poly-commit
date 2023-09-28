@@ -4,7 +4,7 @@ use ark_crypto_primitives::{
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
-use ark_poly::{DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::DenseUVPolynomial;
 use ark_std::fmt::Debug;
 use core::marker::PhantomData;
 use digest::Digest;
@@ -12,7 +12,7 @@ use jf_primitives::pcs::transcript::IOPTranscript;
 use std::borrow::Borrow;
 
 use crate::ligero::utils::{inner_product, reed_solomon};
-use crate::{Error, LabeledCommitment, LabeledPolynomial, PolynomialCommitment};
+use crate::{Error, LabeledCommitment, LabeledPolynomial, PCUniversalParams, PolynomialCommitment};
 
 use ark_std::rand::RngCore;
 
@@ -28,8 +28,7 @@ use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_c
 
 mod tests;
 
-impl<F, C, D, S, P, const RHO_INV: usize, const SEC_PARAM: usize>
-    Ligero<F, C, D, S, P, RHO_INV, SEC_PARAM>
+impl<F, C, D, S, P> Ligero<F, C, D, S, P>
 where
     F: PrimeField,
     C: Config,
@@ -52,7 +51,7 @@ where
         }
     }
 
-    fn compute_matrices(polynomial: &P) -> (Matrix<F>, Matrix<F>) {
+    fn compute_matrices(polynomial: &P, rho_inv: usize) -> (Matrix<F>, Matrix<F>) {
         let mut coeffs = polynomial.coeffs().to_vec();
 
         // 1. Computing parameters and initial matrix
@@ -68,7 +67,7 @@ where
         let ext_mat = Matrix::new_from_rows(
             mat.rows()
                 .iter()
-                .map(|r| reed_solomon(r, RHO_INV))
+                .map(|r| reed_solomon(r, rho_inv))
                 .collect(),
         );
 
@@ -93,13 +92,15 @@ where
         MerkleTree::<C>::new(leaf_hash_params, two_to_one_params, col_hashes).unwrap()
     }
     fn generate_proof(
+        sec_param: usize,
+        rho_inv: usize,
         coeffs: &[F],
         mat: &Matrix<F>,
         ext_mat: &Matrix<F>,
         col_tree: &MerkleTree<C>,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<LigeroPCProofSingle<F, C>, Error> {
-        let t = calculate_t::<F>(RHO_INV, SEC_PARAM, ext_mat.n)?;
+        let t = calculate_t::<F>(sec_param, rho_inv, ext_mat.n)?;
 
         // 1. Compute the linear combination using the random coefficients
         let v = mat.row_mul(coeffs);
@@ -134,8 +135,7 @@ where
     }
 }
 
-impl<F, P, S, C, D, const RHO_INV: usize, const SEC_PARAM: usize> PolynomialCommitment<F, P, S>
-    for Ligero<F, C, D, S, P, RHO_INV, SEC_PARAM>
+impl<F, P, S, C, D> PolynomialCommitment<F, P, S> for Ligero<F, C, D, S, P>
 where
     F: PrimeField,
     P: DenseUVPolynomial<F>,
@@ -147,11 +147,11 @@ where
     C::InnerDigest: Absorb,
     D: Digest,
 {
-    type UniversalParams = LigeroPCUniversalParams;
+    type UniversalParams = LigeroPCUniversalParams<F, C>;
 
-    type CommitterKey = LigeroPCCommitterKey<C>;
+    type CommitterKey = LigeroPCCommitterKey<F, C>;
 
-    type VerifierKey = LigeroPCVerifierKey<C>;
+    type VerifierKey = LigeroPCVerifierKey<F, C>;
 
     type PreparedVerifierKey = LigeroPCPreparedVerifierKey;
 
@@ -167,34 +167,61 @@ where
 
     type Error = Error;
 
+    /// This is only a default setup.
     fn setup<R: RngCore>(
         max_degree: usize,
         _num_vars: Option<usize>,
-        _rng: &mut R,
+        rng: &mut R,
     ) -> Result<Self::UniversalParams, Self::Error> {
-        if RHO_INV <= 1 {
-            return Err(Error::InvalidParameters(format!(
-                "RHO_INV must be an interger greater than 1",
-            )));
+        let leaf_hash_params = <C::LeafHash as CRHScheme>::setup(rng).unwrap();
+        let two_to_one_params = <C::TwoToOneHash as TwoToOneCRHScheme>::setup(rng)
+            .unwrap()
+            .clone();
+        let pp = Self::UniversalParams {
+            _field: PhantomData,
+            sec_param: 128,
+            rho_inv: 4,
+            check_well_formedness: true,
+            leaf_hash_params,
+            two_to_one_params,
+        };
+        let real_max_degree = pp.max_degree();
+        if max_degree > real_max_degree || real_max_degree == 0 {
+            return Err(Error::InvalidParameters(
+                "This field is not suitable for the proposed parameters".to_string(),
+            ));
         }
-        // The domain will have size m * RHO_INV, but we already have the first m elements
-        GeneralEvaluationDomain::<F>::compute_size_of_domain(max_degree * (RHO_INV - 1))
-            .ok_or(Error::UnsupportedDegreeBound(max_degree))?;
-
-        Ok(LigeroPCUniversalParams {
-            num_rows: 0,
-            num_cols: 0,
-            num_ext_cols: 0,
-        })
+        Ok(pp)
     }
 
     fn trim(
-        _pp: &Self::UniversalParams,
+        pp: &Self::UniversalParams,
         _supported_degree: usize,
         _supported_hiding_bound: usize,
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
-        todo!();
+        if pp.max_degree() == 0 {
+            return Err(Error::InvalidParameters(
+                "This field is not suitable for the proposed parameters".to_string(),
+            ));
+        }
+        let ck = LigeroPCCommitterKey::<F, C> {
+            _field: PhantomData,
+            sec_param: pp.sec_param,
+            rho_inv: pp.rho_inv,
+            leaf_hash_params: pp.leaf_hash_params.clone(),
+            two_to_one_params: pp.two_to_one_params.clone(),
+            check_well_formedness: pp.check_well_formedness,
+        };
+        let vk = LigeroPCVerifierKey::<F, C> {
+            _field: PhantomData,
+            sec_param: pp.sec_param,
+            rho_inv: pp.rho_inv,
+            leaf_hash_params: pp.leaf_hash_params.clone(),
+            two_to_one_params: pp.two_to_one_params.clone(),
+            check_well_formedness: pp.check_well_formedness,
+        };
+        Ok((ck, vk))
     }
 
     fn commit<'a>(
@@ -217,7 +244,7 @@ where
             let polynomial = labeled_polynomial.polynomial();
 
             // 1. Compute matrices
-            let (mat, ext_mat) = Self::compute_matrices(polynomial);
+            let (mat, ext_mat) = Self::compute_matrices(polynomial, ck.rho_inv);
 
             // 2. Create the Merkle tree from the hashes of the columns
             let col_tree =
@@ -238,9 +265,11 @@ where
             // 4. Generate the proof by choosing random columns and proving their paths in the tree
 
             let commitment = LigeroPCCommitment {
-                n_rows,
-                n_cols,
-                n_ext_cols,
+                metadata: Metadata {
+                    n_rows,
+                    n_cols,
+                    n_ext_cols,
+                },
                 root,
             };
 
@@ -250,8 +279,8 @@ where
                 None, // TODO think about this (degree_bound)
             ));
         }
-
-        Ok((commitments, Vec::new()))
+        let com_len = &commitments.len();
+        Ok((commitments, vec![Self::Randomness::default(); *com_len]))
         // TODO when should this return Err?
     }
 
@@ -286,9 +315,12 @@ where
         for i in 0..labeled_polynomials.len() {
             let polynomial = labeled_polynomials[i].polynomial();
             let commitment = labeled_commitments[i].commitment();
+            let n_rows = commitment.metadata.n_rows;
+            let n_cols = commitment.metadata.n_cols;
+            let root = &commitment.root;
 
             // 1. Compute matrices
-            let (mat, ext_mat) = Self::compute_matrices(polynomial);
+            let (mat, ext_mat) = Self::compute_matrices(polynomial, ck.rho_inv);
 
             // 2. Create the Merkle tree from the hashes of the columns
             let col_tree =
@@ -296,21 +328,20 @@ where
 
             // 3. Generate vector b
             let mut b = Vec::new();
-            let point_pow = point.pow([commitment.n_cols as u64]); // TODO this and other conversions could potentially fail
-            let mut acc_b = F::one();
-            for _ in 0..commitment.n_rows {
-                b.push(acc_b);
-                acc_b *= point_pow;
+            let point_pow = point.pow([n_cols as u64]); // TODO this and other conversions could potentially fail
+            let mut pow_b = F::one();
+            for _ in 0..n_rows {
+                b.push(pow_b);
+                pow_b *= point_pow;
             }
 
             let mut transcript = IOPTranscript::new(b"transcript");
             transcript
-                .append_serializable_element(b"root", &commitment.root)
+                .append_serializable_element(b"root", root)
                 .map_err(|_| Error::TranscriptError)?;
 
             // If we are checking well-formedness, we need to compute the well-formedness proof (which is just r.M) and append it to the transcript.
             let well_formedness = if ck.check_well_formedness {
-                let n_rows = mat.n;
                 let mut r = Vec::new();
                 for _ in 0..n_rows {
                     r.push(
@@ -335,7 +366,15 @@ where
 
             proof_array.push(LigeroPCProof {
                 // compute the opening proof and append b.M to the transcript
-                opening: Self::generate_proof(&b, &mat, &ext_mat, &col_tree, &mut transcript)?,
+                opening: Self::generate_proof(
+                    ck.sec_param,
+                    ck.rho_inv,
+                    &b,
+                    &mat,
+                    &ext_mat,
+                    &col_tree,
+                    &mut transcript,
+                )?,
                 well_formedness,
             });
         }
@@ -368,9 +407,18 @@ where
                 )
             ));
         }
+        let leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters =
+            &vk.leaf_hash_params;
+        let two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters =
+            &vk.two_to_one_params;
 
         for (i, labeled_commitment) in labeled_commitments.iter().enumerate() {
             let commitment = labeled_commitment.commitment();
+            let n_rows = commitment.metadata.n_rows;
+            let n_cols = commitment.metadata.n_cols;
+            let n_ext_cols = commitment.metadata.n_ext_cols;
+            let root = &commitment.root;
+            let t = calculate_t::<F>(vk.sec_param, vk.rho_inv, n_ext_cols)?;
 
             let mut transcript = IOPTranscript::new(b"transcript");
             transcript
@@ -383,8 +431,8 @@ where
                 }
                 let tmp = &proof_array[i].well_formedness.as_ref();
                 let well_formedness = tmp.unwrap();
-                let mut r = Vec::with_capacity(commitment.n_rows);
-                for _ in 0..commitment.n_rows {
+                let mut r = Vec::with_capacity(n_rows);
+                for _ in 0..n_rows {
                     r.push(
                         transcript
                             .get_and_append_challenge(b"r")
@@ -401,24 +449,7 @@ where
                 (None, None)
             };
 
-            // 1. Compute a and b
-            let mut a = Vec::with_capacity(commitment.n_cols);
-            let mut acc_a = F::one();
-            for _ in 0..commitment.n_cols {
-                a.push(acc_a);
-                acc_a *= point;
-            }
-
-            // by now acc_a = point^n_cols
-            let mut b = Vec::with_capacity(commitment.n_rows);
-            let mut acc_b = F::one();
-            for _ in 0..commitment.n_rows {
-                b.push(acc_b);
-                acc_b *= acc_a;
-            }
-            let t = calculate_t::<F>(RHO_INV, SEC_PARAM, commitment.n_ext_cols)?;
-
-            // 2. Seed the transcript with the point and generate t random indices
+            // 1. Seed the transcript with the point and the recieved vector
             // TODO Consider removing the evaluation point from the transcript.
             transcript
                 .append_serializable_element(b"point", point)
@@ -427,15 +458,10 @@ where
                 .append_serializable_element(b"v", &proof_array[i].opening.v)
                 .map_err(|_| Error::TranscriptError)?;
 
-            // 3. Evaluate and check for the given point
-            let coeffs: &[F] = &b;
-            let root = &commitment.root;
-            let n_ext_cols = commitment.n_ext_cols;
-            let leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters =
-                &vk.leaf_hash_params;
-            let two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters =
-                &vk.two_to_one_params;
-            // 1. Hash the received columns into leaf hashes
+            // 2. Ask random oracle for the `t` indices where the checks happen
+            let indices = get_indices_from_transcript::<F>(n_ext_cols, t, &mut transcript)?;
+
+            // 3. Hash the received columns into leaf hashes
             let col_hashes: Vec<_> = proof_array[i]
                 .opening
                 .columns
@@ -443,10 +469,7 @@ where
                 .map(|c| hash_column::<D, F>(c))
                 .collect();
 
-            // 2. Compute t column indices to check the linear combination at
-            let indices = get_indices_from_transcript::<F>(n_ext_cols, t, &mut transcript)?;
-
-            // 3. Verify the paths for each of the leaf hashes - this is only run once,
+            // 4. Verify the paths for each of the leaf hashes - this is only run once,
             // even if we have a well-formedness check (i.e., we save sending and checking the columns).
             // See "Concrete optimizations to the commitment scheme", p.12 of [Brakedown](https://eprint.iacr.org/2021/1043.pdf)
             for (j, (leaf, q_j)) in col_hashes.iter().zip(indices.iter()).enumerate() {
@@ -459,10 +482,7 @@ where
                     .map_err(|_| Error::InvalidCommitment)?;
             }
 
-            // 4. Compute the encoding w = E(v)
-            let w = reed_solomon(&proof_array[i].opening.v, RHO_INV);
-
-            // helper closure for checking that a.b = c
+            // helper closure: checks if a.b = c
             let check_inner_product = |a, b, c| -> Result<(), Error> {
                 if inner_product(a, b) != c {
                     return Err(Error::InvalidCommitment);
@@ -471,11 +491,33 @@ where
                 Ok(())
             };
 
-            // 5. Probabilistic checks that whatever the prover sent,
+            // 5. Compute the encoding w = E(v)
+            let w = reed_solomon(&proof_array[i].opening.v, vk.rho_inv);
+
+            // 6. Compute a = [1, z, z^2, ..., z^(n_cols_1)]
+            // where z denotes the `point`. Following Justin Thaler's notation
+            let mut a = Vec::with_capacity(n_cols);
+            let mut pow_a = F::one();
+            for _ in 0..n_cols {
+                a.push(pow_a);
+                pow_a *= point;
+            }
+
+            // Here, pow_z = z^n_cols.
+            // Compute b = [1, z^n_cols, z^(2*n_cols), ..., z^((n_rows-1)*n_cols)]
+            let mut b = Vec::with_capacity(n_rows);
+            let mut pow_b = F::one();
+            for _ in 0..n_rows {
+                b.push(pow_b);
+                pow_b *= pow_a;
+            }
+            let coeffs: &[F] = &b;
+
+            // 7. Probabilistic checks that whatever the prover sent,
             // matches with what the verifier computed for himself.
             // Note: we sacrifice some code repetition in order not to repeat execution.
             if let (Some(well_formedness), Some(r)) = out {
-                let w_well_formedness = reed_solomon(&well_formedness, RHO_INV);
+                let w_well_formedness = reed_solomon(&well_formedness, vk.rho_inv);
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
                     check_inner_product(
                         &r,
