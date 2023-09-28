@@ -1,7 +1,7 @@
 use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
+use crate::{Error, Evaluations, QuerySet};
+use crate::{LabeledCommitment, LabeledPolynomial};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
@@ -401,60 +401,6 @@ where
         )?;
         end_timer!(proof_time);
         Ok(result)
-    }
-
-    fn open_combinations<'a>(
-        ck: &Self::CommitterKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
-        polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
-    where
-        P: 'a,
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        Marlin::<E, S, P, Self>::open_combinations(
-            ck,
-            lc_s,
-            polynomials,
-            commitments,
-            query_set,
-            opening_challenges,
-            rands,
-            rng,
-        )
-    }
-
-    /// Checks that `values` are the true evaluations at `query_set` of the polynomials
-    /// committed in `labeled_commitments`.
-    fn check_combinations<'a, R: RngCore>(
-        vk: &Self::VerifierKey,
-        lc_s: impl IntoIterator<Item = &'a LinearCombination<E::ScalarField>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Point>,
-        evaluations: &Evaluations<E::ScalarField, P::Point>,
-        proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rng: &mut R,
-    ) -> Result<bool, Self::Error>
-    where
-        Self::Commitment: 'a,
-    {
-        Marlin::<E, S, P, Self>::check_combinations(
-            vk,
-            lc_s,
-            commitments,
-            query_set,
-            evaluations,
-            proof,
-            opening_challenges,
-            rng,
-        )
     }
 
     /// On input a list of labeled polynomials and a query set, `open` outputs a proof of evaluation
