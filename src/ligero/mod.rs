@@ -1,11 +1,12 @@
 use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_crypto_primitives::{
-    merkle_tree::{Config, MerkleTree},
+    merkle_tree::Config,
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
 use ark_std::fmt::Debug;
+use ark_std::rand::RngCore;
 use core::marker::PhantomData;
 use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
@@ -15,10 +16,7 @@ use crate::data_structures::PCRandomness;
 use crate::ligero::utils::{inner_product, reed_solomon};
 use crate::{Error, LabeledCommitment, LabeledPolynomial, PCUniversalParams, PolynomialCommitment};
 
-use ark_std::rand::RngCore;
-
 mod utils;
-use utils::Matrix;
 
 mod data_structures;
 use data_structures::*;
@@ -27,117 +25,9 @@ pub use data_structures::{
     Ligero, LigeroPCCommitterKey, LigeroPCProof, LigeroPCUniversalParams, LigeroPCVerifierKey,
 };
 
-use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
+use utils::{calculate_t, get_indices_from_transcript, hash_column};
 
 mod tests;
-
-impl<F, C, D, S, P> Ligero<F, C, D, S, P>
-where
-    F: PrimeField,
-    C: Config,
-    Vec<u8>: Borrow<C::Leaf>,
-    C::InnerDigest: Absorb,
-    D: Digest,
-    S: CryptographicSponge,
-    P: DenseUVPolynomial<F>,
-{
-    /// Create a new instance of Ligero.
-    pub fn new() -> Self {
-        Self {
-            _config: PhantomData,
-            _field: PhantomData,
-            // TODO potentially can get rid of digest and sponge
-            _digest: PhantomData,
-            _sponge: PhantomData,
-            _poly: PhantomData,
-        }
-    }
-
-    fn compute_matrices(polynomial: &P, rho_inv: usize) -> (Matrix<F>, Matrix<F>) {
-        let mut coeffs = polynomial.coeffs().to_vec();
-
-        // 1. Computing parameters and initial matrix
-        let (n_rows, n_cols) = compute_dimensions::<F>(polynomial.degree() + 1); // for 6 coefficients, this is returning 4 x 2 with a row of 0s: fix
-
-        // padding the coefficient vector with zeroes
-        // TODO is this the most efficient/safest way to do it?
-        coeffs.resize(n_rows * n_cols, F::zero());
-
-        let mat = Matrix::new_from_flat(n_rows, n_cols, &coeffs);
-
-        // 2. Apply Reed-Solomon encoding row-wise
-        let ext_mat = Matrix::new_from_rows(
-            mat.rows()
-                .iter()
-                .map(|r| reed_solomon(r, rho_inv))
-                .collect(),
-        );
-
-        (mat, ext_mat)
-    }
-    fn create_merkle_tree(
-        ext_mat: &Matrix<F>,
-        leaf_hash_params: &<<C as Config>::LeafHash as CRHScheme>::Parameters,
-        two_to_one_params: &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
-    ) -> MerkleTree<C> {
-        let mut col_hashes: Vec<Vec<u8>> = Vec::new();
-        let ext_mat_cols = ext_mat.cols();
-
-        for col in ext_mat_cols.iter() {
-            col_hashes.push(hash_column::<D, F>(col));
-        }
-
-        // pad the column hashes with zeroes
-        let next_pow_of_two = col_hashes.len().next_power_of_two();
-        col_hashes.resize(next_pow_of_two, vec![0; <D as Digest>::output_size()]);
-
-        MerkleTree::<C>::new(leaf_hash_params, two_to_one_params, col_hashes).unwrap()
-    }
-
-    fn generate_proof(
-        sec_param: usize,
-        rho_inv: usize,
-        b: &[F],
-        mat: &Matrix<F>,
-        ext_mat: &Matrix<F>,
-        col_tree: &MerkleTree<C>,
-        transcript: &mut IOPTranscript<F>,
-    ) -> Result<LigeroPCProofSingle<F, C>, Error> {
-        let t = calculate_t::<F>(sec_param, rho_inv, ext_mat.n)?;
-
-        // 1. left-multiply the matrix by `b`, where for a requested query point `z`,
-        // `b = [1, z^m, z^(2m), ..., z^((m-1)m)]`
-        let v = mat.row_mul(b);
-
-        transcript
-            .append_serializable_element(b"v", &v)
-            .map_err(|_| Error::TranscriptError)?;
-
-        // 2. Generate t column indices to test the linear combination on
-        let indices = get_indices_from_transcript(ext_mat.m, t, transcript)?;
-
-        // 3. Compute Merkle tree paths for the requested columns
-        let mut queried_columns = Vec::with_capacity(t);
-        let mut paths = Vec::with_capacity(t);
-
-        let ext_mat_cols = ext_mat.cols();
-
-        for i in indices {
-            queried_columns.push(ext_mat_cols[i].clone());
-            paths.push(
-                col_tree
-                    .generate_proof(i)
-                    .map_err(|_| Error::TranscriptError)?,
-            );
-        }
-
-        Ok(LigeroPCProofSingle {
-            paths,
-            v,
-            columns: queried_columns,
-        })
-    }
-}
 
 impl<F, P, S, C, D> PolynomialCommitment<F, P, S> for Ligero<F, C, D, S, P>
 where
@@ -517,7 +407,7 @@ where
             // matches with what the verifier computed for himself.
             // Note: we sacrifice some code repetition in order not to repeat execution.
             if let (Some(well_formedness), Some(r)) = out {
-                let w_well_formedness = reed_solomon(&well_formedness, vk.rho_inv);
+                let w_well_formedness = reed_solomon(well_formedness, vk.rho_inv);
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
                     check_inner_product(
                         &r,

@@ -147,7 +147,7 @@ pub(crate) fn reed_solomon<F: FftField>(
         )
     });
 
-    extended_domain.fft(&msg)
+    extended_domain.fft(msg)
 }
 
 #[inline]

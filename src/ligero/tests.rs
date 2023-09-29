@@ -24,7 +24,6 @@ mod tests {
     };
     use ark_std::test_rng;
     use blake2::Blake2s256;
-    use core::marker::PhantomData;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
     type UniPoly = DensePolynomial<Fr>;
@@ -260,14 +259,13 @@ mod tests {
             .clone();
         let check_well_formedness = true;
 
-        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams {
-            _field: PhantomData,
-            sec_param: 128,
-            rho_inv: 4,
+        let pp: LigeroPCUniversalParams<Fr, MTConfig> = LigeroPCUniversalParams::new(
+            128,
+            4,
             check_well_formedness,
             leaf_hash_params,
             two_to_one_params,
-        };
+        );
 
         let (ck, vk) = LigeroPCS::trim(&pp, 0, 0, None).unwrap();
 
