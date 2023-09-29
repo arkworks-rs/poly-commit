@@ -367,9 +367,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
             sorted_by_poly_and_query_label
                 .into_iter()
                 .zip(evals.clone().unwrap())
-                .map(|(((poly_label, point), _query_label), eval)| {
-                    ((poly_label, point), eval)
-                }),
+                .map(|(((poly_label, point), _query_label), eval)| ((poly_label, point), eval)),
         );
 
         for &(ref lc_label, (_, ref point)) in eqn_query_set {
