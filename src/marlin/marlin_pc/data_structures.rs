@@ -3,7 +3,7 @@ use crate::{
     PCRandomness, PCVerifierKey, Vec,
 };
 use ark_ec::pairing::Pairing;
-use ark_ec::Group;
+use ark_ec::AdditiveGroup;
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::ops::{Add, AddAssign};
