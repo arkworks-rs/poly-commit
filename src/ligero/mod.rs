@@ -5,15 +5,14 @@ use ark_crypto_primitives::{
 };
 use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
+use ark_std::borrow::Borrow;
 use ark_std::fmt::Debug;
+use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
-use core::marker::PhantomData;
 use digest::Digest;
-use jf_primitives::pcs::transcript::IOPTranscript;
-use std::borrow::Borrow;
 
 use crate::data_structures::PCRandomness;
-use crate::ligero::utils::{inner_product, reed_solomon};
+use crate::ligero::utils::{inner_product, reed_solomon, IOPTranscript};
 use crate::{Error, LabeledCommitment, LabeledPolynomial, PCUniversalParams, PolynomialCommitment};
 
 mod utils;

@@ -12,17 +12,16 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::borrow::Borrow;
 use ark_std::fmt::Debug;
-use core::marker::PhantomData;
-use digest::Digest;
-use jf_primitives::pcs::transcript::IOPTranscript;
-use std::borrow::Borrow;
-
+use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
+use digest::Digest;
 
 use super::utils::Matrix;
 use super::utils::{
     calculate_t, compute_dimensions, get_indices_from_transcript, hash_column, reed_solomon,
+    IOPTranscript,
 };
 
 /// The univariate Ligero polynomial commitment scheme based on [[Ligero]][ligero].
