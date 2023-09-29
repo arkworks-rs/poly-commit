@@ -1,7 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! A crate for polynomial commitment schemes.
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
-#![deny(trivial_numeric_casts, private_interfaces, private_bounds, unnameable_types, variant_size_differences)]
+#![deny(
+    trivial_numeric_casts,
+    private_interfaces,
+    private_bounds,
+    unnameable_types,
+    variant_size_differences
+)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut)]
 #![deny(missing_docs)]
