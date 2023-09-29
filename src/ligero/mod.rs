@@ -11,6 +11,7 @@ use digest::Digest;
 use jf_primitives::pcs::transcript::IOPTranscript;
 use std::borrow::Borrow;
 
+use crate::data_structures::PCRandomness;
 use crate::ligero::utils::{inner_product, reed_solomon};
 use crate::{Error, LabeledCommitment, LabeledPolynomial, PCUniversalParams, PolynomialCommitment};
 
@@ -39,7 +40,6 @@ where
     P: DenseUVPolynomial<F>,
 {
     /// Create a new instance of Ligero.
-    /// If either or both parameters are None, their default values are used.
     pub fn new() -> Self {
         Self {
             _config: PhantomData,
@@ -91,10 +91,11 @@ where
 
         MerkleTree::<C>::new(leaf_hash_params, two_to_one_params, col_hashes).unwrap()
     }
+
     fn generate_proof(
         sec_param: usize,
         rho_inv: usize,
-        coeffs: &[F],
+        b: &[F],
         mat: &Matrix<F>,
         ext_mat: &Matrix<F>,
         col_tree: &MerkleTree<C>,
@@ -102,8 +103,9 @@ where
     ) -> Result<LigeroPCProofSingle<F, C>, Error> {
         let t = calculate_t::<F>(sec_param, rho_inv, ext_mat.n)?;
 
-        // 1. Compute the linear combination using the random coefficients
-        let v = mat.row_mul(coeffs);
+        // 1. left-multiply the matrix by `b`, where for a requested query point `z`,
+        // `b = [1, z^m, z^(2m), ..., z^((m-1)m)]`
+        let v = mat.row_mul(b);
 
         transcript
             .append_serializable_element(b"v", &v)
@@ -112,9 +114,9 @@ where
         // 2. Generate t column indices to test the linear combination on
         let indices = get_indices_from_transcript(ext_mat.m, t, transcript)?;
 
-        // 3. Compute Merkle tree paths for the columns
-        let mut queried_columns = Vec::new();
-        let mut paths = Vec::new();
+        // 3. Compute Merkle tree paths for the requested columns
+        let mut queried_columns = Vec::with_capacity(t);
+        let mut paths = Vec::with_capacity(t);
 
         let ext_mat_cols = ext_mat.cols();
 
@@ -243,17 +245,19 @@ where
         for labeled_polynomial in polynomials.into_iter() {
             let polynomial = labeled_polynomial.polynomial();
 
-            // 1. Compute matrices
+            // 1. Arrange the coefficients of the polynomial into a matrix,
+            // and apply Reed-Solomon encoding to get `ext_mat`.
             let (mat, ext_mat) = Self::compute_matrices(polynomial, ck.rho_inv);
 
-            // 2. Create the Merkle tree from the hashes of the columns
+            // 2. Create the Merkle tree from the hashes of each column.
             let col_tree =
                 Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
-            // 3. Add root to transcript and generate random linear combination with it
+            // 3. Obtain the MT root and add it to the transcript.
             let root = col_tree.root();
 
             let mut transcript: IOPTranscript<F> = IOPTranscript::new(b"transcript");
+
             transcript
                 .append_serializable_element(b"root", &root)
                 .map_err(|_| Error::TranscriptError)?;
@@ -262,8 +266,7 @@ where
             let n_cols = mat.m;
             let n_ext_cols = ext_mat.m;
 
-            // 4. Generate the proof by choosing random columns and proving their paths in the tree
-
+            // 4. The commitment is just the root, but since each commitment could be to a differently-sized polynomial, we also add some metadata.
             let commitment = LigeroPCCommitment {
                 metadata: Metadata {
                     n_rows,
@@ -276,12 +279,11 @@ where
             commitments.push(LabeledCommitment::new(
                 labeled_polynomial.label().clone(),
                 commitment,
-                None, // TODO think about this (degree_bound)
+                None,
             ));
         }
         let com_len = &commitments.len();
-        Ok((commitments, vec![Self::Randomness::default(); *com_len]))
-        // TODO when should this return Err?
+        Ok((commitments, vec![Self::Randomness::empty(); *com_len]))
     }
 
     fn open<'a>(
@@ -319,16 +321,18 @@ where
             let n_cols = commitment.metadata.n_cols;
             let root = &commitment.root;
 
-            // 1. Compute matrices
+            // 1. Arrange the coefficients of the polynomial into a matrix,
+            // and apply Reed-Solomon encoding to get `ext_mat`.
             let (mat, ext_mat) = Self::compute_matrices(polynomial, ck.rho_inv);
 
-            // 2. Create the Merkle tree from the hashes of the columns
+            // 2. Create the Merkle tree from the hashes of each column.
             let col_tree =
                 Self::create_merkle_tree(&ext_mat, &ck.leaf_hash_params, &ck.two_to_one_params);
 
-            // 3. Generate vector b
+            // 3. Generate vector `b = [1, z^m, z^(2m), ..., z^((m-1)m)]`
             let mut b = Vec::new();
-            let point_pow = point.pow([n_cols as u64]); // TODO this and other conversions could potentially fail
+            // This could potentially fail when n_cols > 1<<64, but `ck` won't allow commiting to such polynomials.
+            let point_pow = point.pow([n_cols as u64]);
             let mut pow_b = F::one();
             for _ in 0..n_rows {
                 b.push(pow_b);
@@ -495,7 +499,7 @@ where
             let w = reed_solomon(&proof_array[i].opening.v, vk.rho_inv);
 
             // 6. Compute a = [1, z, z^2, ..., z^(n_cols_1)]
-            // where z denotes the `point`. Following Justin Thaler's notation
+            // where z denotes the query `point`.
             let mut a = Vec::with_capacity(n_cols);
             let mut pow_a = F::one();
             for _ in 0..n_cols {
@@ -503,7 +507,6 @@ where
                 pow_a *= point;
             }
 
-            // Here, pow_z = z^n_cols.
             // Compute b = [1, z^n_cols, z^(2*n_cols), ..., z^((n_rows-1)*n_cols)]
             let mut b = Vec::with_capacity(n_rows);
             let mut pow_b = F::one();
@@ -549,5 +552,3 @@ where
         Ok(true)
     }
 }
-
-// TODO start considering degree bound
