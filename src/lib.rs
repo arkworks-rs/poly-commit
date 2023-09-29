@@ -9,6 +9,7 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use)]
 #![forbid(unsafe_code)]
+#![doc = include_str!("../README.md")]
 
 #[allow(unused)]
 #[macro_use]
@@ -28,18 +29,6 @@ use ark_std::{
     string::{String, ToString},
     vec::Vec,
 };
-
-#[cfg(doctest)]
-mod test_readme {
-    macro_rules! external_doc_test {
-        ($x:expr) => {
-            #[doc = $x]
-            extern "C" {}
-        };
-    }
-
-    external_doc_test!(include_str!("../README.md"));
-}
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;
