@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! A crate for polynomial commitment schemes.
 #![deny(unused_import_braces, unused_qualifications, trivial_casts)]
-#![deny(trivial_numeric_casts, private_in_public, variant_size_differences)]
+#![deny(trivial_numeric_casts, variant_size_differences)]
 #![deny(stable_features, unreachable_pub, non_shorthand_field_patterns)]
 #![deny(unused_attributes, unused_mut)]
 #![deny(missing_docs)]
@@ -359,16 +359,21 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Commitment: 'a,
     {
         let BatchLCProof { proof, evals } = proof;
-
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
+        let sorted_by_poly_and_query_label: BTreeSet<_> = poly_query_set
+            .iter()
+            .map(|(poly_label, v)| ((poly_label.clone(), v.1.clone()), v.0.clone()))
+            .collect();
+
         let poly_evals = Evaluations::from_iter(
-            poly_query_set
+            sorted_by_poly_and_query_label
                 .iter()
-                .map(|(_, point)| point)
-                .cloned()
-                .zip(evals.clone().unwrap()),
+                .zip(evals.clone().unwrap())
+                .map(|(((poly_label, point), _query_label), eval)| {
+                    ((poly_label.clone(), point.clone()), eval)
+                }),
         );
 
         for &(ref lc_label, (_, ref point)) in eqn_query_set {
@@ -386,7 +391,9 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
                             .get(&(l.clone().into(), point.clone()))
-                            .ok_or(Error::MissingEvaluation { label: l.clone() })?,
+                            .ok_or(Error::MissingEvaluation {
+                                label: format!("{}-{:?}", l.clone(), point.clone()),
+                            })?,
                     };
 
                     actual_rhs += &(*coeff * eval);

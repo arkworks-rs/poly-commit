@@ -23,7 +23,9 @@ use utils::Matrix;
 mod data_structures;
 use data_structures::*;
 
-pub use data_structures::{Ligero, LigeroPCCommitterKey, LigeroPCProof, LigeroPCVerifierKey};
+pub use data_structures::{
+    Ligero, LigeroPCCommitterKey, LigeroPCProof, LigeroPCUniversalParams, LigeroPCVerifierKey,
+};
 
 use utils::{calculate_t, compute_dimensions, get_indices_from_transcript, hash_column};
 
@@ -169,7 +171,9 @@ where
 
     type Error = Error;
 
-    /// This is only a default setup.
+    /// This is only a default setup with reasonable parameters.
+    /// To create your own public parameters (from which vk/ck can be derived by `trim`),
+    /// see the documentation for `LigeroPCUniversalParams`.
     fn setup<R: RngCore>(
         max_degree: usize,
         _num_vars: Option<usize>,
@@ -179,14 +183,7 @@ where
         let two_to_one_params = <C::TwoToOneHash as TwoToOneCRHScheme>::setup(rng)
             .unwrap()
             .clone();
-        let pp = Self::UniversalParams {
-            _field: PhantomData,
-            sec_param: 128,
-            rho_inv: 4,
-            check_well_formedness: true,
-            leaf_hash_params,
-            two_to_one_params,
-        };
+        let pp = Self::UniversalParams::new(128, 4, true, leaf_hash_params, two_to_one_params);
         let real_max_degree = pp.max_degree();
         if max_degree > real_max_degree || real_max_degree == 0 {
             return Err(Error::InvalidParameters(

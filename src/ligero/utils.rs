@@ -70,6 +70,7 @@ impl<F: Field> Matrix<F> {
     /// where n and m are the number of rows and columns, respectively.
     ///
     /// Index bound checks are waived for efficiency and behaviour under invalid indexing is undefined
+    #[cfg(test)]
     pub(crate) fn entry(&self, i: usize, j: usize) -> F {
         self.entries[i][j]
     }
@@ -158,6 +159,7 @@ pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
 }
 
 #[inline]
+#[cfg(test)]
 pub(crate) fn to_field<F: Field>(v: Vec<u64>) -> Vec<F> {
     v.iter().map(|x| F::from(*x)).collect::<Vec<F>>()
 }
