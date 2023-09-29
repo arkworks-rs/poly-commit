@@ -358,8 +358,9 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
         let sorted_by_poly_and_query_label: BTreeSet<_> = poly_query_set
-            .iter()
-            .map(|(poly_label, v)| ((poly_label.clone(), v.1.clone()), v.0.clone()))
+            .clone()
+            .into_iter()
+            .map(|(poly_label, v)| ((poly_label.clone(), v.1), v.0))
             .collect();
 
         let poly_evals = Evaluations::from_iter(
@@ -367,7 +368,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                 .iter()
                 .zip(evals.clone().unwrap())
                 .map(|(((poly_label, point), _query_label), eval)| {
-                    ((poly_label.clone(), point.clone()), eval)
+                    ((poly_label, point), eval)
                 }),
         );
 
