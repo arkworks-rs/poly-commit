@@ -51,3 +51,12 @@ std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relation
 r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
 print-trace = [ "ark-std/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
+
+[patch.crates-io]
+ark-ff = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
+
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves/" }
+ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves/" }
