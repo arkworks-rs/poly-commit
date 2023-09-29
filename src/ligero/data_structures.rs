@@ -39,11 +39,7 @@ pub struct Ligero<
     S: CryptographicSponge,
     P: DenseUVPolynomial<F>,
 > {
-    pub(crate) _field: PhantomData<F>,
-    pub(crate) _config: PhantomData<C>,
-    pub(crate) _digest: PhantomData<D>,
-    pub(crate) _sponge: PhantomData<S>,
-    pub(crate) _poly: PhantomData<P>,
+    _phantom: PhantomData<(F, C, D, S, P)>,
 }
 
 impl<F, C, D, S, P> Ligero<F, C, D, S, P>
@@ -59,12 +55,7 @@ where
     /// Create a new instance of Ligero.
     pub fn new() -> Self {
         Self {
-            _config: PhantomData,
-            _field: PhantomData,
-            // TODO potentially can get rid of digest and sponge
-            _digest: PhantomData,
-            _sponge: PhantomData,
-            _poly: PhantomData,
+            _phantom: PhantomData,
         }
     }
 
