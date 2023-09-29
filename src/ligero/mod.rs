@@ -9,8 +9,8 @@ use ark_std::borrow::Borrow;
 use ark_std::fmt::Debug;
 use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
-use ark_std::vec::Vec;
 use ark_std::string::ToString;
+use ark_std::vec::Vec;
 
 use digest::Digest;
 
