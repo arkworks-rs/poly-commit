@@ -354,16 +354,20 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Commitment: 'a,
     {
         let BatchLCProof { proof, evals } = proof;
-
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
+        let sorted_by_poly_and_query_label: BTreeSet<_> = poly_query_set
+            .clone()
+            .into_iter()
+            .map(|(poly_label, v)| ((poly_label.clone(), v.1), v.0))
+            .collect();
+
         let poly_evals = Evaluations::from_iter(
-            poly_query_set
-                .iter()
-                .map(|(_, point)| point)
-                .cloned()
-                .zip(evals.clone().unwrap()),
+            sorted_by_poly_and_query_label
+                .into_iter()
+                .zip(evals.clone().unwrap())
+                .map(|(((poly_label, point), _query_label), eval)| ((poly_label, point), eval)),
         );
 
         for &(ref lc_label, (_, ref point)) in eqn_query_set {
@@ -381,7 +385,9 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                         LCTerm::One => F::one(),
                         LCTerm::PolyLabel(l) => *poly_evals
                             .get(&(l.clone().into(), point.clone()))
-                            .ok_or(Error::MissingEvaluation { label: l.clone() })?,
+                            .ok_or(Error::MissingEvaluation {
+                                label: format!("{}-{:?}", l.clone(), point.clone()),
+                            })?,
                     };
 
                     actual_rhs += &(*coeff * eval);
