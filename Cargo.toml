@@ -53,5 +53,8 @@ r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1
 print-trace = [ "ark-std/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
 
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+
 [patch.crates-io]
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives/", rev = "a0e1e85f4920ea45c0193663798b7732fa119925" }

@@ -9,6 +9,9 @@ use ark_std::borrow::Borrow;
 use ark_std::fmt::Debug;
 use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
+use ark_std::vec::Vec;
+use ark_std::string::ToString;
+
 use digest::Digest;
 
 use crate::data_structures::PCRandomness;
@@ -430,7 +433,7 @@ where
             }
 
             if inner_product(&proof_array[i].opening.v, &a) != values[i] {
-                println!("Function check: claimed value in position {i} does not match the evaluation of the committed polynomial in the same position");
+                eprintln!("Function check: claimed value in position {i} does not match the evaluation of the committed polynomial in the same position");
                 return Ok(false);
             }
         }
