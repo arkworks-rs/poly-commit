@@ -365,7 +365,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
         let poly_evals = Evaluations::from_iter(
             sorted_by_poly_and_query_label
-                .iter()
+                .into_iter()
                 .zip(evals.clone().unwrap())
                 .map(|(((poly_label, point), _query_label), eval)| {
                     ((poly_label, point), eval)
