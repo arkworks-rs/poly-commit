@@ -30,6 +30,8 @@ use utils::{calculate_t, get_indices_from_transcript, hash_column};
 
 mod tests;
 
+const FIELD_SIZE_ERROR: &str = "This field is not suitable for the proposed parameters";
+
 impl<F, P, S, C, D> PolynomialCommitment<F, P, S> for Ligero<F, C, D, S, P>
 where
     F: PrimeField,
@@ -75,9 +77,7 @@ where
         let pp = Self::UniversalParams::new(128, 4, true, leaf_hash_params, two_to_one_params);
         let real_max_degree = pp.max_degree();
         if max_degree > real_max_degree || real_max_degree == 0 {
-            return Err(Error::InvalidParameters(
-                "This field is not suitable for the proposed parameters".to_string(),
-            ));
+            return Err(Error::InvalidParameters(FIELD_SIZE_ERROR.to_string()));
         }
         Ok(pp)
     }
@@ -89,9 +89,7 @@ where
         _enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error> {
         if pp.max_degree() == 0 {
-            return Err(Error::InvalidParameters(
-                "This field is not suitable for the proposed parameters".to_string(),
-            ));
+            return Err(Error::InvalidParameters(FIELD_SIZE_ERROR.to_string()));
         }
         let ck = LigeroPCCommitterKey::<F, C> {
             _field: PhantomData,
