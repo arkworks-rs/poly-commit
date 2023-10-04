@@ -365,7 +365,9 @@ impl<Unprepared: PCCommitment, C: Config> PCPreparedCommitment<Unprepared>
 pub(crate) type LigeroPCRandomness = ();
 
 impl PCRandomness for LigeroPCRandomness {
-    fn empty() -> Self {}
+    fn empty() -> Self {
+        unimplemented!()
+    }
 
     fn rand<R: RngCore>(
         _num_queries: usize,
@@ -373,6 +375,7 @@ impl PCRandomness for LigeroPCRandomness {
         _num_vars: Option<usize>,
         _rng: &mut R,
     ) -> Self {
+        unimplemented!()
     }
 }
 
