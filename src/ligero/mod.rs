@@ -13,7 +13,6 @@ use ark_std::vec::Vec;
 
 use digest::Digest;
 
-use crate::data_structures::PCRandomness;
 use crate::ligero::utils::{inner_product, reed_solomon, IOPTranscript};
 use crate::{Error, LabeledCommitment, LabeledPolynomial, PCUniversalParams, PolynomialCommitment};
 
@@ -167,7 +166,7 @@ where
             ));
         }
         let com_len = &commitments.len();
-        Ok((commitments, vec![Self::Randomness::empty(); *com_len]))
+        Ok((commitments, vec![(); *com_len]))
     }
 
     fn open<'a>(
