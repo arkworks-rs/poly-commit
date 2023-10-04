@@ -65,7 +65,6 @@ where
     type UniversalParams = UniversalParams<E>;
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
-    type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = Commitment<E>;
     type Randomness = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;

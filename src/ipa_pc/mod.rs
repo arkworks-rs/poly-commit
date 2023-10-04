@@ -346,7 +346,6 @@ where
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
-    type PreparedVerifierKey = PreparedVerifierKey<G>;
     type Commitment = Commitment<G>;
     type Randomness = Randomness<G>;
     type Proof = Proof<G>;

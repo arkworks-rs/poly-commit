@@ -150,7 +150,6 @@ where
     type UniversalParams = UniversalParams<E, P>;
     type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
-    type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = marlin_pc::Commitment<E>;
     type Randomness = Randomness<E, P>;
     type Proof = Proof<E>;
