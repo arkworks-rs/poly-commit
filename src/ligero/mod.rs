@@ -6,7 +6,6 @@ use ark_crypto_primitives::{
 use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
 use ark_std::borrow::Borrow;
-use ark_std::fmt::Debug;
 use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
 use ark_std::string::ToString;
@@ -38,8 +37,6 @@ where
     S: CryptographicSponge,
     C: Config + 'static,
     Vec<u8>: Borrow<C::Leaf>,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
     C::InnerDigest: Absorb,
     D: Digest,
 {

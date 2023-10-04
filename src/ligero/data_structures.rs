@@ -13,7 +13,6 @@ use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::borrow::Borrow;
-use ark_std::fmt::Debug;
 use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
@@ -183,8 +182,6 @@ where
 pub struct LigeroPCUniversalParams<F: PrimeField, C: Config>
 where
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     _field: PhantomData<F>,
     /// The security parameter
@@ -205,8 +202,6 @@ impl<F, C> LigeroPCUniversalParams<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     /// Create new LigeroPCUniversalParams
     pub fn new(
@@ -231,8 +226,6 @@ impl<F, C> PCUniversalParams for LigeroPCUniversalParams<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     fn max_degree(&self) -> usize {
         if F::TWO_ADICITY < self.rho_inv as u32 {
@@ -252,8 +245,6 @@ pub struct LigeroPCCommitterKey<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     pub(crate) _field: PhantomData<F>,
     /// The security parameter
@@ -274,8 +265,6 @@ impl<F, C> PCCommitterKey for LigeroPCCommitterKey<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     fn max_degree(&self) -> usize {
         if (F::TWO_ADICITY - self.rho_inv as u32) * 2 < 64 {
@@ -296,8 +285,6 @@ pub struct LigeroPCVerifierKey<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     pub(crate) _field: PhantomData<F>,
     /// The security parameter
@@ -305,8 +292,10 @@ where
     /// The inverse of code rate
     pub(crate) rho_inv: usize,
     /// Parameters for hash function of Merkle tree leaves
+    #[derivative(Debug = "ignore")]
     pub(crate) leaf_hash_params: LeafParam<C>,
     /// Parameters for hash function of Merke tree combining two nodes into one
+    #[derivative(Debug = "ignore")]
     pub(crate) two_to_one_params: TwoToOneParam<C>,
     /// This is a flag which determines if the random linear combination is done.
     pub(crate) check_well_formedness: bool,
@@ -316,8 +305,6 @@ impl<F, C> PCVerifierKey for LigeroPCVerifierKey<F, C>
 where
     F: PrimeField,
     C: Config,
-    <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters: Debug,
-    <<C as Config>::LeafHash as CRHScheme>::Parameters: Debug,
 {
     fn max_degree(&self) -> usize {
         if (F::TWO_ADICITY - self.rho_inv as u32) * 2 < 64 {
