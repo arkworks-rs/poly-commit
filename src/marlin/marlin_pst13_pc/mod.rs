@@ -152,7 +152,6 @@ where
     type VerifierKey = VerifierKey<E>;
     type PreparedVerifierKey = PreparedVerifierKey<E>;
     type Commitment = marlin_pc::Commitment<E>;
-    type PreparedCommitment = marlin_pc::PreparedCommitment<E>;
     type Randomness = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
