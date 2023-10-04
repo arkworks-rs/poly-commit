@@ -50,7 +50,7 @@ where
 
     type Commitment = LigeroPCCommitment<C>;
 
-    type PreparedCommitment = LigeroPCPreparedCommitment;
+    type PreparedCommitment = LigeroPCPreparedCommitment<C>;
 
     type Randomness = LigeroPCRandomness;
 

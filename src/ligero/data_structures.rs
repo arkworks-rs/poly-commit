@@ -352,10 +352,14 @@ impl<C: Config> PCCommitment for LigeroPCCommitment<C> {
     }
 }
 
-pub(crate) type LigeroPCPreparedCommitment = ();
+pub(crate) type LigeroPCPreparedCommitment<C> = LigeroPCCommitment<C>;
 
-impl<Unprepared: PCCommitment> PCPreparedCommitment<Unprepared> for LigeroPCPreparedCommitment {
-    fn prepare(_cm: &Unprepared) -> Self {}
+impl<Unprepared: PCCommitment, C: Config> PCPreparedCommitment<Unprepared>
+    for LigeroPCPreparedCommitment<C>
+{
+    fn prepare(_cm: &Unprepared) -> Self {
+        LigeroPCPreparedCommitment::default()
+    }
 }
 
 pub(crate) type LigeroPCRandomness = ();
