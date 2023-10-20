@@ -1,13 +1,13 @@
 use super::LigeroPCParams;
 use super::LinCodeParametersInfo;
+use crate::linear_codes::utils::calculate_t;
 use crate::utils::ceil_div;
 use crate::{PCCommitterKey, PCUniversalParams, PCVerifierKey};
 
 use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
 use ark_crypto_primitives::merkle_tree::{Config, LeafParam, TwoToOneParam};
 use ark_ff::PrimeField;
-use ark_poly::EvaluationDomain;
-use ark_poly::GeneralEvaluationDomain;
+use ark_std::log2;
 use ark_std::marker::PhantomData;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
@@ -112,21 +112,29 @@ where
         self.sec_param
     }
 
-    /// Compute the a suitable (for instance, FFT-friendly over F) matrix with at least n entries.
+    /// Compute the a suitable (for instance, FFT-friendly over F) matrix with at least poly_len entries.
     /// The return pair (n, m) corresponds to the dimensions n x m.
-    fn compute_dimensions(&self, n: usize) -> (usize, usize) {
+    fn compute_dimensions(&self, poly_len: usize) -> (usize, usize) {
         assert_eq!(
-            (n as f64) as usize,
-            n,
+            (poly_len as f64) as usize,
+            poly_len,
             "n cannot be converted to f64: aborting"
         );
 
-        let aux = (n as f64).sqrt().ceil() as usize;
-        let n_cols = GeneralEvaluationDomain::<F>::new(aux)
-            .expect("Field F does not admit FFT with m elements")
-            .size();
+        // let aux = (poly_len as f64).sqrt().ceil() as usize;
+        // let n_cols = GeneralEvaluationDomain::<F>::new(aux)
+        //     .expect("Field F does not admit FFT with m elements")
+        //     .size();
+        // TODO this check is actually insufficient, pass rho_inv and
+        // check the codeword length (or just disregard check)
 
-        (ceil_div(n, n_cols), n_cols)
+        // TODO changed
+        let t = calculate_t::<F>(self.sec_param(), self.distance(), poly_len).unwrap();
+        let n = 1 << log2((ceil_div(2 * poly_len, t) as f64).sqrt().ceil() as usize);
+        let m = ceil_div(poly_len, n);
+
+        // (ceil_div(poly_len, n_cols), n_cols)
+        (n, m)
     }
 
     fn leaf_hash_params(&self) -> &<<C as Config>::LeafHash as CRHScheme>::Parameters {
