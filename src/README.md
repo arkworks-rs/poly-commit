@@ -56,6 +56,16 @@ EUROCRYPT 2020
 Aniket Kate, Gregory M. Zaverucha, Ian Goldberg     
 ASIACRYPT 2010
 
+### Hyrax multilinear PC
+
+Polynomial commitment scheme introduced together with the Hyrax zkSNARK (in [this](https://eprint.iacr.org/2017/1132) article). It is based on Pedersen commitments and therefore relies on the difficulty of the discrete logarithm problem in order to provide a hiding PCS.
+
+[Doubly-efficient zkSNARKs without trusted setup][hyrax]
+Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
+2018 IEEE Symposium on Security and Privacy
+
+[hyrax]: https://eprint.iacr.org/2017/1132
+
 ### Marlin variant of the Papamanthou-Shi-Tamassia multivariate PC
 
 Multivariate polynomial commitment based on the construction in the Papamanthou-Shi-Tamassia construction with batching and (optional) hiding property inspired by the univariate scheme in Marlin.

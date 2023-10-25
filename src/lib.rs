@@ -34,6 +34,9 @@ use ark_std::{
 pub mod data_structures;
 pub use data_structures::*;
 
+/// Useful functions
+pub(crate) mod utils;
+
 /// R1CS constraints for polynomial constraints.
 #[cfg(feature = "r1cs")]
 mod constraints;
@@ -125,6 +128,16 @@ pub use marlin::marlin_pst13_pc;
 /// [gemini]:
 /// [bdfg]: https://eprint.iacr.org/2020/081.pdf
 pub mod streaming_kzg;
+
+/// A polynomial commitment scheme based on the hardness of the
+/// discrete logarithm problem in prime-order groups. This is a
+/// Fiat-Shamired version of the PCS described in the Hyrax paper
+/// [[WTsTW17]][hyrax], with the difference that, unlike in the
+/// cited reference, the evaluation of the polynomial at the point
+/// of interest is indeed revealed to the verifier at the end.
+///
+/// [hyrax]: https://eprint.iacr.org/2017/1132.pdf
+pub mod hyrax;
 
 /// `QuerySet` is the set of queries that are to be made to a set of labeled polynomials/equations
 /// `p` that have previously been committed to. Each element of a `QuerySet` is a pair of
