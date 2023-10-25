@@ -284,12 +284,6 @@ pub(crate) fn vanishing_polynomial<F: Field>(points: &[F]) -> DensePolynomial<F>
         .fold(one, |x, y| x.naive_mul(&y))
 }
 
-/// Return ceil(x / y).
-pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
-    // XXX. warning: this expression can overflow.
-    (x + y - 1) / y
-}
-
 /// Compute a linear combination of the polynomials `polynomials` with the given challenges.
 pub(crate) fn linear_combination<F: Field, PP>(
     polynomials: &[PP],

@@ -15,22 +15,24 @@ ark-serialize = { version = "^0.4.0", default-features = false, features = [ "de
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
 ark-poly = {version = "^0.4.0", default-features = false }
-ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge"] }
+ark-crypto-primitives = { version = "^0.4.0", default-features = false, features = ["sponge","merkle_tree" ] }
 ark-std = { version = "^0.4.0", default-features = false }
+blake2 = { version = "0.10", default-features = false }
 
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-hashbrown = { version = "0.13", default-features = false, optional = true }
+hashbrown = { version = "0.14", default-features = false, optional = true }
 
 digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
 rayon = { version = "1", optional = true }
+merlin = { version = "3.0.0", default-features = false }
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
-blake2 = { version = "0.10", default-features = false }
+ark-bn254 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 rand_chacha = { version = "0.3.0", default-features = false }
 
 [profile.release]
@@ -46,18 +48,24 @@ incremental = true
 debug = true
 
 [features]
-default = [ "std", "parallel" ]
-std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-crypto-primitives/std"]
-r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
-print-trace = [ "ark-std/print-trace" ]
-parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
+default = ["std", "parallel"]
+std = ["ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-crypto-primitives/std"]
+r1cs = ["ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
+print-trace = ["ark-std/print-trace"]
+parallel = ["std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 
 [patch.crates-io]
 ark-ff = { git = "https://github.com/arkworks-rs/algebra/" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra/" }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra/" }
+
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std/" }
 
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves/" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves/" }
+ark-bn254 = { git = "https://github.com/arkworks-rs/curves/" }
