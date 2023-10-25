@@ -181,6 +181,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
 [pst]: https://ia.cr/2011/587
+[brakedown]: https://ia.cr/2021/1043
 
 ## Reference papers
 
@@ -207,6 +208,10 @@ TCC 2020
 [Signatures of Correct Computation][pst]    
 Charalampos Papamanthou, Elaine Shi, Roberto Tamassia   
 TCC 2013
+
+[Brakedown: Linear-time and field-agnostic SNARKs for R1CS][brakedown]    
+Alexander Golovnev, Jonathan Lee, Srinath Setty, Justin Thaler, Riad S. Wahby    
+CRYPTO 2023
 
 ## Acknowledgements
 
