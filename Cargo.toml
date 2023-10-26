@@ -15,7 +15,7 @@ ark-serialize = { version = "^0.4.0", default-features = false, features = [ "de
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
 ark-poly = {version = "^0.4.0", default-features = false }
-ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge"] }
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
 ark-std = { version = "^0.4.0", default-features = false }
 
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
@@ -25,6 +25,8 @@ hashbrown = { version = "0.13", default-features = false, optional = true }
 digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
 rayon = { version = "1", optional = true }
+criterion = { version = "0.5", default-features = false, optional = true }
+rand_chacha = { version = "0.3.0", default-features = false, optional = true }
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
@@ -32,6 +34,16 @@ ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "cu
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 blake2 = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
+
+[[bench]]
+name = "pcs"
+path = "benches/benches.rs"
+harness = false
+
+[[bench]]
+name = "pcs-size"
+path = "benches/benches_size.rs"
+harness = false
 
 [profile.release]
 opt-level = 3
@@ -51,6 +63,7 @@ std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relation
 r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
 print-trace = [ "ark-std/print-trace" ]
 parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
+benches = [ "default", "criterion", "rand_chacha" ]
 
 [patch.crates-io]
 ark-ff = { git = "https://github.com/arkworks-rs/algebra/" }
