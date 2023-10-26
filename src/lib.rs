@@ -187,7 +187,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         enforced_degree_bounds: Option<&[usize]>,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), Self::Error>;
 
-    /// Outputs a commitments to `polynomials`. If `polynomials[i].is_hiding()`,
+    /// Outputs a list of commitments to `polynomials`. If `polynomials[i].is_hiding()`,
     /// then the `i`-th commitment is hiding up to `polynomials.hiding_bound()` queries.
     /// `rng` should not be `None` if `polynomials[i].is_hiding() == true` for any `i`.
     ///
@@ -238,7 +238,119 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     where
         Self::Commitment: 'a;
 
-    /// batch_check but with individual challenges
+    /// Open several polynomials at one or more points each (possibly different
+    /// for each polynomial). Each entry in the in the query set of points
+    /// contains the label of the polynomial which should be queried at that
+    /// point.
+    ///
+    /// Behaviour is undefined if `query_set` contains the entries with the
+    /// same point label but different actual points.
+    ///
+    /// The opening challenges are independent for each batch of polynomials.
+    fn batch_open<'a>(
+        ck: &Self::CommitterKey,
+        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
+        query_set: &QuerySet<P::Point>,
+        challenge_generator: &mut ChallengeGenerator<F, S>,
+        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<Self::BatchProof, Self::Error>
+    where
+        P: 'a,
+        Self::Randomness: 'a,
+        Self::Commitment: 'a,
+    {
+        // The default implementation achieves proceeds by rearranging the queries in
+        // order to gather (i.e. batch) all polynomials that should be queried at
+        // the same point, then opening their commitments simultaneously with a
+        // single call to `open` (per point)
+        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
+            .into_iter()
+            .zip(rands)
+            .zip(commitments.into_iter())
+            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
+            .collect();
+
+        let open_time = start_timer!(|| format!(
+            "Opening {} polynomials at query set of size {}",
+            poly_rand_comm.len(),
+            query_set.len(),
+        ));
+
+        let mut query_to_labels_map = BTreeMap::new();
+
+        // `label` is the label of the polynomial the query refers to
+        // `point_label` is the label of the point being queried
+        // `point` is the actual point
+        for (label, (point_label, point)) in query_set.iter() {
+            // For each point label in `query_set`, we define an entry in
+            // `query_to_labels_map` containing a pair whose first element is
+            // the actual point and the second one is the set of labels of the
+            // polynomials being queried at that point
+            let labels = query_to_labels_map
+                .entry(point_label)
+                .or_insert((point, BTreeSet::new()));
+            labels.1.insert(label);
+        }
+
+        let mut proofs = Vec::new();
+        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
+            let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
+            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
+
+            // Constructing matching vectors with the polynomial, commitment
+            // randomness and actual commitment for each polynomial being
+            // queried at `point`
+            for label in labels {
+                let (polynomial, rand, comm) =
+                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
+                        label: label.to_string(),
+                    })?;
+
+                query_polys.push(polynomial);
+                query_rands.push(rand);
+                query_comms.push(comm);
+            }
+
+            let proof_time = start_timer!(|| "Creating proof");
+
+            // Simultaneously opening the commitments of all polynomials that
+            // refer to the the current point using the plain `open` function
+            let proof = Self::open(
+                ck,
+                query_polys,
+                query_comms,
+                &point,
+                challenge_generator,
+                query_rands,
+                Some(rng),
+            )?;
+
+            end_timer!(proof_time);
+
+            proofs.push(proof);
+        }
+        end_timer!(open_time);
+
+        Ok(proofs.into())
+    }
+
+    /// Verify opening proofs for several polynomials at one or more points
+    /// each (possibly different for each polynomial). Each entry in
+    /// the query set of points contains the label of the polynomial which
+    /// was queried at that point.
+    ///
+    /// Behaviour is undefined if `query_set` contains the entries with the
+    /// same point label but different points.
+    ///
+    /// Behaviour is also undefined if proofs are not ordered the same way as
+    /// queries in `query_to_labels_map` (this is the outcome of calling
+    /// `batch_open` for the same commitment list and query set).H
+    ///
+    /// The opening challenges are independent for each batch of polynomials.
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -251,16 +363,28 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     where
         Self::Commitment: 'a,
     {
+        // The default implementation proceeds by rearranging the queries in
+        // order to gather (i.e. batch) the proofs of all polynomials that should
+        // have been opened at the same point, then verifying those proofs
+        // simultaneously with a single call to `check` (per point).
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
+
+        // `label` is the label of the polynomial the query refers to
+        // `point_label` is the label of the point being queried
+        // `point` is the actual point
         for (label, (point_label, point)) in query_set.iter() {
+            // For each point label in `query_set`, we define an entry in
+            // `query_to_labels_map` containing a pair whose first element is
+            // the actual point and the second one is the set of labels of the
+            // polynomials being queried at that point
             let labels = query_to_labels_map
                 .entry(point_label)
                 .or_insert((point, BTreeSet::new()));
             labels.1.insert(label);
         }
 
-        // Implicit assumption: proofs are order in same manner as queries in
+        // Implicit assumption: proofs are ordered in same manner as queries in
         // `query_to_labels_map`.
         let proofs: Vec<_> = proof.clone().into();
         assert_eq!(proofs.len(), query_to_labels_map.len());
@@ -268,6 +392,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         let mut result = true;
         for ((_point_label, (point, labels)), proof) in query_to_labels_map.into_iter().zip(proofs)
         {
+            // Constructing matching vectors with the commitment and claimed
+            // value of each polynomial being queried at `point`
             let mut comms: Vec<&'_ LabeledCommitment<_>> = Vec::new();
             let mut values = Vec::new();
             for label in labels.into_iter() {
@@ -286,6 +412,9 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
             }
 
             let proof_time = start_timer!(|| "Checking per-query proof");
+
+            // Verify all proofs referring to the current point simultaneously
+            // with a single call to `check`
             result &= Self::check(
                 vk,
                 comms,
@@ -300,7 +429,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Ok(result)
     }
 
-    /// open_combinations but with individual challenges
+    /// Open commitments to all polynomials involved in a number of linear
+    /// combinations (LC) simultaneously.
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -316,11 +446,18 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Commitment: 'a,
         P: 'a,
     {
+        // The default implementation proceeds by batch-opening all polynomials
+        // appearing in those LC that are queried at the same point.
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
         let polynomials: Vec<_> = polynomials.into_iter().collect();
+
+        // Rearrange the information about queries on linear combinations into
+        // information about queries on individual polynomials.
         let poly_query_set =
             lc_query_set_to_poly_query_set(linear_combinations.iter().copied(), query_set);
         let poly_evals = evaluate_query_set(polynomials.iter().copied(), &poly_query_set);
+
+        // Batch-open all polynomials that refer to each individual point in `query_set`
         let proof = Self::batch_open(
             ck,
             polynomials,
@@ -336,7 +473,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         })
     }
 
-    /// check_combinations with individual challenges
+    /// Verify opening proofs for all polynomials involved in a number of
+    /// linear combinations (LC) simultaneously.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -350,9 +488,15 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     where
         Self::Commitment: 'a,
     {
+        // The default implementation does this by batch-checking each
+        // batch-opening proof of polynomials appearing in those LC that were
+        // queried at the same point, then computing the evaluations of each LC
+        // using the proved polynomial evaluations.
         let BatchLCProof { proof, evals } = proof;
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
+        // Rearrange the information about queries on linear combinations into
+        // information about queries on individual polynomials.
         let poly_query_set = lc_query_set_to_poly_query_set(lc_s.values().copied(), eqn_query_set);
         let sorted_by_poly_and_query_label: BTreeSet<_> = poly_query_set
             .clone()
@@ -377,6 +521,9 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
                 let mut actual_rhs = F::zero();
 
+                // Compute the value of the linear combination by adding the
+                // claimed value for each polynomial in it (to be proved later)
+                // scaled by the corresponding coefficient.
                 for (coeff, label) in lc.iter() {
                     let eval = match label {
                         LCTerm::One => F::one(),
@@ -389,6 +536,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
                     actual_rhs += &(*coeff * eval);
                 }
+
+                // Checking the computed evaluation matches the claimed one
                 if claimed_rhs != actual_rhs {
                     eprintln!("Claimed evaluation of {} is incorrect", lc.label());
                     return Ok(false);
@@ -396,6 +545,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
             }
         }
 
+        // Verify the claimed evaluation for each polynomial appearing in the
+        // linear combinations, batched by point
         let pc_result = Self::batch_check(
             vk,
             commitments,
@@ -411,81 +562,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         }
 
         Ok(true)
-    }
-
-    /// batch_open with individual challenges
-    fn batch_open<'a>(
-        ck: &Self::CommitterKey,
-        labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
-        query_set: &QuerySet<P::Point>,
-        challenge_generator: &mut ChallengeGenerator<F, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> Result<Self::BatchProof, Self::Error>
-    where
-        P: 'a,
-        Self::Randomness: 'a,
-        Self::Commitment: 'a,
-    {
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
-        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
-            .into_iter()
-            .zip(rands)
-            .zip(commitments.into_iter())
-            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
-            .collect();
-
-        let open_time = start_timer!(|| format!(
-            "Opening {} polynomials at query set of size {}",
-            poly_rand_comm.len(),
-            query_set.len(),
-        ));
-
-        let mut query_to_labels_map = BTreeMap::new();
-
-        for (label, (point_label, point)) in query_set.iter() {
-            let labels = query_to_labels_map
-                .entry(point_label)
-                .or_insert((point, BTreeSet::new()));
-            labels.1.insert(label);
-        }
-
-        let mut proofs = Vec::new();
-        for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
-            let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
-            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
-            let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
-
-            for label in labels {
-                let (polynomial, rand, comm) =
-                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
-
-                query_polys.push(polynomial);
-                query_rands.push(rand);
-                query_comms.push(comm);
-            }
-
-            let proof_time = start_timer!(|| "Creating proof");
-            let proof = Self::open(
-                ck,
-                query_polys,
-                query_comms,
-                &point,
-                challenge_generator,
-                query_rands,
-                Some(rng),
-            )?;
-
-            end_timer!(proof_time);
-
-            proofs.push(proof);
-        }
-        end_timer!(open_time);
-
-        Ok(proofs.into())
     }
 }
 
@@ -514,6 +590,25 @@ where
     evaluations
 }
 
+// Separate the information about queries on linear combinations into
+// information about queries on individual polynomials.
+//
+// For instance, if `linear_combinations` is
+// [
+//  ("average", 1/2 * pol_1 + 1/2 * pol_2),
+//  ("weighted", 1/2 * pol_1 + 1/2 * pol_3)
+// ]
+// and `query_set` is
+// [
+//  ("average", ("three", 3))
+//  ("weighted", ("three", 3))
+// ],
+// then the output is
+// {
+//  ("pol_1", ("three", 3)),
+//  ("pol_2", ("three", 3)),
+//  ("pol_3", ("three", 3)),
+// }
 fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
     linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
     query_set: &QuerySet<T>,
