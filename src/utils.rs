@@ -1,8 +1,5 @@
 use core::marker::PhantomData;
 
-#[cfg(not(feature = "std"))]
-use num_traits::Float;
-
 #[cfg(feature = "parallel")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
