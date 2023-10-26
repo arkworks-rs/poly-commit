@@ -51,20 +51,36 @@ pub const PROTOCOL_NAME: &'static [u8] = b"Hyrax protocol";
 ///
 /// ### Future optimisations
 ///
-/// - Due to the homomorphic nature of Pedersen commitments, it is likely some
-///   of the following methods can be designed more efficiently than their
-///   default implementations: batch_open, batch_check, open_combinations,
-///   check_combinations. This is not discussed in the reference article, but
-///   the IPA and KZG modules might be a good starting point.
-/// - On a related note to the previous point, there might be a more efficient
-///   way to open several polynomials at a single point than the currently
-///   implemented method, where only the computation of the vectors L and R is
+/// - Deal with the modification described above: either modify the PCS trait
+///   to encompass hiding PCSs (in terms of the actual   evaluation, not only
+///   the polynomial), or turn this scheme into a non-hiding one by removing
+///   unnecessary work (which would   probably involve non-trivial theoretical
+///   work).
+/// - Add parallelisation. There is at least one natural place where
+///   parallelisation could bring performance gains: in essence, the prover
+///   commits to the polynomial by expressing it as an evaluation matrix and
+///   Pederson-multi-committing to each row. Each of this commitments can be
+///   computed independently from the rest, and therefore, in parallel. It is
+///   still to be seen how much of an improvement this would entail, since each
+///   Pederson multi-commitment boils down to a multi-exponentiation and this
+///   operation is itself parallelised.
+/// - Due to the homomorphic nature of Pedersen commitments, it is likely
+///   some of the following methods can be designed more efficiently than their
+///   default implementations: `batch_open`, `batch_check`,
+///   `open_combinations`, `check_combinations`. This is not discussed in the
+///   reference article, but the IPA and KZG modules might be a good starting
+///   point.
+/// - On a related note to the previous point, there might be a more
+///   efficient way to open several polynomials at a single point (this is the
+///   functionality of the `open` method) than the currently implemented
+///   technique, where only the computation of the vectors `L` and `R` is
 ///   shared across polynomials.
-/// - The cited article proposes an optimisation in the section `Reducing the
-///   cost of proof-of-dot-prod`. It allows for non-square matrices (and hence
+/// - The cited article proposes an optimisation in the section _Reducing the
+///   cost of proof-of-dot-prod_. It allows for non-square matrices (and hence
 ///   removes the requirement for the number of variables to be even) and
 ///   introduces a tradeoff between proof size and verifier time. It is
 ///   probably worth pursuing.
+
 pub struct HyraxPC<
     // The elliptic curve used for Pedersen commitments (only EC groups are
     // supported as of now).
