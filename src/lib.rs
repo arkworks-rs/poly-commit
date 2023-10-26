@@ -154,12 +154,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     type CommitterKey: PCCommitterKey;
     /// The verifier key for the scheme; used to check an evaluation proof.
     type VerifierKey: PCVerifierKey;
-    /// The prepared verifier key for the scheme; used to check an evaluation proof.
-    type PreparedVerifierKey: PCPreparedVerifierKey<Self::VerifierKey> + Clone;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
-    /// The prepared commitment to a polynomial.
-    type PreparedCommitment: PCPreparedCommitment<Self::Commitment>;
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
