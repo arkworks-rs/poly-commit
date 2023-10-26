@@ -251,11 +251,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// same point label but different actual points.
     ///
     /// The opening challenges are independent for each batch of polynomials.
-    ///
-    /// The default implementation achieves this by rearranging the queries in
-    /// order to gather (i.e. batch) all polynomials that should be queried at
-    /// the same point, then opening their commitments simultaneously with a
-    /// single call to `open` (per point)
     fn batch_open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
@@ -270,6 +265,10 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Randomness: 'a,
         Self::Commitment: 'a,
     {
+        // The default implementation achieves proceeds by rearranging the queries in
+        // order to gather (i.e. batch) all polynomials that should be queried at
+        // the same point, then opening their commitments simultaneously with a
+        // single call to `open` (per point)
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
@@ -356,11 +355,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// `batch_open` for the same commitment list and query set).H
     ///
     /// The opening challenges are independent for each batch of polynomials.
-    ///
-    /// The default implementation achieves this by rearranging the queries in
-    /// order to gather (i.e. batch) the proofs of all polynomials that should
-    /// have been opened at the same point, then verifying those proofs
-    /// simultaneously with a single call to `check` (per point).
     fn batch_check<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
@@ -373,6 +367,10 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     where
         Self::Commitment: 'a,
     {
+        // The default implementation proceeds by rearranging the queries in
+        // order to gather (i.e. batch) the proofs of all polynomials that should
+        // have been opened at the same point, then verifying those proofs
+        // simultaneously with a single call to `check` (per point).
         let commitments: BTreeMap<_, _> = commitments.into_iter().map(|c| (c.label(), c)).collect();
         let mut query_to_labels_map = BTreeMap::new();
 
@@ -437,9 +435,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
     /// Open commitments to all polynomials involved in a number of linear
     /// combinations (LC) simultaneously.
-    ///
-    /// The default implementation does so by batch-opening all polynomials
-    /// appearing in those LC that are queried at the same point.
     fn open_combinations<'a>(
         ck: &Self::CommitterKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -455,6 +450,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         Self::Commitment: 'a,
         P: 'a,
     {
+        // The default implementation proceeds by batch-opening all polynomials
+        // appearing in those LC that are queried at the same point.
         let linear_combinations: Vec<_> = linear_combinations.into_iter().collect();
         let polynomials: Vec<_> = polynomials.into_iter().collect();
 
@@ -482,11 +479,6 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
     /// Verify opening proofs for all polynomials involved in a number of
     /// linear combinations (LC) simultaneously.
-    ///
-    /// The default implementation does this by batch-checking each
-    /// batch-opening proof of polynomials appearing in those LC that were
-    /// queried at the same point, then computing the evaluations of each LC
-    /// using the proved polynomial evaluations.
     fn check_combinations<'a, R: RngCore>(
         vk: &Self::VerifierKey,
         linear_combinations: impl IntoIterator<Item = &'a LinearCombination<F>>,
@@ -500,6 +492,10 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     where
         Self::Commitment: 'a,
     {
+        // The default implementation does this by batch-checking each
+        // batch-opening proof of polynomials appearing in those LC that were
+        // queried at the same point, then computing the evaluations of each LC
+        // using the proved polynomial evaluations.
         let BatchLCProof { proof, evals } = proof;
         let lc_s = BTreeMap::from_iter(linear_combinations.into_iter().map(|lc| (lc.label(), lc)));
 
