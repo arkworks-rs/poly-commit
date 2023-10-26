@@ -14,7 +14,9 @@ use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
 use ark_std::string::ToString;
 use ark_std::vec::Vec;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator, IntoParallelIterator};
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 mod utils;
 
