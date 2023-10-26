@@ -114,26 +114,16 @@ where
 
     /// Compute the a suitable (for instance, FFT-friendly over F) matrix with at least poly_len entries.
     /// The return pair (n, m) corresponds to the dimensions n x m.
+    /// FIXME: Maybe, there should be some checks for making sure the extended row can have an FFT.
     fn compute_dimensions(&self, poly_len: usize) -> (usize, usize) {
         assert_eq!(
             (poly_len as f64) as usize,
             poly_len,
             "n cannot be converted to f64: aborting"
         );
-
-        // let aux = (poly_len as f64).sqrt().ceil() as usize;
-        // let n_cols = GeneralEvaluationDomain::<F>::new(aux)
-        //     .expect("Field F does not admit FFT with m elements")
-        //     .size();
-        // TODO this check is actually insufficient, pass rho_inv and
-        // check the codeword length (or just disregard check)
-
-        // TODO changed
         let t = calculate_t::<F>(self.sec_param(), self.distance(), poly_len).unwrap();
         let n = 1 << log2((ceil_div(2 * poly_len, t) as f64).sqrt().ceil() as usize);
         let m = ceil_div(poly_len, n);
-
-        // (ceil_div(poly_len, n_cols), n_cols)
         (n, m)
     }
 
