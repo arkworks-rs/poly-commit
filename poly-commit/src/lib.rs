@@ -156,6 +156,8 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     type VerifierKey: PCVerifierKey;
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
+    /// The state of committer
+    type CommitterState: Default + CanonicalSerialize + CanonicalDeserialize;
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
