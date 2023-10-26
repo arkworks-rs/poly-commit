@@ -264,6 +264,8 @@ pub(crate) mod tests {
     use crate::utils::to_field;
 
     use super::*;
+
+    use ark_bls12_377::Fq;
     use ark_bls12_377::Fr;
 
     #[test]
@@ -304,5 +306,22 @@ pub(crate) mod tests {
         assert_eq!(get_num_bytes(1 << 32 - 1), 4);
         assert_eq!(get_num_bytes(1 << 32), 5);
         assert_eq!(get_num_bytes(1 << 32 + 1), 5);
+    }
+
+    #[test]
+    fn test_calculate_t_with_good_parameters() {
+        assert!(calculate_t::<Fq>(128, (3, 4), 2_usize.pow(32)).unwrap() < 200);
+        assert!(calculate_t::<Fq>(256, (3, 4), 2_usize.pow(32)).unwrap() < 400);
+    }
+
+    #[test]
+    fn test_calculate_t_with_bad_parameters() {
+        calculate_t::<Fq>(
+            (Fq::MODULUS_BIT_SIZE - 60) as usize,
+            (3, 4),
+            2_usize.pow(60),
+        )
+        .unwrap_err();
+        calculate_t::<Fq>(400, (3, 4), 2_usize.pow(32)).unwrap_err();
     }
 }
