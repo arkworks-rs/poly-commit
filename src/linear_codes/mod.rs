@@ -14,7 +14,9 @@ use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
 use ark_std::string::ToString;
 use ark_std::vec::Vec;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator, IntoParallelIterator};
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 mod utils;
 
@@ -118,8 +120,11 @@ where
 
         // 2. Apply encoding row-wise
         let rows = mat.rows();
-        let ext_mat =
-            Matrix::new_from_rows(cfg_iter!(rows).map(|r| Self::encode(r, param).unwrap()).collect());
+        let ext_mat = Matrix::new_from_rows(
+            cfg_iter!(rows)
+                .map(|r| Self::encode(r, param).unwrap())
+                .collect(),
+        );
 
         (mat, ext_mat)
     }
