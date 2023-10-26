@@ -14,6 +14,7 @@ use ark_std::marker::PhantomData;
 use ark_std::rand::RngCore;
 use ark_std::string::ToString;
 use ark_std::vec::Vec;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator, IntoParallelIterator};
 
 mod utils;
 
@@ -116,12 +117,9 @@ where
         let mat = Matrix::new_from_flat(n_rows, n_cols, &coeffs);
 
         // 2. Apply encoding row-wise
-        let ext_mat = Matrix::new_from_rows(
-            mat.rows()
-                .iter()
-                .map(|r| Self::encode(r, param).unwrap()) // Since we just computed the dimension, the error does not happen
-                .collect(),
-        );
+        let rows = mat.rows();
+        let ext_mat =
+            Matrix::new_from_rows(cfg_iter!(rows).map(|r| Self::encode(r, param).unwrap()).collect());
 
         (mat, ext_mat)
     }
@@ -157,7 +155,7 @@ where
     C: Config + 'static,
     Vec<F>: Borrow<<H as CRHScheme>::Input>,
     H::Output: Into<C::Leaf>,
-    C::Leaf: Sized + Clone + Default,
+    C::Leaf: Sized + Clone + Default + Send,
     H: CRHScheme,
 {
     type UniversalParams = L::LinCodePCParams;
@@ -552,15 +550,13 @@ where
     H: CRHScheme,
     Vec<F>: Borrow<<H as CRHScheme>::Input>,
     H::Output: Into<C::Leaf>,
-    C::Leaf: Default + Clone,
+    C::Leaf: Default + Clone + Send,
 {
-    let mut col_hashes: Vec<C::Leaf> = Vec::new();
     let ext_mat_cols = ext_mat.cols();
 
-    for col in ext_mat_cols.into_iter() {
-        let col_digest = hash_column::<F, C, H>(col, col_hash_params)?;
-        col_hashes.push(col_digest);
-    }
+    let mut col_hashes: Vec<C::Leaf> = cfg_into_iter!(ext_mat_cols)
+        .map(|col| hash_column::<F, C, H>(col, &col_hash_params).unwrap())
+        .collect();
 
     // pad the column hashes with zeroes
     let next_pow_of_two = col_hashes.len().next_power_of_two();
