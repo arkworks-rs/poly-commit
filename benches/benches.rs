@@ -26,7 +26,7 @@ fn rand_poly_ipa_pc<F: PrimeField>(degree: usize, rng: &mut ChaCha20Rng) -> Dens
 }
 
 const MIN_NUM_VARS: usize = 10;
-const MAX_NUM_VARS: usize = 12;
+const MAX_NUM_VARS: usize = 20;
 
 macro_rules! bench_pcs {
     ($c:expr, $method:ident, $scheme_type:ty, $rand_poly:ident) => {{

@@ -26,7 +26,7 @@ fn rand_poly_ipa_pc<F: PrimeField>(degree: usize, rng: &mut ChaCha20Rng) -> Dens
 }
 
 const MIN_NUM_VARS: usize = 10;
-const MAX_NUM_VARS: usize = 14;
+const MAX_NUM_VARS: usize = 20;
 
 fn main() {
     println!("\nIPA on JubJub: Commitment size");
