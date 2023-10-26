@@ -344,7 +344,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     }
 
     /// Verify opening proofs for several polynomials at one or more points
-    /// each (possibly different for each polynomial). Each entry in the in
+    /// each (possibly different for each polynomial). Each entry in
     /// the query set of points contains the label of the polynomial which
     /// was queried at that point.
     ///
