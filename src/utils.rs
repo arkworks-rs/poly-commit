@@ -1,8 +1,5 @@
 use core::marker::PhantomData;
 
-#[cfg(not(feature = "std"))]
-use num_traits::Float;
-
 #[cfg(feature = "parallel")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -62,16 +59,6 @@ impl<F: Field> Matrix<F> {
             m,
             entries: row_list,
         }
-    }
-
-    /// Returns the entry in position (i, j). **Indexing starts at 0 in both coordinates**,
-    /// i.e. the first element is in position (0, 0) and the last one in (n - 1, j - 1),
-    /// where n and m are the number of rows and columns, respectively.
-    ///
-    /// Index bound checks are waived for efficiency and behaviour under invalid indexing is undefined
-    #[cfg(test)]
-    pub(crate) fn entry(&self, i: usize, j: usize) -> F {
-        self.entries[i][j]
     }
 
     /// Returns the product v * self, where v is interpreted as a row vector. In other words,
@@ -179,12 +166,6 @@ impl<F: PrimeField> IOPTranscript<F> {
         self.append_serializable_element(label, &challenge)?;
         Ok(challenge)
     }
-}
-
-#[inline]
-#[cfg(test)]
-pub(crate) fn to_field<F: Field>(v: Vec<u64>) -> Vec<F> {
-    v.iter().map(|x| F::from(*x)).collect::<Vec<F>>()
 }
 
 // TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
