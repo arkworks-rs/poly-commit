@@ -265,7 +265,9 @@ mod tests {
     use crate::multilinear_pc::MultilinearPC;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+    use ark_poly::{
+        DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
+    };
     use ark_std::rand::RngCore;
     use ark_std::test_rng;
     use ark_std::vec::Vec;
@@ -284,7 +286,7 @@ mod tests {
         let com = MultilinearPC::commit(&ck, poly);
         let proof = MultilinearPC::open(&ck, poly, &point);
 
-        let value = poly.evaluate(&point).unwrap();
+        let value = poly.evaluate(&point);
         let result = MultilinearPC::check(&vk, &com, &point, value, &proof);
         assert!(result);
     }
@@ -332,7 +334,7 @@ mod tests {
         let com = MultilinearPC::commit(&ck, &poly);
         let proof = MultilinearPC::open(&ck, &poly, &point);
 
-        let value = poly.evaluate(&point).unwrap();
+        let value = poly.evaluate(&point);
         let result = MultilinearPC::check(&vk, &com, &point, value + &(1u16.into()), &proof);
         assert!(!result);
     }
