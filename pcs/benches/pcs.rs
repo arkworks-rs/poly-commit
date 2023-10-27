@@ -13,11 +13,10 @@ use rand_chacha::ChaCha20Rng;
 
 type UniPoly = DenseUnivariatePoly<Fr>;
 type Sponge = PoseidonSponge<<EdwardsAffine as AffineRepr>::ScalarField>;
-type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
 
 // IPA_PC over the JubJub curve with Blake2s as the hash function
 #[allow(non_camel_case_types)]
-type IPA_JubJub = PC<EdwardsAffine, Blake2s256, UniPoly, Sponge>;
+type IPA_JubJub = InnerProductArgPC<EdwardsAffine, Blake2s256, UniPoly, Sponge>;
 
 fn rand_poly_ipa_pc<F: PrimeField>(degree: usize, rng: &mut ChaCha20Rng) -> DenseUnivariatePoly<F> {
     DenseUnivariatePoly::rand(degree, rng)
