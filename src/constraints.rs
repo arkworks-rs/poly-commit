@@ -1,6 +1,6 @@
 use crate::{
     data_structures::LabeledCommitment, BatchLCProof, LCTerm, LinearCombination,
-    PolynomialCommitment, String, Vec,
+    PCPreparedCommitment, PCPreparedVerifierKey, PolynomialCommitment, String, Vec,
 };
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::PrimeField;
@@ -99,16 +99,20 @@ pub trait PCCheckVar<
     S: CryptographicSponge,
 >: Clone
 {
+    /// The prepared verifier key for the scheme; used to check an evaluation proof.
+    type PreparedVerifierKey: PCPreparedVerifierKey<PC::VerifierKey> + Clone;
+    /// The prepared commitment to a polynomial.
+    type PreparedCommitment: PCPreparedCommitment<PC::Commitment>;
     /// An allocated version of `PC::VerifierKey`.
     type VerifierKeyVar: AllocVar<PC::VerifierKey, ConstraintF> + Clone;
     /// An allocated version of `PC::PreparedVerifierKey`.
-    type PreparedVerifierKeyVar: AllocVar<PC::PreparedVerifierKey, ConstraintF>
+    type PreparedVerifierKeyVar: AllocVar<Self::PreparedVerifierKey, ConstraintF>
         + Clone
         + PrepareGadget<Self::VerifierKeyVar, ConstraintF>;
     /// An allocated version of `PC::Commitment`.
     type CommitmentVar: AllocVar<PC::Commitment, ConstraintF> + Clone;
     /// An allocated version of `PC::PreparedCommitment`.
-    type PreparedCommitmentVar: AllocVar<PC::PreparedCommitment, ConstraintF>
+    type PreparedCommitmentVar: AllocVar<Self::PreparedCommitment, ConstraintF>
         + PrepareGadget<Self::CommitmentVar, ConstraintF>
         + Clone;
     /// An allocated version of `LabeledCommitment<PC::Commitment>`.
