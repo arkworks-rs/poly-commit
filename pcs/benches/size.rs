@@ -1,6 +1,5 @@
-#![cfg(feature = "benches")]
-
 use ark_ec::AffineRepr;
+use ark_pcs_bench_templates::*;
 use ark_poly::DenseUVPolynomial;
 use blake2::Blake2s256;
 
@@ -8,7 +7,7 @@ use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
 use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
 use ark_ff::PrimeField;
 use ark_poly::univariate::DensePolynomial as DenseUnivariatePoly;
-use ark_poly_commit::bench_templates::*;
+// use ark_poly_commit::bench_templates::*;
 use ark_poly_commit::ipa_pc::InnerProductArgPC;
 
 use rand_chacha::ChaCha20Rng;

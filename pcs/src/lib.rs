@@ -45,10 +45,6 @@ pub mod error;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 pub use error::*;
 
-/// Auxiliary functions `benches.rs`
-#[cfg(feature = "benches")]
-pub mod bench_templates;
-
 /// Univariate and multivariate polynomial commitment schemes
 /// which (optionally) enable hiding commitments by following
 /// the approach outlined in [[CHMMVW20, "Marlin"]][marlin].

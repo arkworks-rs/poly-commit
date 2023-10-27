@@ -11,9 +11,10 @@ use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use core::time::Duration;
 use std::time::Instant;
 
-use crate::{challenge::ChallengeGenerator, LabeledPolynomial, PolynomialCommitment};
+use ark_poly_commit::{challenge::ChallengeGenerator, LabeledPolynomial, PolynomialCommitment};
 
-use criterion::{BenchmarkId, Criterion};
+pub use criterion::*;
+pub use paste::paste;
 
 /// Measure the time cost of {commit/open/verify} across a range of num_vars
 pub fn bench_pcs_method<
@@ -238,4 +239,40 @@ fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
     }
     let config = PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, v, 2, 1);
     PoseidonSponge::new(&config)
+}
+
+#[macro_export]
+macro_rules! bench_method {
+    ($c:expr, $method:ident, $scheme_type:ty, $rand_poly:ident) => {
+        let scheme_type_str = stringify!($scheme_type);
+        let bench_name = format!("{} {}", stringify!($method), scheme_type_str);
+        bench_pcs_method::<_, _, $scheme_type>(
+            $c,
+            (MIN_NUM_VARS..MAX_NUM_VARS).step_by(2).collect(),
+            &bench_name,
+            $method::<_, _, $scheme_type>,
+            $rand_poly::<_>,
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! bench {
+    (
+        $scheme_type:ty, $rand_poly:ident
+    ) => {
+        fn bench_pcs(c: &mut Criterion) {
+            bench_method!(c, commit, $scheme_type, $rand_poly);
+            bench_method!(c, open, $scheme_type, $rand_poly);
+            bench_method!(c, verify, $scheme_type, $rand_poly);
+        }
+
+        criterion_group!(benches, bench_pcs);
+
+        paste! {
+            criterion_main!(
+                benches
+            );
+        }
+    };
 }

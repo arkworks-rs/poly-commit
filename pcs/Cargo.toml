@@ -1,0 +1,50 @@
+[package]
+name = "ark-poly-commit"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+categories.workspace = true
+include.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
+ark-ff = { version = "^0.4.0", default-features = false }
+ark-ec = { version = "^0.4.0", default-features = false }
+ark-poly = {version = "^0.4.0", default-features = false }
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
+ark-std = { version = "^0.4.0", default-features = false }
+
+ark-relations = { version = "^0.4.0", default-features = false, optional = true }
+ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
+hashbrown = { version = "0.13", default-features = false, optional = true }
+
+digest = "0.10"
+derivative = { version = "2", features = [ "use_core" ] }
+rayon = { version = "1", optional = true }
+
+[[bench]]
+name = "pcs"
+path = "benches/pcs.rs"
+harness = false
+
+[[bench]]
+name = "size"
+path = "benches/size.rs"
+harness = false
+
+[dev-dependencies]
+ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
+ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
+ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
+blake2 = { version = "0.10", default-features = false }
+rand_chacha = { version = "0.3.0", default-features = false }
+ark-pcs-bench-templates = { path = "../bench-templates" }
+
+[features]
+default = [ "std", "parallel" ]
+std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-crypto-primitives/std"]
+r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
+print-trace = [ "ark-std/print-trace" ]
+parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
