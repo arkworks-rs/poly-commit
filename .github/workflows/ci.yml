@@ -96,13 +96,11 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --workspace --no-default-features --target aarch64-unknown-none --
-exclude ark-pcs-bench-templates
+          args: --workspace --no-default-features --target aarch64-unknown-none --exclude ark-pcs-bench-templates
 
       - name: Check
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: check
-          args: --workspace --examples --no-default-features --target aarch64-unknown-none --
-exclude ark-pcs-bench-templates
+          args: --workspace --examples --no-default-features --target aarch64-unknown-none --exclude ark-pcs-bench-templates
