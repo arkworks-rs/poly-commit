@@ -3,10 +3,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{rand::RngCore, vec::Vec};
 
-use crate::{
-    PCCommitment, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness,
-    PCUniversalParams, PCVerifierKey,
-};
+use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCUniversalParams, PCVerifierKey};
 
 /// `UniversalParams` amounts to a Pederson commitment key of sufficient length
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
@@ -53,16 +50,6 @@ impl<G: AffineRepr> PCVerifierKey for HyraxVerifierKey<G> {
     }
 }
 
-/// Nothing to do to prepare this prover-verifier key.
-pub type HyraxPreparedVerifierKey<G> = HyraxVerifierKey<G>;
-
-impl<G: AffineRepr> PCPreparedVerifierKey<HyraxVerifierKey<G>> for HyraxPreparedVerifierKey<G> {
-    /// Simply clone the prover-verifier key
-    fn prepare(vk: &HyraxVerifierKey<G>) -> Self {
-        vk.clone()
-    }
-}
-
 /// Hyrax commitment to a polynomial consisting of one multi-commit per row of
 /// the coefficient matrix
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
@@ -85,16 +72,6 @@ impl<G: AffineRepr> PCCommitment for HyraxCommitment<G> {
     // supported
     fn has_degree_bound(&self) -> bool {
         true
-    }
-}
-
-/// No preparation is needed for Hyrax commitments
-pub type HyraxPreparedCommitment<E> = HyraxCommitment<E>;
-
-impl<G: AffineRepr> PCPreparedCommitment<HyraxCommitment<G>> for HyraxPreparedCommitment<G> {
-    /// Simply clone the prover-verifier key
-    fn prepare(vk: &HyraxCommitment<G>) -> Self {
-        vk.clone()
     }
 }
 

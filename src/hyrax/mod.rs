@@ -144,9 +144,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
     type UniversalParams = HyraxUniversalParams<G>;
     type CommitterKey = HyraxCommitterKey<G>;
     type VerifierKey = HyraxVerifierKey<G>;
-    type PreparedVerifierKey = HyraxPreparedVerifierKey<G>;
     type Commitment = HyraxCommitment<G>;
-    type PreparedCommitment = HyraxPreparedCommitment<G>;
     type Randomness = HyraxRandomness<G::ScalarField>;
     type Proof = Vec<HyraxProof<G>>;
     type BatchProof = Vec<Self::Proof>;
