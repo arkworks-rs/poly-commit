@@ -10,7 +10,7 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-ark-poly-commit = { path = "../pcs", default-features = false }
+ark-poly-commit = { path = "../poly-commit", default-features = false }
 ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
