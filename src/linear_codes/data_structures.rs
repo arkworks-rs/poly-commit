@@ -1,7 +1,5 @@
 use super::utils::SprsMat;
-use crate::{
-    PCCommitment, PCPreparedCommitment, PCPreparedVerifierKey, PCRandomness, PCVerifierKey,
-};
+use crate::{PCCommitment, PCRandomness};
 use ark_crypto_primitives::{
     crh::CRHScheme,
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
@@ -62,11 +60,6 @@ pub struct BrakedownPCParams<F: PrimeField, C: Config, H: CRHScheme> {
     pub(crate) col_hash_params: H::Parameters,
 }
 
-pub(crate) type LinCodePCPreparedVerifierKey = ();
-
-impl<Unprepared: PCVerifierKey> PCPreparedVerifierKey<Unprepared> for LinCodePCPreparedVerifierKey {
-    fn prepare(_vk: &Unprepared) -> Self {}
-}
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub(crate) struct Metadata {
@@ -92,16 +85,6 @@ impl<C: Config> PCCommitment for LinCodePCCommitment<C> {
 
     fn has_degree_bound(&self) -> bool {
         false
-    }
-}
-
-pub(crate) type LinCodePCPreparedCommitment<C> = LinCodePCCommitment<C>;
-
-impl<Unprepared: PCCommitment, C: Config> PCPreparedCommitment<Unprepared>
-    for LinCodePCPreparedCommitment<C>
-{
-    fn prepare(_cm: &Unprepared) -> Self {
-        LinCodePCPreparedCommitment::default()
     }
 }
 

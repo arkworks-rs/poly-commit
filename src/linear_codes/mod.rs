@@ -169,11 +169,7 @@ where
 
     type VerifierKey = L::LinCodePCParams;
 
-    type PreparedVerifierKey = LinCodePCPreparedVerifierKey;
-
     type Commitment = LinCodePCCommitment<C>;
-
-    type PreparedCommitment = LinCodePCPreparedCommitment<C>;
 
     type Randomness = LinCodePCRandomness;
 
