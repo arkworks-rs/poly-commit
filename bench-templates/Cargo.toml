@@ -1,0 +1,24 @@
+[package]
+name = "ark-pcs-bench-templates"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+categories.workspace = true
+include.workspace = true
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+ark-poly-commit = { path = "../poly-commit", default-features = false }
+ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
+ark-ff = { version = "^0.4.0", default-features = false }
+ark-ec = { version = "^0.4.0", default-features = false }
+ark-poly = {version = "^0.4.0", default-features = false }
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
+ark-std = { version = "^0.4.0", default-features = false }
+
+rand_chacha = { version = "0.3.0", default-features = false }
+criterion = { version = "0.5", default-features = false }
+
+paste = "1.0"
