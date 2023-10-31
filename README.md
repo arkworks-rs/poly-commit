@@ -39,6 +39,11 @@ This library comes with some unit and integration tests. Run these tests with:
 cargo test
 ```
 
+A benchmarking module is also provided for the `commit`, `open` and `verify` methods, as well as for computing the commitment and proof size. You can add a new benchmark for your scheme following the examples in the `pcs/benches` directory, or run the existing benchmarks with:
+```bash
+cargo bench
+```
+
 Lastly, this library is instrumented with profiling infrastructure that prints detailed traces of execution time. To enable this, compile with `cargo build --features print-trace`.
 
 ## Usage
