@@ -28,13 +28,14 @@ incremental = true
 debug = true
 
 [patch.crates-io]
-ark-ff = { git = "https://github.com/HungryCatsStudio/algebra", branch = "ml-is-poly-vec"}
-ark-ec = { git = "https://github.com/HungryCatsStudio/algebra", branch = "ml-is-poly-vec"}
-ark-poly = { git = "https://github.com/HungryCatsStudio/algebra", branch = "ml-is-poly-vec"}
-ark-serialize = { git = "https://github.com/HungryCatsStudio/algebra", branch = "ml-is-poly-vec"}
+ark-ff = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-poly = { git = "https://github.com/arkworks-rs/algebra/" }
 
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std/" }
 
 ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves/" }
 ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves/" }
+ark-bn254 = { git = "https://github.com/arkworks-rs/curves/" }

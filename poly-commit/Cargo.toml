@@ -18,15 +18,21 @@ ark-std = { version = "^0.4.0", default-features = false }
 
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-hashbrown = { version = "0.13", default-features = false, optional = true }
+hashbrown = { version = "0.14", default-features = false, optional = true }
 
 digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
 rayon = { version = "1", optional = true }
+merlin = { version = "3.0.0", default-features = false }
 
 [[bench]]
-name = "pcs"
-path = "benches/pcs.rs"
+name = "ipa_times"
+path = "benches/ipa_times.rs"
+harness = false
+
+[[bench]]
+name = "brakedown_times"
+path = "benches/brakedown_ml_times.rs"
 harness = false
 
 [[bench]]
@@ -38,9 +44,13 @@ harness = false
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
+ark-bn254 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 blake2 = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
 ark-pcs-bench-templates = { path = "../bench-templates" }
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 
 [features]
 default = [ "std", "parallel" ]
