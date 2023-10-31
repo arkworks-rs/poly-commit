@@ -1,17 +1,25 @@
-use ark_crypto_primitives::{sponge::{
-    poseidon::{PoseidonConfig, PoseidonSponge},
-    CryptographicSponge,
-}, crh::{sha256::digest::Digest, CRHScheme}};
+use ark_crypto_primitives::{
+    crh::{sha256::digest::Digest, CRHScheme},
+    sponge::{
+        poseidon::{PoseidonConfig, PoseidonSponge},
+        CryptographicSponge,
+    },
+};
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
 use ark_serialize::{CanonicalSerialize, Compress};
 use ark_std::{test_rng, UniformRand};
-use rand_chacha::{rand_core::{SeedableRng, RngCore}, ChaCha20Rng};
+use rand_chacha::{
+    rand_core::{RngCore, SeedableRng},
+    ChaCha20Rng,
+};
 
 use core::time::Duration;
-use std::{time::Instant, marker::PhantomData, borrow::Borrow};
+use std::{borrow::Borrow, marker::PhantomData, time::Instant};
 
-use ark_poly_commit::{challenge::ChallengeGenerator, LabeledPolynomial, PolynomialCommitment, to_bytes};
+use ark_poly_commit::{
+    challenge::ChallengeGenerator, to_bytes, LabeledPolynomial, PolynomialCommitment,
+};
 
 pub use criterion::*;
 pub use paste::paste;

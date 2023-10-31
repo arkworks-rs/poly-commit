@@ -21,7 +21,7 @@ mod tests {
     use blake2::Blake2s256;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-    use ark_pcs_bench_templates::{LeafIdentityHasher, FieldToBytesColHasher};
+    use ark_pcs_bench_templates::{FieldToBytesColHasher, LeafIdentityHasher};
 
     type LeafH = LeafIdentityHasher;
     type CompressH = Sha256;

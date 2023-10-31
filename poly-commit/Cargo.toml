@@ -44,6 +44,7 @@ harness = false
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
+ark-bn254 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 blake2 = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
 ark-pcs-bench-templates = { path = "../bench-templates" }
