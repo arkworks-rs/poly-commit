@@ -37,11 +37,6 @@ path = "benches/hyrax_times.rs"
 harness = false
 
 [[bench]]
-name = "pcs"
-path = "benches/pcs.rs"
-harness = false
-
-[[bench]]
 name = "size"
 path = "benches/size.rs"
 harness = false
