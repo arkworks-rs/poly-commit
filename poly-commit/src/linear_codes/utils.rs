@@ -13,14 +13,6 @@ use ark_std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
-#[cfg(any(feature = "benches", test))]
-use {
-    crate::to_bytes,
-    ark_serialize::CanonicalSerialize,
-    ark_std::{marker::PhantomData, rand::RngCore},
-    digest::Digest,
-};
-
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of some FFT domain in F.
 /// Returns a vector of length equal to the smallest FFT domain of size at least msg.len() * RHO_INV.
@@ -113,62 +105,6 @@ pub(crate) fn calculate_t<F: PrimeField>(
     }
     let t = (nom / denom).ceil() as usize;
     Ok(if t < codeword_len { t } else { codeword_len })
-}
-
-/// Only needed for benches and tests.
-#[cfg(any(feature = "benches", test))]
-pub struct LeafIdentityHasher;
-
-#[cfg(any(feature = "benches", test))]
-impl CRHScheme for LeafIdentityHasher {
-    type Input = Vec<u8>;
-    type Output = Vec<u8>;
-    type Parameters = ();
-
-    fn setup<R: RngCore>(_: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
-        Ok(())
-    }
-
-    fn evaluate<T: Borrow<Self::Input>>(
-        _: &Self::Parameters,
-        input: T,
-    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
-        Ok(input.borrow().to_vec().into())
-    }
-}
-
-/// Only needed for benches and tests.
-#[cfg(any(feature = "benches", test))]
-pub struct FieldToBytesColHasher<F, D>
-where
-    F: PrimeField + CanonicalSerialize,
-    D: Digest,
-{
-    _phantom: PhantomData<(F, D)>,
-}
-
-#[cfg(any(feature = "benches", test))]
-impl<F, D> CRHScheme for FieldToBytesColHasher<F, D>
-where
-    F: PrimeField + CanonicalSerialize,
-    D: Digest,
-{
-    type Input = Vec<F>;
-    type Output = Vec<u8>;
-    type Parameters = ();
-
-    fn setup<R: RngCore>(_rng: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
-        Ok(())
-    }
-
-    fn evaluate<T: Borrow<Self::Input>>(
-        _parameters: &Self::Parameters,
-        input: T,
-    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
-        let mut dig = D::new();
-        dig.update(to_bytes!(input.borrow()).unwrap());
-        Ok(dig.finalize().to_vec())
-    }
 }
 
 pub(crate) fn tensor_vec<F: PrimeField>(values: &[F]) -> Vec<F> {

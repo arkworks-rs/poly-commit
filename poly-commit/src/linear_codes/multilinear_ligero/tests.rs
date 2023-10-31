@@ -5,7 +5,7 @@ mod tests {
     use crate::utils::test_sponge;
     use crate::{
         challenge::ChallengeGenerator,
-        linear_codes::{utils::*, LigeroPCParams, MultilinearLigero, PolynomialCommitment},
+        linear_codes::{LigeroPCParams, MultilinearLigero, PolynomialCommitment},
         LabeledPolynomial,
     };
     use ark_bls12_377::Fr;
@@ -20,6 +20,8 @@ mod tests {
     use ark_std::test_rng;
     use blake2::Blake2s256;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+
+    use ark_pcs_bench_templates::{LeafIdentityHasher, FieldToBytesColHasher};
 
     type LeafH = LeafIdentityHasher;
     type CompressH = Sha256;
