@@ -63,6 +63,9 @@ pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize {
     fn has_degree_bound(&self) -> bool;
 }
 
+/// Defines the auxiliary data of the commitment
+pub trait PCCommitmentState: Clone + Default + CanonicalSerialize + CanonicalDeserialize {}
+
 /// Defines the minimal interface of prepared commitments for any polynomial
 /// commitment scheme.
 pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {

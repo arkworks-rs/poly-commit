@@ -309,6 +309,7 @@ where
             lc_commitments.iter(),
             &query_set,
             opening_challenges,
+            &vec![PC::CommitmentState::default(); lc_randomness.len()],
             lc_randomness.iter(),
             rng,
         )?;

@@ -1,5 +1,5 @@
 use crate::{
-    kzg10,
+    kzg10::{self, CommitmentState},
     marlin::{marlin_pc, Marlin},
     CHALLENGE_SIZE,
 };
@@ -151,6 +151,7 @@ where
     type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = marlin_pc::Commitment<E>;
+    type CommitmentState = CommitmentState;
     type Randomness = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
@@ -343,6 +344,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::CommitmentState>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -431,7 +433,11 @@ where
             end_timer!(commit_time);
         }
         end_timer!(commit_time);
-        Ok((commitments, randomness))
+        Ok((
+            commitments,
+            vec![CommitmentState {}; randomness.len()],
+            randomness,
+        ))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -441,6 +447,7 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -661,6 +668,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>

@@ -1,3 +1,4 @@
+use crate::kzg10::CommitmentState;
 use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
@@ -66,6 +67,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
+    type CommitmentState = CommitmentState;
     type Randomness = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
@@ -180,6 +182,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::CommitmentState>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -242,7 +245,11 @@ where
             end_timer!(commit_time);
         }
         end_timer!(commit_time);
-        Ok((commitments, randomness))
+        Ok((
+            commitments,
+            vec![CommitmentState {}; randomness.len()],
+            randomness,
+        ))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -252,6 +259,7 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -408,6 +416,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
@@ -463,12 +472,14 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
     where
         P: 'a,
         Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
@@ -518,6 +529,7 @@ where
                 query_comms,
                 point,
                 opening_challenges,
+                &vec![CommitmentState {}; query_rands.len()],
                 query_rands,
                 Some(rng),
             )?;

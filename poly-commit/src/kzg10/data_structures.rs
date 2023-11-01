@@ -329,6 +329,11 @@ pub struct Commitment<E: Pairing>(
     pub E::G1Affine,
 );
 
+/// The auxiliary data for KZG commitment is empty.
+#[derive(Clone, Default, CanonicalSerialize, CanonicalDeserialize)]
+pub struct CommitmentState {}
+impl PCCommitmentState for CommitmentState {}
+
 impl<E: Pairing> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {

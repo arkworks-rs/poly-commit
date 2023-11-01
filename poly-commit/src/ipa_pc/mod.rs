@@ -1,3 +1,4 @@
+use crate::kzg10::CommitmentState;
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec, CHALLENGE_SIZE};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
@@ -347,6 +348,7 @@ where
     type CommitterKey = CommitterKey<G>;
     type VerifierKey = VerifierKey<G>;
     type Commitment = Commitment<G>;
+    type CommitmentState = CommitmentState;
     type Randomness = Randomness<G>;
     type Proof = Proof<G>;
     type BatchProof = Vec<Self::Proof>;
@@ -418,6 +420,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::CommitmentState>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -480,7 +483,7 @@ where
         }
 
         end_timer!(commit_time);
-        Ok((comms, rands))
+        Ok((comms, vec![CommitmentState {}; rands.len()], rands))
     }
 
     fn open<'a>(
@@ -489,6 +492,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -877,6 +881,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<G::ScalarField, Self::BatchProof>, Self::Error>
@@ -972,6 +977,7 @@ where
             lc_commitments.iter(),
             &query_set,
             opening_challenges,
+            &vec![CommitmentState {}; lc_randomness.len()],
             lc_randomness.iter(),
             rng,
         )?;

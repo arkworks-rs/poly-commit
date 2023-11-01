@@ -157,7 +157,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// The state of committer
-    type CommitterState: Default + CanonicalSerialize + CanonicalDeserialize;
+    type CommitmentState: PCCommitmentState;
     /// The commitment randomness.
     type Randomness: PCRandomness;
     /// The evaluation proof for a single point.
@@ -205,6 +205,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::CommitmentState>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -219,12 +220,14 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         challenge_generator: &mut ChallengeGenerator<F, S>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a;
 
     /// check but with individual challenges
@@ -255,12 +258,14 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         challenge_generator: &mut ChallengeGenerator<F, S>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::BatchProof, Self::Error>
     where
         P: 'a,
         Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         // The default implementation achieves proceeds by rearranging the queries in
@@ -268,11 +273,12 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         // the same point, then opening their commitments simultaneously with a
         // single call to `open` (per point)
         let rng = &mut crate::optional_rng::OptionalRng(rng);
-        let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
+        let poly_rand_st_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
+            .zip(states)
             .zip(rands)
             .zip(commitments.into_iter())
-            .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
+            .map(|(((poly, st), r), comm)| (poly.label(), (poly, r, st, comm)))
             .collect();
 
         let open_time = start_timer!(|| format!(
@@ -301,19 +307,23 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
             let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_states: Vec<&'a Self::CommitmentState> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             // Constructing matching vectors with the polynomial, commitment
             // randomness and actual commitment for each polynomial being
             // queried at `point`
             for label in labels {
-                let (polynomial, rand, comm) =
-                    poly_rand_comm.get(label).ok_or(Error::MissingPolynomial {
-                        label: label.to_string(),
-                    })?;
+                let (polynomial, rand, state, comm) =
+                    poly_rand_st_comm
+                        .get(label)
+                        .ok_or(Error::MissingPolynomial {
+                            label: label.to_string(),
+                        })?;
 
                 query_polys.push(polynomial);
                 query_rands.push(rand);
+                query_states.push(state);
                 query_comms.push(comm);
             }
 
@@ -327,6 +337,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
                 query_comms,
                 &point,
                 challenge_generator,
+                query_states,
                 query_rands,
                 Some(rng),
             )?;
@@ -440,11 +451,13 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         challenge_generator: &mut ChallengeGenerator<F, S>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<F, Self::BatchProof>, Self::Error>
     where
         Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
     {
@@ -466,6 +479,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
             commitments,
             &poly_query_set,
             challenge_generator,
+            states,
             rands,
             rng,
         )?;
@@ -717,7 +731,7 @@ pub mod tests {
                 )?;
                 println!("Trimmed");
 
-                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+                let (comms, states, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
                 let mut query_set = QuerySet::new();
                 let mut values = Evaluations::new();
@@ -735,6 +749,7 @@ pub mod tests {
                     &comms,
                     &query_set,
                     &mut (challenge_gen.clone()),
+                    &states,
                     &rands,
                     Some(rng),
                 )?;
@@ -850,7 +865,7 @@ pub mod tests {
                 )?;
                 println!("Trimmed");
 
-                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+                let (comms, states, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
                 // Construct query set
                 let mut query_set = QuerySet::new();
@@ -871,6 +886,7 @@ pub mod tests {
                     &comms,
                     &query_set,
                     &mut (challenge_gen.clone()),
+                    &states,
                     &rands,
                     Some(rng),
                 )?;
@@ -998,7 +1014,7 @@ pub mod tests {
                 )?;
                 println!("Trimmed");
 
-                let (comms, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
+                let (comms, states, rands) = PC::commit(&ck, &polynomials, Some(rng))?;
 
                 // Let's construct our equations
                 let mut linear_combinations = Vec::new();
@@ -1050,6 +1066,7 @@ pub mod tests {
                     &comms,
                     &query_set,
                     &mut (challenge_gen.clone()),
+                    &states,
                     &rands,
                     Some(rng),
                 )?;

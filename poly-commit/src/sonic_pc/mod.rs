@@ -1,3 +1,4 @@
+use crate::kzg10::CommitmentState;
 use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
@@ -146,6 +147,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
+    type CommitmentState = CommitmentState;
     type Randomness = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
@@ -281,6 +283,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
+            Vec<Self::CommitmentState>,
             Vec<Self::Randomness>,
         ),
         Self::Error,
@@ -337,7 +340,11 @@ where
         }
 
         end_timer!(commit_time);
-        Ok((labeled_comms, randomness))
+        Ok((
+            labeled_comms,
+            vec![CommitmentState {}; randomness.len()],
+            randomness,
+        ))
     }
 
     fn open<'a>(
@@ -346,6 +353,7 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -503,11 +511,13 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rands: impl IntoIterator<Item = &'a Self::Randomness>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
     {
@@ -582,6 +592,7 @@ where
             lc_commitments.iter(),
             &query_set,
             opening_challenges,
+            &vec![CommitmentState {}; lc_randomness.len()],
             lc_randomness.iter(),
             rng,
         )?;
