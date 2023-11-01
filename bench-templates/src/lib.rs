@@ -69,7 +69,7 @@ pub fn commit<
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
     let start = Instant::now();
-    let (_, _) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
+    let (_, _, _) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
     start.elapsed()
 }
 
@@ -91,7 +91,7 @@ pub fn commitment_size<
     let labeled_poly =
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
-    let (coms, _) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
+    let (coms, _, _) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
 
     coms[0].commitment().serialized_size(Compress::No)
 }
@@ -114,7 +114,7 @@ where
     let labeled_poly =
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
-    let (coms, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
+    let (coms, states, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
     let point = P::Point::rand(rng);
 
     let start = Instant::now();
@@ -124,6 +124,7 @@ where
         &coms,
         &point,
         &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &states,
         &randomness,
         Some(rng),
     )
@@ -148,7 +149,7 @@ where
     let labeled_poly =
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
-    let (coms, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
+    let (coms, states, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
     let point = P::Point::rand(rng);
 
     let proofs = PCS::open(
@@ -157,6 +158,7 @@ where
         &coms,
         &point,
         &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &states,
         &randomness,
         Some(rng),
     )
@@ -185,7 +187,7 @@ where
     let labeled_poly =
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
-    let (coms, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
+    let (coms, states, randomness) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
     let point = P::Point::rand(rng);
     let claimed_eval = labeled_poly.evaluate(&point);
     let proof = PCS::open(
@@ -194,6 +196,7 @@ where
         &coms,
         &point,
         &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &states,
         &randomness,
         Some(rng),
     )
