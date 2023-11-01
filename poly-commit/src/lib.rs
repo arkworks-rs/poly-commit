@@ -283,7 +283,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
         let open_time = start_timer!(|| format!(
             "Opening {} polynomials at query set of size {}",
-            poly_rand_comm.len(),
+            poly_rand_st_comm.len(),
             query_set.len(),
         ));
 
