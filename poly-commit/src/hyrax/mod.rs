@@ -36,26 +36,9 @@ pub const PROTOCOL_NAME: &'static [u8] = b"Hyrax protocol";
 /// [[WTsTW17]][hyrax].
 ///
 /// [hyrax]: https://eprint.iacr.org/2017/1132.pdf
-///
-/// ### Modification note
-///
-/// In the PCS contained in the cited article, the verifier never learns the
-/// actual evaluation of the polynomial at the requested point, but is instead
-/// convinced that a previously received Pedersen commitment is indeed a
-/// commitment to said evaluation - this is what the SNARK proposed therein
-/// necessitates. However, the Arkworks framework requies the verifier to
-/// actually learn that value, which is why we have added the opening of
-/// the commitment at the end of the protocol. This likely does not result in
-/// an optimal non-hiding PCS, but we feel it is the most faithful adaptation
-/// of the original PCS that can be implemented with the current restrictions.
-///
+/// 
 /// ### Future optimisations
 ///
-/// - Deal with the modification described above: either modify the PCS trait
-///   to encompass hiding PCSs (in terms of the actual   evaluation, not only
-///   the polynomial), or turn this scheme into a non-hiding one by removing
-///   unnecessary work (which would   probably involve non-trivial theoretical
-///   work).
 /// - Add parallelisation. There is at least one natural place where
 ///   parallelisation could bring performance gains: in essence, the prover
 ///   commits to the polynomial by expressing it as an evaluation matrix and
@@ -437,12 +420,6 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
             let z_d = c * r_lt + r_d;
             let z_b = c * r_eval + r_b;
 
-            // ******** Opening ********
-            // This is *not* part of the Hyrax PCS as described in the reference
-            // article. Cf. the "Modification note" at the beginning of this file.
-            // From the prover's perspective, opening amounts to adding r_eval to
-            // the proof.
-
             proofs.push(HyraxProof {
                 com_eval,
                 com_d,
@@ -450,7 +427,6 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
                 z,
                 z_d,
                 z_b,
-                r_eval,
             });
         }
 
@@ -504,7 +480,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
         let l = tensor_prime(point_lower);
         let r = tensor_prime(point_upper);
 
-        for (com, (claim, h_proof)) in commitments
+        for (com, (_, h_proof)) in commitments
             .into_iter()
             .zip(values.into_iter().zip(proof.iter()))
         {
@@ -518,7 +494,6 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
                 z,
                 z_d,
                 z_b,
-                r_eval,
             } = h_proof;
 
             if row_coms.len() != 1 << n / 2 {
@@ -567,13 +542,6 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
             // Second check
             let com_dp = Self::pedersen_commit(vk, &[inner_product(&r, z)], Some(*z_b), None).0;
             if com_dp != (com_eval.mul(c) + com_b).into() {
-                return Ok(false);
-            }
-
-            // Third check: opening
-            let exp = Self::pedersen_commit(vk, &[claim], Some(*r_eval), None).0;
-
-            if *com_eval != exp {
                 return Ok(false);
             }
         }

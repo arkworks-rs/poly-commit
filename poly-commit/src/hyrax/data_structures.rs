@@ -111,8 +111,4 @@ pub struct HyraxProof<G: AffineRepr> {
     pub z_d: G::ScalarField,
     /// Auxiliary random scalar
     pub z_b: G::ScalarField,
-    /// The hiding scalar r_eval is not part of a Hyrax PCS proof as described
-    /// in the reference article. Cf. the "Modification note" at the beginning
-    /// of `mod.rs`
-    pub r_eval: G::ScalarField,
 }
