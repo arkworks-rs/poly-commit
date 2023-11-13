@@ -128,13 +128,13 @@ let (ck, vk) = PCS::trim(&pp, degree, 2, Some(&[degree])).unwrap();
 
 // 3. PolynomialCommitment::commit
 // The prover commits to the polynomial using their committer key `ck`.
-let (comms, states, rands) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
+let (comms, states) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
 
 let challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarField, Sponge_Bls12_377> = ChallengeGenerator::new_univariate(&mut test_sponge);
 
 // 4a. PolynomialCommitment::open
 // Opening proof at a single point.
-let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &states, &rands, None).unwrap(); 
+let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &states, None).unwrap(); 
 
 // 5a. PolynomialCommitment::check
 // Verifying the proof at a single point, given the commitment, the point, the claimed evaluation, and the proof.
@@ -157,7 +157,6 @@ let proof_batched = PCS::batch_open(
    &query_set,
    &mut (challenge_generator.clone()),
    &states,
-   &rands,
    Some(rng),
 ).unwrap();
 
