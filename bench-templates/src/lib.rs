@@ -54,7 +54,13 @@ pub fn bench_pcs_method<
             BenchmarkId::from_parameter(num_vars),
             &num_vars,
             |b, num_vars| {
-                b.iter(|| method(&ck, &vk, *num_vars, rand_poly, rand_point));
+                b.iter_custom(|i| {
+                    let mut time = Duration::from_nanos(0);
+                    for _ in 0..i {
+                        time += method(&ck, &vk, *num_vars, rand_poly, rand_point);
+                    }
+                    time
+                });
             },
         );
     }
