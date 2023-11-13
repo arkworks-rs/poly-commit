@@ -231,6 +231,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
     ///
     /// Panics if `rng` is None, since Hyrax requires randomness in order to
     /// commit to a polynomial
+    #[allow(unused_variables)]
     fn commit<'a>(
         ck: &Self::CommitterKey,
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
@@ -248,11 +249,10 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
         let mut coms = Vec::new();
         let mut rands = Vec::new();
 
+        #[cfg(not(feature = "parallel"))]
         let rng_inner = rng.expect("Committing to polynomials requires a random generator");
 
         for l_poly in polynomials {
-            let mut com_rands = Vec::new();
-
             let label = l_poly.label();
             let poly = l_poly.polynomial();
 
@@ -272,15 +272,16 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
             let m = flat_to_matrix_column_major(&poly.to_evaluations(), dim, dim);
 
             // Commiting to the matrix with one multi-commitment per row
-            let row_coms = m
-                .iter()
+            let (row_coms, com_rands): (Vec<_>, Vec<_>) = cfg_iter!(m)
                 .map(|row| {
+                    #[cfg(not(feature = "parallel"))]
                     let (c, r) = Self::pedersen_commit(ck, row, None, Some(rng_inner));
-                    // Storing the randomness used in the commitment
-                    com_rands.push(r);
-                    c
+                    #[cfg(feature = "parallel")]
+                    let (c, r) =
+                        Self::pedersen_commit(ck, row, None, Some(&mut rand::thread_rng()));
+                    (c, r)
                 })
-                .collect();
+                .unzip();
 
             let com = HyraxCommitment { row_coms };
             let l_comm = LabeledCommitment::new(label.to_string(), com, Some(1));
