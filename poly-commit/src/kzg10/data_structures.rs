@@ -329,11 +329,6 @@ pub struct Commitment<E: Pairing>(
     pub E::G1Affine,
 );
 
-/// The auxiliary data for KZG commitment is empty.
-#[derive(Clone, Default, CanonicalSerialize, CanonicalDeserialize)]
-pub struct CommitmentState {}
-impl PCCommitmentState for CommitmentState {}
-
 impl<E: Pairing> PCCommitment for Commitment<E> {
     #[inline]
     fn empty() -> Self {
@@ -425,7 +420,7 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>> Randomness<F, P> {
     }
 }
 
-impl<F: PrimeField, P: DenseUVPolynomial<F>> PCRandomness for Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> PCCommitmentState for Randomness<F, P> {
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),

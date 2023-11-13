@@ -1,9 +1,8 @@
-use crate::kzg10::CommitmentState;
 use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
@@ -67,8 +66,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
-    type CommitmentState = CommitmentState;
-    type Randomness = Randomness<E::ScalarField, P>;
+    type CommitmentState = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -183,7 +181,6 @@ where
         (
             Vec<LabeledCommitment<Self::Commitment>>,
             Vec<Self::CommitmentState>,
-            Vec<Self::Randomness>,
         ),
         Self::Error,
     >
@@ -245,11 +242,7 @@ where
             end_timer!(commit_time);
         }
         end_timer!(commit_time);
-        Ok((
-            commitments,
-            vec![CommitmentState {}; randomness.len()],
-            randomness,
-        ))
+        Ok((commitments, randomness))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -259,13 +252,12 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         let mut p = P::zero();
@@ -416,13 +408,12 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         Marlin::<E, S, P, Self>::open_combinations(
@@ -472,13 +463,11 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
         Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
@@ -508,7 +497,7 @@ where
         let mut proofs = Vec::new();
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
-            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_rands: Vec<&'a Self::CommitmentState> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             for label in labels {
@@ -529,7 +518,6 @@ where
                 query_comms,
                 point,
                 opening_challenges,
-                &vec![CommitmentState {}; query_rands.len()],
                 query_rands,
                 Some(rng),
             )?;

@@ -3,7 +3,7 @@ use crate::{kzg10, Error};
 use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
-use crate::{PCRandomness, Polynomial, PolynomialCommitment};
+use crate::{PCCommitmentState, Polynomial, PolynomialCommitment};
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
@@ -228,7 +228,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<D>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a PC::Randomness>,
+        rands: impl IntoIterator<Item = &'a PC::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, PC::BatchProof>, Error>
     where
@@ -241,7 +241,7 @@ where
             Commitment = marlin_pc::Commitment<E>,
             Error = Error,
         >,
-        PC::Randomness: 'a + AddAssign<(E::ScalarField, &'a PC::Randomness)>,
+        PC::CommitmentState: 'a + AddAssign<(E::ScalarField, &'a PC::CommitmentState)>,
         PC::Commitment: 'a,
     {
         let label_map = polynomials
@@ -262,7 +262,7 @@ where
             let mut degree_bound = None;
             let mut hiding_bound = None;
 
-            let mut randomness = PC::Randomness::empty();
+            let mut randomness = PC::CommitmentState::empty();
             let mut coeffs_and_comms = Vec::new();
 
             let num_polys = lc.len();
@@ -309,7 +309,6 @@ where
             lc_commitments.iter(),
             &query_set,
             opening_challenges,
-            &vec![PC::CommitmentState::default(); lc_randomness.len()],
             lc_randomness.iter(),
             rng,
         )?;

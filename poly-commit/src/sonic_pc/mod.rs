@@ -1,9 +1,8 @@
-use crate::kzg10::CommitmentState;
 use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
 
@@ -147,8 +146,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
-    type CommitmentState = CommitmentState;
-    type Randomness = Randomness<E::ScalarField, P>;
+    type CommitmentState = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -284,7 +282,6 @@ where
         (
             Vec<LabeledCommitment<Self::Commitment>>,
             Vec<Self::CommitmentState>,
-            Vec<Self::Randomness>,
         ),
         Self::Error,
     >
@@ -294,7 +291,7 @@ where
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
-        let mut randomness: Vec<Self::Randomness> = Vec::new();
+        let mut randomness: Vec<Self::CommitmentState> = Vec::new();
 
         for labeled_polynomial in polynomials {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -340,11 +337,7 @@ where
         }
 
         end_timer!(commit_time);
-        Ok((
-            labeled_comms,
-            vec![CommitmentState {}; randomness.len()],
-            randomness,
-        ))
+        Ok((labeled_comms, randomness))
     }
 
     fn open<'a>(
@@ -353,12 +346,11 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
     {
@@ -511,12 +503,10 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        _states: impl IntoIterator<Item = &'a Self::CommitmentState>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
-        Self::Randomness: 'a,
         Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
@@ -538,7 +528,7 @@ where
             let mut poly = P::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
-            let mut randomness = Self::Randomness::empty();
+            let mut randomness = Self::CommitmentState::empty();
             let mut comm = E::G1::zero();
 
             let num_polys = lc.len();
@@ -592,7 +582,6 @@ where
             lc_commitments.iter(),
             &query_set,
             opening_challenges,
-            &vec![CommitmentState {}; lc_randomness.len()],
             lc_randomness.iter(),
             rng,
         )?;
