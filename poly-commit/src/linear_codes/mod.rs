@@ -29,8 +29,6 @@ mod data_structures;
 use data_structures::*;
 
 pub use data_structures::LinCodePCProof;
-#[cfg(any(feature = "benches", test))]
-pub use utils::{FieldToBytesColHasher, LeafIdentityHasher};
 
 use utils::{calculate_t, get_indices_from_transcript, hash_column};
 

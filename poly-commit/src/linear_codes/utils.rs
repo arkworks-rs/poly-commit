@@ -13,7 +13,7 @@ use ark_std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
-#[cfg(any(feature = "benches", test))]
+#[cfg(test)]
 use {
     crate::to_bytes,
     ark_std::{marker::PhantomData, rand::RngCore},
@@ -182,11 +182,10 @@ pub(crate) fn calculate_t<F: PrimeField>(
     Ok(if t < codeword_len { t } else { codeword_len })
 }
 
-/// Only needed for benches and tests.
-#[cfg(any(feature = "benches", test))]
-pub struct LeafIdentityHasher;
+#[cfg(test)]
+pub(crate) struct LeafIdentityHasher;
 
-#[cfg(any(feature = "benches", test))]
+#[cfg(test)]
 impl CRHScheme for LeafIdentityHasher {
     type Input = Vec<u8>;
     type Output = Vec<u8>;
@@ -204,9 +203,8 @@ impl CRHScheme for LeafIdentityHasher {
     }
 }
 
-/// Only needed for benches and tests.
-#[cfg(any(feature = "benches", test))]
-pub struct FieldToBytesColHasher<F, D>
+#[cfg(test)]
+pub(crate) struct FieldToBytesColHasher<F, D>
 where
     F: PrimeField + CanonicalSerialize,
     D: Digest,
@@ -214,7 +212,7 @@ where
     _phantom: PhantomData<(F, D)>,
 }
 
-#[cfg(any(feature = "benches", test))]
+#[cfg(test)]
 impl<F, D> CRHScheme for FieldToBytesColHasher<F, D>
 where
     F: PrimeField + CanonicalSerialize,
