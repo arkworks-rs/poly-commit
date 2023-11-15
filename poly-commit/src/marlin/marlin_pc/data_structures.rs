@@ -361,6 +361,7 @@ impl<'a, F: PrimeField, P: DenseUVPolynomial<F>> AddAssign<(F, &'a Randomness<F,
 }
 
 impl<F: PrimeField, P: DenseUVPolynomial<F>> PCCommitmentState for Randomness<F, P> {
+    type Randomness = Self;
     fn empty() -> Self {
         Self {
             rand: kzg10::Randomness::empty(),

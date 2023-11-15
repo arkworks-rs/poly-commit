@@ -441,7 +441,7 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
@@ -452,14 +452,14 @@ where
         // Compute random linear combinations of committed polynomials and randomness
         let mut p = P::zero();
         let mut r = Randomness::empty();
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, state) in labeled_polynomials.into_iter().zip(states) {
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
 
             p += (challenge_j, polynomial.polynomial());
-            r += (challenge_j, rand);
+            r += (challenge_j, state);
         }
 
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
@@ -661,7 +661,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
@@ -676,7 +676,7 @@ where
             commitments,
             query_set,
             opening_challenges,
-            rands,
+            states,
             rng,
         )
     }

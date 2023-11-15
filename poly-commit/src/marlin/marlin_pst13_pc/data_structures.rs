@@ -368,6 +368,7 @@ where
     P: DenseMVPolynomial<E::ScalarField>,
     P::Point: Index<usize, Output = E::ScalarField>,
 {
+    type Randomness = Self;
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),

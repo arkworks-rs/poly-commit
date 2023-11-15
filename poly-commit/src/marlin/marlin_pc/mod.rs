@@ -191,7 +191,7 @@ where
         let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
-        let mut randomness = Vec::new();
+        let mut states = Vec::new();
 
         for p in polynomials {
             let label = p.label();
@@ -232,17 +232,17 @@ where
             };
 
             let comm = Commitment { comm, shifted_comm };
-            let rand = Randomness { rand, shifted_rand };
+            let state = Randomness { rand, shifted_rand };
             commitments.push(LabeledCommitment::new(
                 label.to_string(),
                 comm,
                 degree_bound,
             ));
-            randomness.push(rand);
+            states.push(state);
             end_timer!(commit_time);
         }
         end_timer!(commit_time);
-        Ok((commitments, randomness))
+        Ok((commitments, states))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -252,7 +252,7 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
@@ -267,7 +267,7 @@ where
         let mut shifted_r_witness = P::zero();
 
         let mut enforce_degree_bound = false;
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, rand) in labeled_polynomials.into_iter().zip(states) {
             let degree_bound = polynomial.degree_bound();
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
@@ -408,7 +408,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
@@ -423,7 +423,7 @@ where
             commitments,
             query_set,
             opening_challenges,
-            rands,
+            states,
             rng,
         )
     }
@@ -463,7 +463,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
         opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::CommitmentState>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
     where
@@ -474,7 +474,7 @@ where
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
-            .zip(rands)
+            .zip(states)
             .zip(commitments.into_iter())
             .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
             .collect();
@@ -497,7 +497,7 @@ where
         let mut proofs = Vec::new();
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
-            let mut query_rands: Vec<&'a Self::CommitmentState> = Vec::new();
+            let mut query_states: Vec<&'a Self::CommitmentState> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             for label in labels {
@@ -507,7 +507,7 @@ where
                     })?;
 
                 query_polys.push(polynomial);
-                query_rands.push(rand);
+                query_states.push(rand);
                 query_comms.push(comm);
             }
 
@@ -518,7 +518,7 @@ where
                 query_comms,
                 point,
                 opening_challenges,
-                query_rands,
+                query_states,
                 Some(rng),
             )?;
 
