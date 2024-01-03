@@ -73,7 +73,7 @@ pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
 /// Defines the minimal interface of commitment state for any polynomial
 /// commitment scheme. It might be randomness etc.
 pub trait PCCommitmentState: Clone + CanonicalSerialize + CanonicalDeserialize {
-    /// blah
+    /// This is the type of `Randomness` that the `rand` method returns
     type Randomness: Clone + CanonicalSerialize + CanonicalDeserialize;
 
     /// Outputs empty randomness that does not hide the commitment.
