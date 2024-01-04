@@ -666,8 +666,8 @@ pub mod tests {
         S: CryptographicSponge,
     {
         let challenge_generators = vec![
-            ChallengeGenerator::new_multivariate(sponge()),
-            ChallengeGenerator::new_univariate(&mut sponge()),
+            ChallengeGenerator::new_independent(sponge()),
+            ChallengeGenerator::new_correlated(&mut sponge()),
         ];
 
         for challenge_gen in challenge_generators {
@@ -774,8 +774,8 @@ pub mod tests {
         } = info;
 
         let challenge_gens = vec![
-            ChallengeGenerator::new_multivariate(sponge()),
-            ChallengeGenerator::new_univariate(&mut sponge()),
+            ChallengeGenerator::new_independent(sponge()),
+            ChallengeGenerator::new_correlated(&mut sponge()),
         ];
 
         for challenge_gen in challenge_gens {
@@ -919,8 +919,8 @@ pub mod tests {
         } = info;
 
         let challenge_gens = vec![
-            ChallengeGenerator::new_multivariate(sponge()),
-            ChallengeGenerator::new_univariate(&mut sponge()),
+            ChallengeGenerator::new_independent(sponge()),
+            ChallengeGenerator::new_correlated(&mut sponge()),
         ];
 
         for challenge_gen in challenge_gens {

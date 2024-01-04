@@ -123,7 +123,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &mut ChallengeGenerator::new_correlated(&mut test_sponge()),
         &randomness,
         Some(rng),
     )
@@ -156,7 +156,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &mut ChallengeGenerator::new_correlated(&mut test_sponge()),
         &randomness,
         Some(rng),
     )
@@ -193,7 +193,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &mut ChallengeGenerator::new_correlated(&mut test_sponge()),
         &randomness,
         Some(rng),
     )
@@ -206,7 +206,7 @@ where
         &point,
         [claimed_eval],
         &proof,
-        &mut ChallengeGenerator::new_univariate(&mut test_sponge()),
+        &mut ChallengeGenerator::new_correlated(&mut test_sponge()),
         None,
     )
     .unwrap();
