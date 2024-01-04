@@ -60,7 +60,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
                 let (f, lc_term) = term;
 
                 let fg =
-                EmulatedFpVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
+                    EmulatedFpVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
                         .unwrap();
 
                 (LinearCombinationCoeffVar::Var(fg), lc_term.clone())
