@@ -127,7 +127,8 @@ where
             combined_value += &(value * &challenge_i);
 
             if let Some(degree_bound) = degree_bound {
-                let challenge_i_1: E::ScalarField = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
+                let challenge_i_1: E::ScalarField =
+                    sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
                 let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_group();
 

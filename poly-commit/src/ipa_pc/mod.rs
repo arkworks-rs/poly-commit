@@ -116,7 +116,8 @@ where
         let mut combined_commitment_proj = G::Group::zero();
         let mut combined_v = G::ScalarField::zero();
 
-        let mut cur_challenge: G::ScalarField = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
+        let mut cur_challenge: G::ScalarField =
+            sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
         let labeled_commitments = commitments.into_iter();
         let values = values.into_iter();
@@ -761,8 +762,7 @@ where
             ));
         }
 
-        let check_poly =
-            Self::succinct_check(vk, commitments, *point, values, proof, sponge);
+        let check_poly = Self::succinct_check(vk, commitments, *point, values, proof, sponge);
 
         if check_poly.is_none() {
             return Ok(false);
@@ -832,14 +832,8 @@ where
                 vals.push(*v_i);
             }
 
-            let check_poly = Self::succinct_check(
-                vk,
-                comms.into_iter(),
-                *point,
-                vals.into_iter(),
-                p,
-                sponge,
-            );
+            let check_poly =
+                Self::succinct_check(vk, comms.into_iter(), *point, vals.into_iter(), p, sponge);
 
             if check_poly.is_none() {
                 return Ok(false);

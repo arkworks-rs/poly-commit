@@ -414,15 +414,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
 
             // Verify all proofs referring to the current point simultaneously
             // with a single call to `check`
-            result &= Self::check(
-                vk,
-                comms,
-                &point,
-                values,
-                &proof,
-                sponge,
-                Some(rng),
-            )?;
+            result &= Self::check(vk, comms, &point, values, &proof, sponge, Some(rng))?;
             end_timer!(proof_time);
         }
         Ok(result)
