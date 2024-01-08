@@ -656,7 +656,7 @@ pub mod tests {
     {
         let sponge = sponge();
 
-        for _ in 0..1 {
+        for __ in 0..1 {
             let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
             let max_degree = 100;
             let pp = PC::setup(max_degree, None, rng)?;
@@ -770,7 +770,7 @@ pub mod tests {
             };
             let pp = PC::setup(max_degree, num_vars, rng)?;
 
-            for _ in 0..num_iters {
+            for __ in 0..num_iters {
                 let supported_degree =
                     supported_degree.unwrap_or(Uniform::from(1..=max_degree).sample(rng));
                 assert!(
@@ -903,7 +903,7 @@ pub mod tests {
 
         let sponge = sponge();
 
-        for _ in 0..1 {
+        for __ in 0..1 {
             let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
             // If testing multivariate polynomials, make the max degree lower
             let max_degree = match num_vars {
