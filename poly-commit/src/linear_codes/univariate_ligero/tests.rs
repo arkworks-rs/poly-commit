@@ -42,22 +42,22 @@ mod tests {
     }
 
     type MTConfig = MerkleTreeParams;
-    type Sponge = PoseidonSponge<Fr>;
+    type Sponge<F> = PoseidonSponge<F>;
 
     type LigeroPCS = LinearCodePCS<
-        UnivariateLigero<Fr, MTConfig, Sponge, DensePolynomial<Fr>, ColHasher<Fr, Blake2s256>>,
+        UnivariateLigero<Fr, MTConfig, Sponge<Fr>, DensePolynomial<Fr>, ColHasher<Fr, Blake2s256>>,
         Fr,
         DensePolynomial<Fr>,
-        Sponge,
+        Sponge<Fr>,
         MTConfig,
         ColHasher<Fr, Blake2s256>,
     >;
 
     type LigeroPcsF<F> = LinearCodePCS<
-        UnivariateLigero<F, MTConfig, Sponge, DensePolynomial<F>, ColHasher<F, Blake2s256>>,
+        UnivariateLigero<F, MTConfig, Sponge<F>, DensePolynomial<F>, ColHasher<F, Blake2s256>>,
         F,
         DensePolynomial<F>,
-        Sponge,
+        Sponge<F>,
         MTConfig,
         ColHasher<F, Blake2s256>,
     >;
