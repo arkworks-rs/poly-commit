@@ -5,7 +5,7 @@ use crate::{
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
-use ark_r1cs_std::fields::nonnative::NonNativeFieldVar;
+use ark_r1cs_std::fields::emulated_fp::EmulatedFpVar;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
@@ -24,8 +24,8 @@ pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeFiel
     One,
     /// Coefficient -1.
     MinusOne,
-    /// Other coefficient, represented as a nonnative field element.
-    Var(NonNativeFieldVar<TargetField, BaseField>),
+    /// Other coefficient, represented as a "emulated" field element.
+    Var(EmulatedFpVar<TargetField, BaseField>),
 }
 
 /// An allocated version of `LinearCombination`.
@@ -60,7 +60,7 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
                 let (f, lc_term) = term;
 
                 let fg =
-                    NonNativeFieldVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
+                    EmulatedFpVar::new_variable(ark_relations::ns!(cs, "term"), || Ok(f), mode)
                         .unwrap();
 
                 (LinearCombinationCoeffVar::Var(fg), lc_term.clone())
@@ -79,12 +79,12 @@ impl<TargetField: PrimeField, BaseField: PrimeField>
 pub struct PCCheckRandomDataVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// Opening challenges.
     /// The prover and the verifier MUST use the same opening challenges.
-    pub opening_challenges: Vec<NonNativeFieldVar<TargetField, BaseField>>,
+    pub opening_challenges: Vec<EmulatedFpVar<TargetField, BaseField>>,
     /// Bit representations of the opening challenges.
     pub opening_challenges_bits: Vec<Vec<Boolean<BaseField>>>,
     /// Batching random numbers.
     /// The verifier can choose these numbers freely, as long as they are random.
-    pub batching_rands: Vec<NonNativeFieldVar<TargetField, BaseField>>,
+    pub batching_rands: Vec<EmulatedFpVar<TargetField, BaseField>>,
     /// Bit representations of the batching random numbers.
     pub batching_rands_bits: Vec<Vec<Boolean<BaseField>>>,
 }
@@ -172,7 +172,7 @@ pub struct LabeledPointVar<TargetField: PrimeField, BaseField: PrimeField> {
     /// MUST be a unique identifier in a query set.
     pub name: String,
     /// The point value.
-    pub value: NonNativeFieldVar<TargetField, BaseField>,
+    pub value: EmulatedFpVar<TargetField, BaseField>,
 }
 
 /// An allocated version of `QuerySet`.
@@ -184,7 +184,7 @@ pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub HashMap<LabeledPointVar<TargetField, BaseField>, NonNativeFieldVar<TargetField, BaseField>>,
+    pub HashMap<LabeledPointVar<TargetField, BaseField>, EmulatedFpVar<TargetField, BaseField>>,
 );
 
 impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField, BaseField> {
@@ -192,8 +192,8 @@ impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField,
     pub fn get_lc_eval(
         &self,
         lc_string: &str,
-        point: &NonNativeFieldVar<TargetField, BaseField>,
-    ) -> Result<NonNativeFieldVar<TargetField, BaseField>, SynthesisError> {
+        point: &EmulatedFpVar<TargetField, BaseField>,
+    ) -> Result<EmulatedFpVar<TargetField, BaseField>, SynthesisError> {
         let key = LabeledPointVar::<TargetField, BaseField> {
             name: String::from(lc_string),
             value: point.clone(),
