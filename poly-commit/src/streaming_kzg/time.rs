@@ -1,9 +1,9 @@
 //! An impementation of a time-efficient version of Kate et al's polynomial commitment,
 //! with optimization from [\[BDFG20\]](https://eprint.iacr.org/2020/081.pdf).
 use ark_ec::pairing::Pairing;
-use ark_ec::scalar_mul::fixed_base::FixedBase;
+use ark_ec::scalar_mul::ScalarMul;
 use ark_ec::CurveGroup;
-use ark_ff::{PrimeField, Zero};
+use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
 use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, vec::Vec, UniformRand};
 
@@ -50,11 +50,7 @@ impl<E: Pairing> CommitterKey<E> {
         let powers_of_tau = powers(tau, max_degree + 1);
 
         let g = E::G1::rand(rng);
-        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
-        let powers_of_g_proj = FixedBase::msm(scalar_bits, window_size, &g_table, &powers_of_tau);
-        let powers_of_g = E::G1::normalize_batch(&powers_of_g_proj);
+        let powers_of_g = g.batch_mul(&powers_of_tau);
 
         let g2 = E::G2::rand(rng).into_affine();
         let powers_of_g2 = powers_of_tau
