@@ -1,6 +1,7 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
+use ark_ec::scalar_mul::BatchMulPreprocessing;
 use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
@@ -56,7 +57,9 @@ impl<E: Pairing> MultilinearPC<E> {
             let pp_k_powers = (0..(1 << (num_vars - i))).map(|x| eq[x]);
             pp_powers.extend(pp_k_powers);
         }
-        let pp_g = g.batch_mul(&pp_powers);
+
+        let g_table = BatchMulPreprocessing::new(g, num_vars);
+        let pp_g = g.batch_mul_with_preprocessing(&pp_powers, &g_table);
         let pp_h = h.batch_mul(&pp_powers);
         let mut start = 0;
         for i in 0..num_vars {
@@ -70,7 +73,7 @@ impl<E: Pairing> MultilinearPC<E> {
 
         // uncomment to measure the time for calculating vp
         // let vp_generation_timer = start_timer!(|| "VP generation");
-        let g_mask = g.batch_mul(&t);
+        let g_mask = g.batch_mul_with_preprocessing(&t, &g_table);
         // end_timer!(vp_generation_timer);
 
         UniversalParams {
