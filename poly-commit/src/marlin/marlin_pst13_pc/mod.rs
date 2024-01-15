@@ -8,7 +8,11 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup, VariableBaseMSM};
+use ark_ec::{
+    pairing::Pairing,
+    scalar_mul::{BatchMulPreprocessing, ScalarMul},
+    CurveGroup, VariableBaseMSM,
+};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
@@ -210,47 +214,33 @@ where
             })
             .unzip();
 
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
-        let mut powers_of_g =
-            FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
-        powers_of_g.push(g);
+        let mut powers_of_g = g.batch_mul(&powers_of_beta);
+        powers_of_g.push(g.into_affine());
         powers_of_beta_terms.push(P::Term::new(vec![]));
         end_timer!(g_time);
 
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 2);
-        let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
         // Each element `i` of `powers_of_gamma_g` is a vector of length `max_degree+1`
         // containing `betas[i]^j \gamma G` for `j` from 1 to `max_degree+1` to support
         // up to `max_degree` queries
         let mut powers_of_gamma_g = vec![Vec::new(); num_vars];
+        let gamma_g_table = BatchMulPreprocessing::new(gamma_g, max_degree + 1);
+
         ark_std::cfg_iter_mut!(powers_of_gamma_g)
             .enumerate()
             .for_each(|(i, v)| {
-                let mut powers_of_beta = Vec::with_capacity(max_degree);
+                let mut powers_of_beta = Vec::with_capacity(max_degree + 1);
                 let mut cur = E::ScalarField::one();
                 for _ in 0..=max_degree {
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = FixedBase::msm::<E::G1>(
-                    scalar_bits,
-                    window_size,
-                    &gamma_g_table,
-                    &powers_of_beta,
-                );
+                *v = gamma_g.batch_mul_with_preprocessing(&powers_of_beta, &gamma_g_table);
             });
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
         let gamma_g = gamma_g.into_affine();
-        let powers_of_gamma_g = powers_of_gamma_g
-            .into_iter()
-            .map(|v| E::G1::normalize_batch(&v))
-            .collect();
         let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
         let prepared_h = h.into();
