@@ -66,10 +66,10 @@ where
         let gamma_g = E::G1::rand(rng);
         let h = E::G2::rand(rng);
 
+        // powers_of_beta = [1, b, ..., b^(max_degree + 1)], len = max_degree + 2
         let mut powers_of_beta = vec![E::ScalarField::one()];
-
         let mut cur = beta;
-        for _ in 0..=max_degree + 1 {
+        for _ in 0..=max_degree {
             powers_of_beta.push(cur);
             cur *= &beta;
         }
@@ -78,6 +78,8 @@ where
         let powers_of_g = g.batch_mul(&powers_of_beta[0..max_degree + 1]);
         end_timer!(g_time);
 
+        // Use the entire `powers_of_beta`, since we want to be able to support
+        // up to D queries.
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
         let powers_of_gamma_g = gamma_g
             .batch_mul(&powers_of_beta)
