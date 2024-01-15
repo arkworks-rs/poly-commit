@@ -8,7 +8,7 @@
 use crate::{BTreeMap, Error, LabeledPolynomial, PCRandomness, ToString, Vec};
 use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ec::{scalar_mul::fixed_base::FixedBase, VariableBaseMSM};
+use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
@@ -69,33 +69,39 @@ where
         let mut powers_of_beta = vec![E::ScalarField::one()];
 
         let mut cur = beta;
-        for _ in 0..max_degree {
+        for _ in 0..=max_degree {
             powers_of_beta.push(cur);
             cur *= &beta;
         }
 
-        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
-        let powers_of_g =
-            FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
-        end_timer!(g_time);
-        let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
-        let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
-        let mut powers_of_gamma_g =
-            FixedBase::msm::<E::G1>(scalar_bits, window_size, &gamma_g_table, &powers_of_beta);
-        // Add an additional power of gamma_g, because we want to be able to support
-        // up to D queries.
-        powers_of_gamma_g.push(powers_of_gamma_g.last().unwrap().mul(&beta));
-        end_timer!(gamma_g_time);
+        let powers_of_g = g.batch_mul(&powers_of_beta[0..max_degree]);
 
-        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
-        let powers_of_gamma_g = E::G1::normalize_batch(&powers_of_gamma_g)
+        // let window_size = FixedBase::get_mul_window_size(max_degree + 1);
+
+        // let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
+        // let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
+        // let powers_of_g =
+        //     FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
+        end_timer!(g_time);
+
+        let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
+        let powers_of_gamma_g = gamma_g
+            .batch_mul(&powers_of_beta)
             .into_iter()
             .enumerate()
             .collect();
+        // let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
+        // let mut powers_of_gamma_g =
+        //     FixedBase::msm::<E::G1>(scalar_bits, window_size, &gamma_g_table, &powers_of_beta);
+        // Add an additional power of gamma_g, because we want to be able to support
+        // up to D queries.
+        // let last_gamma_g = powers_of_gamma_g.last().unwrap().mul(&beta);
+        // powers_of_gamma_g.push(last_gamma_g.into_affine());
+        end_timer!(gamma_g_time);
+
+        // let powers_of_g = E::G1::normalize_batch(&powers_of_g);
+        // let powers_of_gamma_g = E::G1::normalize_batch(&powers_of_gamma_g)
 
         let neg_powers_of_h_time = start_timer!(|| "Generating negative powers of h in G2");
         let neg_powers_of_h = if produce_g2_powers {
@@ -106,20 +112,22 @@ where
                 cur /= &beta;
             }
 
-            let neg_h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
-            let neg_powers_of_h = FixedBase::msm::<E::G2>(
-                scalar_bits,
-                window_size,
-                &neg_h_table,
-                &neg_powers_of_beta,
-            );
+            // let neg_h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
+            h.batch_mul(&neg_powers_of_beta).into_iter().enumerate().collect()
+            // let neg_powers_of_h = FixedBase::msm::<E::G2>(
+            //     scalar_bits,
+            //     window_size,
+            //     &neg_h_table,
+            //     &neg_powers_of_beta,
+            // );
 
-            let affines = E::G2::normalize_batch(&neg_powers_of_h);
-            let mut affines_map = BTreeMap::new();
-            affines.into_iter().enumerate().for_each(|(i, a)| {
-                affines_map.insert(i, a);
-            });
-            affines_map
+            // let affines = E::G2::normalize_batch(&neg_powers_of_h);
+            // let mut affines_map = BTreeMap::new();
+            // neg_powers_of_h.into_iter().enumerate().collect();
+            // for_each(|(i, a)| {
+            //     affines_map.insert(i, a);
+            // });
+            // affines_map
         } else {
             BTreeMap::new()
         };
