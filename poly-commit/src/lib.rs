@@ -154,7 +154,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
     /// The commitment to a polynomial.
     type Commitment: PCCommitment + Default;
     /// Auxiliary state of the commitment, output by the `commit` phase.
-    /// It contains information that can be reused by the committer 
+    /// It contains information that can be reused by the committer
     /// during the `open` phase, such as the commitment randomness.
     /// Not to be shared with the verifier.
     type CommitmentState: PCCommitmentState;
