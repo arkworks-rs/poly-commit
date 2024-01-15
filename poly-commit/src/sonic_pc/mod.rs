@@ -12,7 +12,6 @@ use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 mod data_structures;
-use crate::challenge::ChallengeGenerator;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 pub use data_structures::*;
 
@@ -47,12 +46,12 @@ where
         point: P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
         proof: &kzg10::Proof<E>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         randomizer: Option<E::ScalarField>,
     ) {
         let acc_time = start_timer!(|| "Accumulating elements");
 
-        let mut curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+        let mut curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
         // Keeps track of running combination of values
         let mut combined_values = E::ScalarField::zero();
@@ -73,7 +72,7 @@ where
 
             // Accumulate values in the BTreeMap
             *combined_comms.entry(degree_bound).or_insert(E::G1::zero()) += &comm_with_challenge;
-            curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
         }
 
         // Push expected results into list of elems. Power will be the negative of the expected power
@@ -345,7 +344,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -357,7 +356,7 @@ where
         let mut combined_polynomial = P::zero();
         let mut combined_rand = kzg10::Randomness::empty();
 
-        let mut curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+        let mut curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
         for (polynomial, state) in labeled_polynomials.into_iter().zip(states) {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -374,7 +373,7 @@ where
 
             combined_polynomial += (curr_challenge, polynomial.polynomial());
             combined_rand += (curr_challenge, state);
-            curr_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
         }
 
         let proof_time = start_timer!(|| "Creating proof for polynomials");
@@ -390,7 +389,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -410,7 +409,7 @@ where
             *point,
             values,
             proof,
-            opening_challenges,
+            sponge,
             None,
         );
 
@@ -430,7 +429,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<E::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -481,7 +480,7 @@ where
                 *point,
                 values_to_combine.into_iter(),
                 p,
-                opening_challenges,
+                sponge,
                 Some(randomizer),
             );
 
@@ -502,7 +501,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
@@ -581,7 +580,7 @@ where
             lc_polynomials.iter(),
             lc_commitments.iter(),
             &query_set,
-            opening_challenges,
+            sponge,
             lc_states.iter(),
             rng,
         )?;
@@ -597,7 +596,7 @@ where
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, E::ScalarField>,
         proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -666,7 +665,7 @@ where
             &eqn_query_set,
             &evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }

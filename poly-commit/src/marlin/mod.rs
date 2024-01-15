@@ -1,4 +1,4 @@
-use crate::{challenge::ChallengeGenerator, CHALLENGE_SIZE};
+use crate::CHALLENGE_SIZE;
 use crate::{kzg10, Error};
 use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
@@ -110,7 +110,7 @@ where
     fn accumulate_commitments_and_values<'a>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         values: impl IntoIterator<Item = E::ScalarField>,
-        challenge_gen: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(E::G1, E::ScalarField), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
@@ -121,13 +121,14 @@ where
             let commitment = labeled_commitment.commitment();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
 
-            let challenge_i = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
+            let challenge_i = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             combined_comm += &commitment.comm.0.mul(challenge_i);
             combined_value += &(value * &challenge_i);
 
             if let Some(degree_bound) = degree_bound {
-                let challenge_i_1 = challenge_gen.try_next_challenge_of_size(CHALLENGE_SIZE);
+                let challenge_i_1: E::ScalarField =
+                    sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
                 let shifted_comm = commitment.shifted_comm.as_ref().unwrap().0.into_group();
 
@@ -152,7 +153,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         query_set: &QuerySet<D>,
         evaluations: &Evaluations<D, E::ScalarField>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(Vec<kzg10::Commitment<E>>, Vec<D>, Vec<E::ScalarField>), Error>
     where
@@ -199,7 +200,7 @@ where
             let (c, v) = Self::accumulate_commitments_and_values(
                 comms_to_combine,
                 values_to_combine,
-                opening_challenges,
+                sponge,
                 vk,
             )?;
             end_timer!(lc_time);
@@ -227,7 +228,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<D>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a PC::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, PC::BatchProof>, Error>
@@ -308,7 +309,7 @@ where
             lc_polynomials.iter(),
             lc_commitments.iter(),
             &query_set,
-            opening_challenges,
+            sponge,
             lc_states.iter(),
             rng,
         )?;
@@ -323,7 +324,7 @@ where
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<P::Point, E::ScalarField>,
         proof: &BatchLCProof<E::ScalarField, PC::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
@@ -404,7 +405,7 @@ where
             &query_set,
             &evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }

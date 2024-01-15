@@ -20,7 +20,6 @@ pub use data_structures::*;
 mod combinations;
 use combinations::*;
 
-use crate::challenge::ChallengeGenerator;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -440,7 +439,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -456,7 +455,7 @@ where
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            let challenge_j = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             p += (challenge_j, polynomial.polynomial());
             r += (challenge_j, state);
@@ -538,7 +537,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -550,7 +549,7 @@ where
             Marlin::<E, S, P, Self>::accumulate_commitments_and_values(
                 commitments,
                 values,
-                opening_challenges,
+                sponge,
                 None,
             )?;
         // Compute both sides of the pairing equation
@@ -582,7 +581,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<P::Point, E::ScalarField>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -593,7 +592,7 @@ where
                 commitments,
                 query_set,
                 values,
-                opening_challenges,
+                sponge,
                 None,
             )?;
         let check_time =
@@ -660,7 +659,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
@@ -675,7 +674,7 @@ where
             polynomials,
             commitments,
             query_set,
-            opening_challenges,
+            sponge,
             states,
             rng,
         )
@@ -690,7 +689,7 @@ where
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, E::ScalarField>,
         proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -703,7 +702,7 @@ where
             eqn_query_set,
             eqn_evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }

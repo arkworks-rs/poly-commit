@@ -15,7 +15,6 @@ pub use data_structures::*;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-use crate::challenge::ChallengeGenerator;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use digest::Digest;
 
@@ -105,7 +104,7 @@ where
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
     ) -> Option<SuccinctCheckPolynomial<G::ScalarField>> {
         let check_time = start_timer!(|| "Succinct checking");
 
@@ -117,7 +116,8 @@ where
         let mut combined_commitment_proj = G::Group::zero();
         let mut combined_v = G::ScalarField::zero();
 
-        let mut cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+        let mut cur_challenge: G::ScalarField =
+            sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
         let labeled_commitments = commitments.into_iter();
         let values = values.into_iter();
@@ -126,7 +126,7 @@ where
             let commitment = labeled_commitment.commitment();
             combined_v += &(cur_challenge * &value);
             combined_commitment_proj += &labeled_commitment.commitment().comm.mul(cur_challenge);
-            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            cur_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             let degree_bound = labeled_commitment.degree_bound();
             assert_eq!(degree_bound.is_some(), commitment.shifted_comm.is_some());
@@ -137,7 +137,7 @@ where
                 combined_commitment_proj += &commitment.shifted_comm.unwrap().mul(cur_challenge);
             }
 
-            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            cur_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
         }
 
         let mut combined_commitment = combined_commitment_proj.into_affine();
@@ -488,7 +488,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -509,7 +509,7 @@ where
 
         let combine_time = start_timer!(|| "Combining polynomials, randomness, and commitments.");
 
-        let mut cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+        let mut cur_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
         for (labeled_polynomial, (labeled_commitment, state)) in
             polys_iter.zip(comms_iter.zip(states_iter))
@@ -531,7 +531,7 @@ where
                 combined_rand += &(cur_challenge * &state.rand);
             }
 
-            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            cur_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             let has_degree_bound = degree_bound.is_some();
 
@@ -564,7 +564,7 @@ where
                 }
             }
 
-            cur_challenge = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            cur_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
         }
 
         end_timer!(combine_time);
@@ -739,7 +739,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -762,8 +762,7 @@ where
             ));
         }
 
-        let check_poly =
-            Self::succinct_check(vk, commitments, *point, values, proof, opening_challenges);
+        let check_poly = Self::succinct_check(vk, commitments, *point, values, proof, sponge);
 
         if check_poly.is_none() {
             return Ok(false);
@@ -790,7 +789,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -833,14 +832,8 @@ where
                 vals.push(*v_i);
             }
 
-            let check_poly = Self::succinct_check(
-                vk,
-                comms.into_iter(),
-                *point,
-                vals.into_iter(),
-                p,
-                opening_challenges,
-            );
+            let check_poly =
+                Self::succinct_check(vk, comms.into_iter(), *point, vals.into_iter(), p, sponge);
 
             if check_poly.is_none() {
                 return Ok(false);
@@ -876,7 +869,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<G::ScalarField, Self::BatchProof>, Self::Error>
@@ -971,7 +964,7 @@ where
             lc_polynomials.iter(),
             lc_commitments.iter(),
             &query_set,
-            opening_challenges,
+            sponge,
             lc_states.iter(),
             rng,
         )?;
@@ -987,7 +980,7 @@ where
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, G::ScalarField>,
         proof: &BatchLCProof<G::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<G::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -1060,7 +1053,7 @@ where
             &eqn_query_set,
             &evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }
