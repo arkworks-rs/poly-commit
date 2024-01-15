@@ -13,7 +13,7 @@ use ark_std::vec::Vec;
 
 mod tests;
 
-/// The univariate Brakedown polynomial commitment scheme based on [[Brakedown]][bd].
+/// The multilinear Brakedown polynomial commitment scheme based on [[Brakedown]][bd].
 /// The scheme defaults to the naive batching strategy.
 ///
 /// Note: The scheme currently does not support hiding.
