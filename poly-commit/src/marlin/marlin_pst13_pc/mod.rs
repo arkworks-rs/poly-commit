@@ -8,7 +8,11 @@ use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, CurveGroup, VariableBaseMSM};
+use ark_ec::{
+    pairing::Pairing,
+    scalar_mul::{BatchMulPreprocessing, ScalarMul},
+    CurveGroup, VariableBaseMSM,
+};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
@@ -221,6 +225,8 @@ where
         // containing `betas[i]^j \gamma G` for `j` from 1 to `max_degree+1` to support
         // up to `max_degree` queries
         let mut powers_of_gamma_g = vec![Vec::new(); num_vars];
+        let gamma_g_table = BatchMulPreprocessing::new(gamma_g, max_degree + 1);
+
         ark_std::cfg_iter_mut!(powers_of_gamma_g)
             .enumerate()
             .for_each(|(i, v)| {
@@ -230,7 +236,7 @@ where
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = gamma_g.batch_mul(&powers_of_beta);
+                *v = gamma_g.batch_mul_with_preprocessing(&powers_of_beta, &gamma_g_table);
             });
         end_timer!(gamma_g_time);
 
