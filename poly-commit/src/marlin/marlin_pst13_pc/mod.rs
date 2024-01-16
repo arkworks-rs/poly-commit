@@ -236,7 +236,7 @@ where
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = gamma_g1_table.batch_mul(&powers_of_beta);
+                *v = gamma_g_table.batch_mul(&powers_of_beta);
             });
         end_timer!(gamma_g_time);
 
