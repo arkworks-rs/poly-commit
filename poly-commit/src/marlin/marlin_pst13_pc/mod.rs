@@ -5,7 +5,7 @@ use crate::{
 };
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::AffineRepr;
 use ark_ec::{
@@ -154,7 +154,7 @@ where
     type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = marlin_pc::Commitment<E>;
-    type Randomness = Randomness<E, P>;
+    type CommitmentState = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -332,7 +332,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
+            Vec<Self::CommitmentState>,
         ),
         Self::Error,
     >
@@ -430,25 +430,25 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
         sponge: &mut S,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         // Compute random linear combinations of committed polynomials and randomness
         let mut p = P::zero();
         let mut r = Randomness::empty();
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, state) in labeled_polynomials.into_iter().zip(states) {
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
             let challenge_j = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             p += (challenge_j, polynomial.polynomial());
-            r += (challenge_j, rand);
+            r += (challenge_j, state);
         }
 
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
@@ -650,12 +650,12 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         sponge: &mut S,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         Marlin::<E, S, P, Self>::open_combinations(
@@ -665,7 +665,7 @@ where
             commitments,
             query_set,
             sponge,
-            rands,
+            states,
             rng,
         )
     }

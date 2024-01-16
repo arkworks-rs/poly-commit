@@ -2,7 +2,7 @@ use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
 
@@ -145,7 +145,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
-    type Randomness = Randomness<E::ScalarField, P>;
+    type CommitmentState = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -280,7 +280,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
+            Vec<Self::CommitmentState>,
         ),
         Self::Error,
     >
@@ -290,7 +290,7 @@ where
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let commit_time = start_timer!(|| "Committing to polynomials");
         let mut labeled_comms: Vec<LabeledCommitment<Self::Commitment>> = Vec::new();
-        let mut randomness: Vec<Self::Randomness> = Vec::new();
+        let mut randomness: Vec<Self::CommitmentState> = Vec::new();
 
         for labeled_polynomial in polynomials {
             let enforced_degree_bounds: Option<&[usize]> = ck
@@ -345,11 +345,11 @@ where
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
         sponge: &mut S,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
     {
@@ -358,7 +358,7 @@ where
 
         let mut curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, state) in labeled_polynomials.into_iter().zip(states) {
             let enforced_degree_bounds: Option<&[usize]> = ck
                 .enforced_degree_bounds
                 .as_ref()
@@ -372,7 +372,7 @@ where
             )?;
 
             combined_polynomial += (curr_challenge, polynomial.polynomial());
-            combined_rand += (curr_challenge, rand);
+            combined_rand += (curr_challenge, state);
             curr_challenge = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
         }
 
@@ -502,23 +502,23 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
         sponge: &mut S,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
         P: 'a,
     {
         let label_map = polynomials
             .into_iter()
-            .zip(rands)
+            .zip(states)
             .zip(commitments)
-            .map(|((p, r), c)| (p.label(), (p, r, c)))
+            .map(|((p, s), c)| (p.label(), (p, s, c)))
             .collect::<BTreeMap<_, _>>();
 
         let mut lc_polynomials = Vec::new();
-        let mut lc_randomness = Vec::new();
+        let mut lc_states = Vec::new();
         let mut lc_commitments = Vec::new();
         let mut lc_info = Vec::new();
 
@@ -527,13 +527,13 @@ where
             let mut poly = P::zero();
             let mut degree_bound = None;
             let mut hiding_bound = None;
-            let mut randomness = Self::Randomness::empty();
+            let mut state = Self::CommitmentState::empty();
             let mut comm = E::G1::zero();
 
             let num_polys = lc.len();
             for (coeff, label) in lc.iter().filter(|(_, l)| !l.is_one()) {
                 let label: &String = label.try_into().expect("cannot be one!");
-                let &(cur_poly, cur_rand, curr_comm) =
+                let &(cur_poly, cur_state, curr_comm) =
                     label_map.get(label).ok_or(Error::MissingPolynomial {
                         label: label.to_string(),
                     })?;
@@ -552,14 +552,14 @@ where
                 // Some(_) > None, always.
                 hiding_bound = core::cmp::max(hiding_bound, cur_poly.hiding_bound());
                 poly += (*coeff, cur_poly.polynomial());
-                randomness += (*coeff, cur_rand);
+                state += (*coeff, cur_state);
                 comm += &curr_comm.commitment().0.mul(*coeff);
             }
 
             let lc_poly =
                 LabeledPolynomial::new(lc_label.clone(), poly, degree_bound, hiding_bound);
             lc_polynomials.push(lc_poly);
-            lc_randomness.push(randomness);
+            lc_states.push(state);
             lc_commitments.push(comm);
             lc_info.push((lc_label, degree_bound));
         }
@@ -581,7 +581,7 @@ where
             lc_commitments.iter(),
             &query_set,
             sponge,
-            lc_randomness.iter(),
+            lc_states.iter(),
             rng,
         )?;
         Ok(BatchLCProof { proof, evals: None })

@@ -420,7 +420,8 @@ impl<F: PrimeField, P: DenseUVPolynomial<F>> Randomness<F, P> {
     }
 }
 
-impl<F: PrimeField, P: DenseUVPolynomial<F>> PCRandomness for Randomness<F, P> {
+impl<F: PrimeField, P: DenseUVPolynomial<F>> PCCommitmentState for Randomness<F, P> {
+    type Randomness = Self;
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),
