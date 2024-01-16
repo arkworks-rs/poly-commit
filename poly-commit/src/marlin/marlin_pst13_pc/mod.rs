@@ -236,7 +236,7 @@ where
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = gamma_g.batch_mul_with_preprocessing(&powers_of_beta, &gamma_g_table);
+                *v = E::G1::batch_mul_with_preprocessing(&gamma_g_table, &powers_of_beta);
             });
         end_timer!(gamma_g_time);
 
