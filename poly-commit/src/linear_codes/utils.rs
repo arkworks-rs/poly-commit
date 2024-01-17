@@ -16,7 +16,8 @@ use {
     digest::Digest,
 };
 
-/// This is CSC format https://shorturl.at/fpL17
+/// This is CSC format
+/// https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_(CSC_or_CCS)
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
 pub struct SprsMat<F: Field> {
