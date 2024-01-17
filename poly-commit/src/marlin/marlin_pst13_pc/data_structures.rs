@@ -1,6 +1,6 @@
 use crate::{BTreeMap, Vec};
 use crate::{
-    PCCommitterKey, PCPreparedVerifierKey, PCRandomness, PCUniversalParams, PCVerifierKey,
+    PCCommitmentState, PCCommitterKey, PCPreparedVerifierKey, PCUniversalParams, PCVerifierKey,
 };
 use ark_ec::pairing::Pairing;
 use ark_poly::DenseMVPolynomial;
@@ -362,12 +362,13 @@ where
     }
 }
 
-impl<E, P> PCRandomness for Randomness<E, P>
+impl<E, P> PCCommitmentState for Randomness<E, P>
 where
     E: Pairing,
     P: DenseMVPolynomial<E::ScalarField>,
     P::Point: Index<usize, Output = E::ScalarField>,
 {
+    type Randomness = Self;
     fn empty() -> Self {
         Self {
             blinding_polynomial: P::zero(),

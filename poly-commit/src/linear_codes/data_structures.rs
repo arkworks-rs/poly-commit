@@ -1,5 +1,5 @@
 use super::utils::SprsMat;
-use crate::{PCCommitment, PCRandomness};
+use crate::{utils::Matrix, PCCommitment, PCCommitmentState};
 use ark_crypto_primitives::{
     crh::CRHScheme,
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
@@ -51,10 +51,10 @@ pub struct BrakedownPCParams<F: PrimeField, C: Config, H: CRHScheme> {
     pub(crate) check_well_formedness: bool,
     /// Parameters for hash function of Merkle tree leaves
     #[derivative(Debug = "ignore")]
-    pub(crate) leaf_hash_params: LeafParam<C>,
+    pub(crate) leaf_hash_param: LeafParam<C>,
     /// Parameters for hash function of Merke tree combining two nodes into one
     #[derivative(Debug = "ignore")]
-    pub(crate) two_to_one_params: TwoToOneParam<C>,
+    pub(crate) two_to_one_hash_param: TwoToOneParam<C>,
     // Parameters for obtaining leaf digest from leaf value.
     #[derivative(Debug = "ignore")]
     pub(crate) col_hash_params: H::Parameters,
@@ -88,9 +88,24 @@ impl<C: Config> PCCommitment for LinCodePCCommitment<C> {
     }
 }
 
-pub(crate) type LinCodePCRandomness = ();
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+pub struct LinCodePCCommitmentState<F, H>
+where
+    F: PrimeField,
+    H: CRHScheme,
+{
+    pub(crate) mat: Matrix<F>,
+    pub(crate) ext_mat: Matrix<F>,
+    pub(crate) leaves: Vec<H::Output>,
+}
 
-impl PCRandomness for LinCodePCRandomness {
+impl<F, H> PCCommitmentState for LinCodePCCommitmentState<F, H>
+where
+    F: PrimeField,
+    H: CRHScheme,
+{
+    type Randomness = ();
     fn empty() -> Self {
         unimplemented!()
     }
@@ -100,7 +115,7 @@ impl PCRandomness for LinCodePCRandomness {
         _has_degree_bound: bool,
         _num_vars: Option<usize>,
         _rng: &mut R,
-    ) -> Self {
+    ) -> Self::Randomness {
         unimplemented!()
     }
 }

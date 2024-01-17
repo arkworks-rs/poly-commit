@@ -5,10 +5,14 @@ use crate::{
 };
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use crate::{ToString, Vec};
 use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup, VariableBaseMSM};
+use ark_ec::{
+    pairing::Pairing,
+    scalar_mul::{BatchMulPreprocessing, ScalarMul},
+    CurveGroup, VariableBaseMSM,
+};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
@@ -20,7 +24,6 @@ pub use data_structures::*;
 mod combinations;
 use combinations::*;
 
-use crate::challenge::ChallengeGenerator;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -151,7 +154,7 @@ where
     type CommitterKey = CommitterKey<E, P>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = marlin_pc::Commitment<E>;
-    type Randomness = Randomness<E, P>;
+    type CommitmentState = Randomness<E, P>;
     type Proof = Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -211,47 +214,33 @@ where
             })
             .unzip();
 
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
         let g_time = start_timer!(|| "Generating powers of G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 1);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
-        let mut powers_of_g =
-            FixedBase::msm::<E::G1>(scalar_bits, window_size, &g_table, &powers_of_beta);
-        powers_of_g.push(g);
+        let mut powers_of_g = g.batch_mul(&powers_of_beta);
+        powers_of_g.push(g.into_affine());
         powers_of_beta_terms.push(P::Term::new(vec![]));
         end_timer!(g_time);
 
         let gamma_g_time = start_timer!(|| "Generating powers of gamma * G");
-        let window_size = FixedBase::get_mul_window_size(max_degree + 2);
-        let gamma_g_table = FixedBase::get_window_table(scalar_bits, window_size, gamma_g);
         // Each element `i` of `powers_of_gamma_g` is a vector of length `max_degree+1`
         // containing `betas[i]^j \gamma G` for `j` from 1 to `max_degree+1` to support
         // up to `max_degree` queries
         let mut powers_of_gamma_g = vec![Vec::new(); num_vars];
+        let gamma_g_table = BatchMulPreprocessing::new(gamma_g, max_degree + 1);
+
         ark_std::cfg_iter_mut!(powers_of_gamma_g)
             .enumerate()
             .for_each(|(i, v)| {
-                let mut powers_of_beta = Vec::with_capacity(max_degree);
+                let mut powers_of_beta = Vec::with_capacity(max_degree + 1);
                 let mut cur = E::ScalarField::one();
                 for _ in 0..=max_degree {
                     cur *= &betas[i];
                     powers_of_beta.push(cur);
                 }
-                *v = FixedBase::msm::<E::G1>(
-                    scalar_bits,
-                    window_size,
-                    &gamma_g_table,
-                    &powers_of_beta,
-                );
+                *v = gamma_g_table.batch_mul(&powers_of_beta);
             });
         end_timer!(gamma_g_time);
 
-        let powers_of_g = E::G1::normalize_batch(&powers_of_g);
         let gamma_g = gamma_g.into_affine();
-        let powers_of_gamma_g = powers_of_gamma_g
-            .into_iter()
-            .map(|v| E::G1::normalize_batch(&v))
-            .collect();
         let beta_h: Vec<_> = betas.iter().map(|b| h.mul(b).into_affine()).collect();
         let h = h.into_affine();
         let prepared_h = h.into();
@@ -343,7 +332,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
+            Vec<Self::CommitmentState>,
         ),
         Self::Error,
     >
@@ -440,26 +429,26 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         // Compute random linear combinations of committed polynomials and randomness
         let mut p = P::zero();
         let mut r = Randomness::empty();
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, state) in labeled_polynomials.into_iter().zip(states) {
             Self::check_degrees_and_bounds(ck.supported_degree, &polynomial)?;
 
             // compute challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            let challenge_j = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             p += (challenge_j, polynomial.polynomial());
-            r += (challenge_j, rand);
+            r += (challenge_j, state);
         }
 
         let open_time = start_timer!(|| format!("Opening polynomial of degree {}", p.degree()));
@@ -538,7 +527,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -550,7 +539,7 @@ where
             Marlin::<E, S, P, Self>::accumulate_commitments_and_values(
                 commitments,
                 values,
-                opening_challenges,
+                sponge,
                 None,
             )?;
         // Compute both sides of the pairing equation
@@ -582,7 +571,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<P::Point, E::ScalarField>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -593,7 +582,7 @@ where
                 commitments,
                 query_set,
                 values,
-                opening_challenges,
+                sponge,
                 None,
             )?;
         let check_time =
@@ -660,13 +649,13 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         Marlin::<E, S, P, Self>::open_combinations(
@@ -675,8 +664,8 @@ where
             polynomials,
             commitments,
             query_set,
-            opening_challenges,
-            rands,
+            sponge,
+            states,
             rng,
         )
     }
@@ -690,7 +679,7 @@ where
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, E::ScalarField>,
         proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -703,7 +692,7 @@ where
             eqn_query_set,
             eqn_evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }

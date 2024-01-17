@@ -1,11 +1,6 @@
-use core::borrow::Borrow;
-
-use crate::utils::IOPTranscript;
 use crate::{utils::ceil_div, Error};
-
-use ark_crypto_primitives::{crh::CRHScheme, merkle_tree::Config};
+use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::{Field, PrimeField};
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::string::ToString;
 use ark_std::vec::Vec;
@@ -16,7 +11,8 @@ use num_traits::Float;
 #[cfg(test)]
 use {
     crate::to_bytes,
-    ark_std::{marker::PhantomData, rand::RngCore},
+    ark_crypto_primitives::crh::CRHScheme,
+    ark_std::{borrow::Borrow, marker::PhantomData, rand::RngCore},
     digest::Digest,
 };
 
@@ -113,35 +109,18 @@ pub(crate) fn get_num_bytes(n: usize) -> usize {
     ceil_div((usize::BITS - n.leading_zeros()) as usize, 8)
 }
 
-#[inline]
-pub(crate) fn hash_column<F, C, H>(array: Vec<F>, params: &H::Parameters) -> Result<C::Leaf, Error>
-where
-    F: PrimeField,
-    C: Config,
-    H: CRHScheme,
-    Vec<F>: Borrow<<H as CRHScheme>::Input>,
-    C::Leaf: Sized,
-    H::Output: Into<C::Leaf>,
-{
-    H::evaluate(params, array)
-        .map_err(|_| Error::HashingError)
-        .map(|x| x.into())
-}
-
 /// Generate `t` (not necessarily distinct) random points in `[0, n)`
 /// using the current state of the `transcript`.
-pub(crate) fn get_indices_from_transcript<F: PrimeField>(
+pub(crate) fn get_indices_from_sponge<S: CryptographicSponge>(
     n: usize,
     t: usize,
-    transcript: &mut IOPTranscript<F>,
+    sponge: &mut S,
 ) -> Result<Vec<usize>, Error> {
     let bytes_to_squeeze = get_num_bytes(n);
     let mut indices = Vec::with_capacity(t);
     for _ in 0..t {
-        let mut bytes: Vec<u8> = vec![0; bytes_to_squeeze];
-        transcript
-            .get_and_append_byte_challenge(b"i", &mut bytes)
-            .map_err(|_| Error::TranscriptError)?;
+        let bytes = sponge.squeeze_bytes(bytes_to_squeeze);
+        sponge.absorb(&bytes);
 
         // get the usize from Vec<u8>:
         let ind = bytes.iter().fold(0, |acc, &x| (acc << 8) + x as usize);
