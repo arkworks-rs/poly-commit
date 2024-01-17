@@ -59,7 +59,7 @@ impl<E: Pairing> MultilinearPC<E> {
         }
 
         let g_table = BatchMulPreprocessing::new(g, num_vars);
-        let pp_g = g.batch_mul_with_preprocessing(&pp_powers, &g_table);
+        let pp_g = g_table.batch_mul(&pp_powers);
         let pp_h = h.batch_mul(&pp_powers);
         let mut start = 0;
         for i in 0..num_vars {
@@ -73,7 +73,7 @@ impl<E: Pairing> MultilinearPC<E> {
 
         // uncomment to measure the time for calculating vp
         // let vp_generation_timer = start_timer!(|| "VP generation");
-        let g_mask = g.batch_mul_with_preprocessing(&t, &g_table);
+        let g_mask = g_table.batch_mul(&t);
         // end_timer!(vp_generation_timer);
 
         UniversalParams {
