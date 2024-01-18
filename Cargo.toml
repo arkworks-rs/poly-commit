@@ -36,6 +36,6 @@ ark-poly = { git = "https://github.com/arkworks-rs/algebra/" }
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std/" }
 
-ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves/" }
-ark-bls12-381 = { git = "https://github.com/arkworks-rs/curves/" }
-ark-bn254 = { git = "https://github.com/arkworks-rs/curves/" }
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-bls12-381 = { git = "https://github.com/arkworks-rs/algebra/" }
+ark-bn254 = { git = "https://github.com/arkworks-rs/algebra/" }

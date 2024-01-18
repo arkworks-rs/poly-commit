@@ -16,14 +16,17 @@ use ark_poly_commit::{LabeledPolynomial, PolynomialCommitment};
 pub use criterion::*;
 pub use paste::paste;
 
-/// Measure the time cost of {commit/open/verify} across a range of num_vars
+/// Measure the time cost of `method` (i.e., commit/open/verify) of a
+/// multilinear PCS for all `num_vars` specified in `nv_list`.
+/// `rand_poly` is a function that outputs a random multilinear polynomial.
+/// `rand_point` is a function that outputs a random point in the domain of polynomial.
 pub fn bench_pcs_method<
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
 >(
     c: &mut Criterion,
-    range: Vec<usize>,
+    nv_list: Vec<usize>,
     msg: &str,
     method: impl Fn(
         &PCS::CommitterKey,
@@ -38,7 +41,7 @@ pub fn bench_pcs_method<
     let mut group = c.benchmark_group(msg);
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
-    for num_vars in range {
+    for num_vars in nv_list {
         let pp = PCS::setup(num_vars, Some(num_vars), rng).unwrap();
         let (ck, vk) = PCS::trim(&pp, num_vars, num_vars, None).unwrap();
 

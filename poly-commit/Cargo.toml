@@ -16,7 +16,6 @@ ark-poly = {version = "^0.4.0", default-features = false }
 ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
 ark-std = { version = "^0.4.0", default-features = false }
 blake2 = { version = "0.10", default-features = false }
-merlin = { version = "3.0.0", default-features = false }
 rand = { version = "0.8.0", optional = true }
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
