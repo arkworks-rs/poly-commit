@@ -23,8 +23,8 @@ where
         sec_param: usize,
         rho_inv: usize,
         check_well_formedness: bool,
-        leaf_hash_params: LeafParam<C>,
-        two_to_one_params: TwoToOneParam<C>,
+        leaf_hash_param: LeafParam<C>,
+        two_to_one_hash_param: TwoToOneParam<C>,
         col_hash_params: H::Parameters,
     ) -> Self {
         Self {
@@ -32,8 +32,8 @@ where
             sec_param,
             rho_inv,
             check_well_formedness,
-            leaf_hash_params,
-            two_to_one_params,
+            leaf_hash_param,
+            two_to_one_hash_param,
             col_hash_params,
         }
     }
@@ -127,12 +127,14 @@ where
         (n, m)
     }
 
-    fn leaf_hash_params(&self) -> &<<C as Config>::LeafHash as CRHScheme>::Parameters {
-        &self.leaf_hash_params
+    fn leaf_hash_param(&self) -> &<<C as Config>::LeafHash as CRHScheme>::Parameters {
+        &self.leaf_hash_param
     }
 
-    fn two_to_one_params(&self) -> &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters {
-        &self.two_to_one_params
+    fn two_to_one_hash_param(
+        &self,
+    ) -> &<<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters {
+        &self.two_to_one_hash_param
     }
 
     fn col_hash_params(&self) -> &<H as CRHScheme>::Parameters {

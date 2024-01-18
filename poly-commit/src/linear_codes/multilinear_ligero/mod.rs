@@ -47,16 +47,16 @@ where
         _max_degree: usize,
         _num_vars: Option<usize>,
         _rng: &mut R,
-        leaf_hash_params: <<C as Config>::LeafHash as CRHScheme>::Parameters,
-        two_to_one_params: <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
+        leaf_hash_param: <<C as Config>::LeafHash as CRHScheme>::Parameters,
+        two_to_one_hash_param: <<C as Config>::TwoToOneHash as TwoToOneCRHScheme>::Parameters,
         col_hash_params: H::Parameters,
     ) -> Self::LinCodePCParams {
         Self::LinCodePCParams::new(
             128,
             2,
             true,
-            leaf_hash_params,
-            two_to_one_params,
+            leaf_hash_param,
+            two_to_one_hash_param,
             col_hash_params,
         )
     }

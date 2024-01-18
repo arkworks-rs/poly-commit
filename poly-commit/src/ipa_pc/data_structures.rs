@@ -146,7 +146,8 @@ pub struct Randomness<G: AffineRepr> {
     pub shifted_rand: Option<G::ScalarField>,
 }
 
-impl<G: AffineRepr> PCRandomness for Randomness<G> {
+impl<G: AffineRepr> PCCommitmentState for Randomness<G> {
+    type Randomness = Self;
     fn empty() -> Self {
         Self {
             rand: G::ScalarField::zero(),

@@ -70,9 +70,12 @@ pub trait PCPreparedCommitment<UNPREPARED: PCCommitment>: Clone {
     fn prepare(comm: &UNPREPARED) -> Self;
 }
 
-/// Defines the minimal interface of commitment randomness for any polynomial
-/// commitment scheme.
-pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
+/// Defines the minimal interface of commitment state for any polynomial
+/// commitment scheme. It might be randomness etc.
+pub trait PCCommitmentState: Clone + CanonicalSerialize + CanonicalDeserialize {
+    /// This is the type of `Randomness` that the `rand` method returns
+    type Randomness: Clone + CanonicalSerialize + CanonicalDeserialize;
+
     /// Outputs empty randomness that does not hide the commitment.
     fn empty() -> Self;
 
@@ -86,9 +89,8 @@ pub trait PCRandomness: Clone + CanonicalSerialize + CanonicalDeserialize {
         has_degree_bound: bool,
         num_vars: Option<usize>,
         rng: &mut R,
-    ) -> Self;
+    ) -> Self::Randomness;
 }
-
 /// A proof of satisfaction of linear combinations.
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BatchLCProof<F: PrimeField, T: Clone + CanonicalSerialize + CanonicalDeserialize> {

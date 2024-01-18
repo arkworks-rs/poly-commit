@@ -5,7 +5,6 @@ mod tests {
     use crate::linear_codes::LinearCodePCS;
     use crate::utils::test_sponge;
     use crate::{
-        challenge::ChallengeGenerator,
         linear_codes::{LigeroPCParams, PolynomialCommitment, UnivariateLigero},
         LabeledPolynomial,
     };
@@ -83,8 +82,8 @@ mod tests {
         let degree = 4;
         let mut rng = &mut test_rng();
         // just to make sure we have the right degree given the FFT domain for our field
-        let leaf_hash_params = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
-        let two_to_one_params = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
+        let leaf_hash_param = <LeafH as CRHScheme>::setup(&mut rng).unwrap();
+        let two_to_one_hash_param = <CompressH as TwoToOneCRHScheme>::setup(&mut rng)
             .unwrap()
             .clone();
         let col_hash_params = <ColHasher<Fr, Blake2s256> as CRHScheme>::setup(&mut rng).unwrap();
@@ -94,8 +93,8 @@ mod tests {
             128,
             4,
             check_well_formedness,
-            leaf_hash_params,
-            two_to_one_params,
+            leaf_hash_param,
+            two_to_one_hash_param,
             col_hash_params,
         );
 
@@ -116,29 +115,19 @@ mod tests {
 
         let value = labeled_poly.evaluate(&point);
 
-        let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
-            ChallengeGenerator::new_univariate(&mut test_sponge);
-
         let proof = LigeroPCS::open(
             &ck,
             &[labeled_poly],
             &c,
             &point,
-            &mut (challenge_generator.clone()),
+            &mut (test_sponge.clone()),
             &rands,
             None,
         )
         .unwrap();
-        assert!(LigeroPCS::check(
-            &vk,
-            &c,
-            &point,
-            [value],
-            &proof,
-            &mut challenge_generator,
-            None
-        )
-        .unwrap());
+        assert!(
+            LigeroPCS::check(&vk, &c, &point, [value], &proof, &mut test_sponge, None).unwrap()
+        );
     }
 
     fn rand_point<F: Field>(_: Option<usize>, rng: &mut ChaCha20Rng) -> F {
