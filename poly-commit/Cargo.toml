@@ -23,7 +23,6 @@ hashbrown = { version = "0.14", default-features = false, optional = true }
 digest = "0.10"
 derivative = { version = "2", features = [ "use_core" ] }
 rayon = { version = "1", optional = true }
-merlin = { version = "3.0.0", default-features = false }
 
 [[bench]]
 name = "ipa_times"
