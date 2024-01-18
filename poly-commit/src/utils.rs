@@ -1,17 +1,12 @@
-use core::marker::PhantomData;
+use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::vec::Vec;
 
 #[cfg(feature = "parallel")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     prelude::IndexedParallelIterator,
 };
-
-use ark_ff::{Field, PrimeField};
-use ark_serialize::CanonicalSerialize;
-use ark_std::vec::Vec;
-use merlin::Transcript;
-
-use crate::Error;
 
 /// Takes as input a struct, and converts them to a series of bytes. All traits
 /// that implement `CanonicalSerialize` can be automatically converted to bytes
@@ -31,7 +26,8 @@ pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
     (x + y - 1) / y
 }
 
-#[derive(Debug)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub(crate) struct Matrix<F: Field> {
     pub(crate) n: usize,
     pub(crate) m: usize,
@@ -108,69 +104,11 @@ pub(crate) fn vector_sum<F: Field>(v1: &[F], v2: &[F]) -> Vec<F> {
         .collect()
 }
 
-/// The following struct is taken from jellyfish repository. Once they change
-/// their dependency on `crypto-primitive`, we use their crate instead of
-/// a copy-paste. We needed the newer `crypto-primitive` for serializing.
-#[derive(Clone)]
-pub(crate) struct IOPTranscript<F: PrimeField> {
-    transcript: Transcript,
-    is_empty: bool,
-    #[doc(hidden)]
-    phantom: PhantomData<F>,
-}
-
-// TODO: merge this with jf_plonk::transcript
-impl<F: PrimeField> IOPTranscript<F> {
-    /// Create a new IOP transcript.
-    pub(crate) fn new(label: &'static [u8]) -> Self {
-        Self {
-            transcript: Transcript::new(label),
-            is_empty: true,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Append the message to the transcript.
-    pub(crate) fn append_message(&mut self, label: &'static [u8], msg: &[u8]) -> Result<(), Error> {
-        self.transcript.append_message(label, msg);
-        self.is_empty = false;
-        Ok(())
-    }
-
-    /// Append the message to the transcript.
-    pub(crate) fn append_serializable_element<S: CanonicalSerialize>(
-        &mut self,
-        label: &'static [u8],
-        group_elem: &S,
-    ) -> Result<(), Error> {
-        self.append_message(
-            label,
-            &to_bytes!(group_elem).map_err(|_| Error::TranscriptError)?,
-        )
-    }
-
-    /// Generate the challenge from the current transcript
-    /// and append it to the transcript.
-    ///
-    /// The output field element is statistical uniform as long
-    /// as the field has a size less than 2^384.
-    pub(crate) fn get_and_append_challenge(&mut self, label: &'static [u8]) -> Result<F, Error> {
-        //  we need to reject when transcript is empty
-        if self.is_empty {
-            return Err(Error::TranscriptError);
-        }
-
-        let mut buf = [0u8; 64];
-        self.transcript.challenge_bytes(label, &mut buf);
-        let challenge = F::from_le_bytes_mod_order(&buf);
-        self.append_serializable_element(label, &challenge)?;
-        Ok(challenge)
-    }
-}
-
 // TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
 #[cfg(test)]
 use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
+#[cfg(test)]
+use ark_ff::PrimeField;
 
 #[cfg(test)]
 pub(crate) fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {

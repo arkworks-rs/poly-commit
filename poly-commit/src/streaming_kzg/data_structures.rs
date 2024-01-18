@@ -141,7 +141,7 @@ where
 
 /// Stream implementation of foleded polynomial.
 #[derive(Clone, Copy)]
-pub struct FoldedPolynomialStream<'a, F, S>(FoldedPolynomialTree<'a, F, S>, usize);
+pub struct FoldedPolynomialStream<'a, F, S>(FoldedPolynomialTree<'a, F, S>);
 /// Iterator implementation of foleded polynomial.
 pub struct FoldedPolynomialStreamIter<'a, F, I> {
     challenges: &'a [F],
@@ -158,8 +158,7 @@ where
     /// Initialize a new folded polynomial stream.
     pub fn new(coefficients: &'a S, challenges: &'a [F]) -> Self {
         let tree = FoldedPolynomialTree::new(coefficients, challenges);
-        let len = challenges.len();
-        Self(tree, len)
+        Self(tree)
     }
 }
 
@@ -241,7 +240,7 @@ fn test_folded_polynomial() {
     let challenges = vec![F::one(), two];
     let coefficients_stream = coefficients.as_slice();
     let foldstream = FoldedPolynomialTree::new(&coefficients_stream, challenges.as_slice());
-    let fold_stream = FoldedPolynomialStream(foldstream, 2);
+    let fold_stream = FoldedPolynomialStream(foldstream);
     assert_eq!(fold_stream.len(), 1);
     assert_eq!(
         fold_stream.iter().next(),
@@ -253,7 +252,7 @@ fn test_folded_polynomial() {
     let challenges = vec![F::one(); 4];
     let coefficients_stream = coefficients.as_slice();
     let foldstream = FoldedPolynomialTree::new(&coefficients_stream, challenges.as_slice());
-    let fold_stream = FoldedPolynomialStream(foldstream, 4).iter();
+    let fold_stream = FoldedPolynomialStream(foldstream).iter();
     assert_eq!(fold_stream.last(), Some(coefficients.iter().sum()));
 }
 

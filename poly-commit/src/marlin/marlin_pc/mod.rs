@@ -2,7 +2,7 @@ use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet, ToString, Vec};
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCRandomness, PCUniversalParams, PolynomialCommitment};
+use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
@@ -12,7 +12,6 @@ use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
 
 mod data_structures;
-use crate::challenge::ChallengeGenerator;
 use ark_crypto_primitives::sponge::CryptographicSponge;
 pub use data_structures::*;
 
@@ -66,7 +65,7 @@ where
     type CommitterKey = CommitterKey<E>;
     type VerifierKey = VerifierKey<E>;
     type Commitment = Commitment<E>;
-    type Randomness = Randomness<E::ScalarField, P>;
+    type CommitmentState = Randomness<E::ScalarField, P>;
     type Proof = kzg10::Proof<E>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -180,7 +179,7 @@ where
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
+            Vec<Self::CommitmentState>,
         ),
         Self::Error,
     >
@@ -191,7 +190,7 @@ where
         let commit_time = start_timer!(|| "Committing to polynomials");
 
         let mut commitments = Vec::new();
-        let mut randomness = Vec::new();
+        let mut states = Vec::new();
 
         for p in polynomials {
             let label = p.label();
@@ -232,17 +231,17 @@ where
             };
 
             let comm = Commitment { comm, shifted_comm };
-            let rand = Randomness { rand, shifted_rand };
+            let state = Randomness { rand, shifted_rand };
             commitments.push(LabeledCommitment::new(
                 label.to_string(),
                 comm,
                 degree_bound,
             ));
-            randomness.push(rand);
+            states.push(state);
             end_timer!(commit_time);
         }
         end_timer!(commit_time);
-        Ok((commitments, randomness))
+        Ok((commitments, states))
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
@@ -251,13 +250,13 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         _commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         let mut p = P::zero();
@@ -267,7 +266,7 @@ where
         let mut shifted_r_witness = P::zero();
 
         let mut enforce_degree_bound = false;
-        for (polynomial, rand) in labeled_polynomials.into_iter().zip(rands) {
+        for (polynomial, rand) in labeled_polynomials.into_iter().zip(states) {
             let degree_bound = polynomial.degree_bound();
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
@@ -283,7 +282,7 @@ where
             )?;
 
             // compute next challenges challenge^j and challenge^{j+1}.
-            let challenge_j = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+            let challenge_j = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
             assert_eq!(degree_bound.is_some(), rand.shifted_rand.is_some());
 
@@ -299,7 +298,7 @@ where
                         *point,
                         &shifted_rand,
                     )?;
-                let challenge_j_1 = opening_challenges.try_next_challenge_of_size(CHALLENGE_SIZE);
+                let challenge_j_1 = sponge.squeeze_field_elements_with_sizes(&[CHALLENGE_SIZE])[0];
 
                 let shifted_witness = shift_polynomial(ck, &witness, degree_bound);
 
@@ -347,7 +346,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
         proof: &Self::Proof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -358,7 +357,7 @@ where
             Marlin::<E, S, P, Self>::accumulate_commitments_and_values(
                 commitments,
                 values,
-                opening_challenges,
+                sponge,
                 Some(vk),
             )?;
         let combined_comm = kzg10::Commitment(combined_comm.into());
@@ -373,7 +372,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<E::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -384,7 +383,7 @@ where
                 commitments,
                 query_set,
                 values,
-                opening_challenges,
+                sponge,
                 Some(vk),
             )?;
         assert_eq!(proof.len(), combined_queries.len());
@@ -407,13 +406,13 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, Self::BatchProof>, Self::Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         Marlin::<E, S, P, Self>::open_combinations(
@@ -422,8 +421,8 @@ where
             polynomials,
             commitments,
             query_set,
-            opening_challenges,
-            rands,
+            sponge,
+            states,
             rng,
         )
     }
@@ -437,7 +436,7 @@ where
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<E::ScalarField, P::Point>,
         proof: &BatchLCProof<E::ScalarField, Self::BatchProof>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
+        sponge: &mut S,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -450,7 +449,7 @@ where
             query_set,
             evaluations,
             proof,
-            opening_challenges,
+            sponge,
             rng,
         )
     }
@@ -462,19 +461,19 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E>>>,
         query_set: &QuerySet<P::Point>,
-        opening_challenges: &mut ChallengeGenerator<E::ScalarField, S>,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Vec<kzg10::Proof<E>>, Error>
     where
         P: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         Self::Commitment: 'a,
     {
         let rng = &mut crate::optional_rng::OptionalRng(rng);
         let poly_rand_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
-            .zip(rands)
+            .zip(states)
             .zip(commitments.into_iter())
             .map(|((poly, r), comm)| (poly.label(), (poly, r, comm)))
             .collect();
@@ -497,7 +496,7 @@ where
         let mut proofs = Vec::new();
         for (_point_label, (point, labels)) in query_to_labels_map.into_iter() {
             let mut query_polys: Vec<&'a LabeledPolynomial<_, _>> = Vec::new();
-            let mut query_rands: Vec<&'a Self::Randomness> = Vec::new();
+            let mut query_states: Vec<&'a Self::CommitmentState> = Vec::new();
             let mut query_comms: Vec<&'a LabeledCommitment<Self::Commitment>> = Vec::new();
 
             for label in labels {
@@ -507,7 +506,7 @@ where
                     })?;
 
                 query_polys.push(polynomial);
-                query_rands.push(rand);
+                query_states.push(rand);
                 query_comms.push(comm);
             }
 
@@ -517,8 +516,8 @@ where
                 query_polys,
                 query_comms,
                 point,
-                opening_challenges,
-                query_rands,
+                sponge,
+                query_states,
                 Some(rng),
             )?;
 

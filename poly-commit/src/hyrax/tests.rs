@@ -1,3 +1,7 @@
+use crate::hyrax::HyraxPC;
+use crate::tests::*;
+use crate::utils::test_sponge;
+use crate::{LabeledPolynomial, PolynomialCommitment};
 use ark_bls12_377::G1Affine;
 use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
 use ark_ec::AffineRepr;
@@ -7,24 +11,16 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_std::test_rng;
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
-use crate::challenge::ChallengeGenerator;
-use crate::hyrax::HyraxPC;
-
-use crate::utils::test_sponge;
-use crate::{LabeledPolynomial, PolynomialCommitment};
-
-use crate::tests::*;
-
 // The test structure is largely taken from the multilinear_ligero module
 // inside this crate
 
 // ****************** types ******************
 
-type Fr = <EdwardsAffine as AffineRepr>::ScalarField;
-type Hyrax381 = HyraxPC<EdwardsAffine, DenseMultilinearExtension<Fr>>;
-
 type Fq = <G1Affine as AffineRepr>::ScalarField;
-type Hyrax377 = HyraxPC<G1Affine, DenseMultilinearExtension<Fq>>;
+type Hyrax377 = HyraxPC<G1Affine, DenseMultilinearExtension<Fq>, PoseidonSponge<Fq>>;
+
+type Fr = <EdwardsAffine as AffineRepr>::ScalarField;
+type Hyrax381 = HyraxPC<EdwardsAffine, DenseMultilinearExtension<Fr>, PoseidonSponge<Fr>>;
 
 // ******** auxiliary test functions ********
 
@@ -84,15 +80,13 @@ fn test_hyrax_construction() {
 
     // Dummy argument
     let mut test_sponge = test_sponge::<Fr>();
-    let mut challenge_generator: ChallengeGenerator<Fr, PoseidonSponge<Fr>> =
-        ChallengeGenerator::new_univariate(&mut test_sponge);
 
     let proof = Hyrax381::open(
         &ck,
         &[l_poly],
         &c,
         &point,
-        &mut (challenge_generator.clone()),
+        &mut (test_sponge.clone()),
         &rands,
         Some(chacha),
     )
@@ -104,7 +98,7 @@ fn test_hyrax_construction() {
         &point,
         [value],
         &proof,
-        &mut challenge_generator,
+        &mut test_sponge,
         Some(chacha),
     )
     .unwrap());
@@ -112,35 +106,35 @@ fn test_hyrax_construction() {
 
 #[test]
 fn hyrax_single_poly_test() {
-    single_poly_test::<_, _, Hyrax381, _>(
-        Some(10),
-        rand_poly::<Fr>,
-        rand_point::<Fr>,
-        poseidon_sponge_for_test,
-    )
-    .expect("test failed for bls12-381");
     single_poly_test::<_, _, Hyrax377, _>(
         Some(10),
-        rand_poly::<Fq>,
-        rand_point::<Fq>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
+    single_poly_test::<_, _, Hyrax381, _>(
+        Some(10),
+        rand_poly,
+        rand_point,
+        poseidon_sponge_for_test,
+    )
+    .expect("test failed for bls12-381");
 }
 
 #[test]
 fn hyrax_constant_poly_test() {
     single_poly_test::<_, _, Hyrax377, _>(
         Some(0),
-        constant_poly::<Fq>,
-        rand_point::<Fq>,
+        constant_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
     single_poly_test::<_, _, Hyrax381, _>(
         Some(0),
-        constant_poly::<Fr>,
-        rand_point::<Fr>,
+        constant_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-381");
@@ -150,15 +144,15 @@ fn hyrax_constant_poly_test() {
 fn hyrax_full_end_to_end_test() {
     full_end_to_end_test::<_, _, Hyrax377, _>(
         Some(8),
-        rand_poly::<Fq>,
-        rand_point::<Fq>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
     full_end_to_end_test::<_, _, Hyrax381, _>(
         Some(10),
-        rand_poly::<Fr>,
-        rand_point::<Fr>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-381");
@@ -168,15 +162,15 @@ fn hyrax_full_end_to_end_test() {
 fn hyrax_single_equation_test() {
     single_equation_test::<_, _, Hyrax377, _>(
         Some(6),
-        rand_poly::<Fq>,
-        rand_point::<Fq>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
     single_equation_test::<_, _, Hyrax381, _>(
         Some(6),
-        rand_poly::<Fr>,
-        rand_point::<Fr>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-381");
@@ -186,15 +180,15 @@ fn hyrax_single_equation_test() {
 fn hyrax_two_equation_test() {
     two_equation_test::<_, _, Hyrax377, _>(
         Some(10),
-        rand_poly::<Fq>,
-        rand_point::<Fq>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
     two_equation_test::<_, _, Hyrax381, _>(
         Some(10),
-        rand_poly::<Fr>,
-        rand_point::<Fr>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-381");
@@ -204,15 +198,15 @@ fn hyrax_two_equation_test() {
 fn hyrax_full_end_to_end_equation_test() {
     full_end_to_end_equation_test::<_, _, Hyrax377, _>(
         Some(8),
-        rand_poly::<Fq>,
-        rand_point::<Fq>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-377");
     full_end_to_end_equation_test::<_, _, Hyrax381, _>(
         Some(8),
-        rand_poly::<Fr>,
-        rand_point::<Fr>,
+        rand_poly,
+        rand_point,
         poseidon_sponge_for_test,
     )
     .expect("test failed for bls12-381");

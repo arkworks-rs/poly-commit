@@ -57,7 +57,7 @@ This trait defines the interface for a polynomial commitment scheme. It is recom
 // In this example, we will commit to a single polynomial, open it first at one point, and then batched at two points, and finally verify the proofs.
 // We will use the KZG10 polynomial commitment scheme, following the approach from Marlin.
 
-use ark_poly_commit::{Polynomial, marlin_pc::MarlinKZG10, LabeledPolynomial, PolynomialCommitment, QuerySet, Evaluations, challenge::ChallengeGenerator};
+use ark_poly_commit::{Polynomial, marlin_pc::MarlinKZG10, LabeledPolynomial, PolynomialCommitment, QuerySet, Evaluations};
 use ark_bls12_377::Bls12_377;
 use ark_crypto_primitives::sponge::poseidon::{PoseidonSponge, PoseidonConfig};
 use ark_crypto_primitives::sponge::CryptographicSponge;
@@ -128,17 +128,15 @@ let (ck, vk) = PCS::trim(&pp, degree, 2, Some(&[degree])).unwrap();
 
 // 3. PolynomialCommitment::commit
 // The prover commits to the polynomial using their committer key `ck`.
-let (comms, rands) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
-
-let challenge_generator: ChallengeGenerator<<Bls12_377 as Pairing>::ScalarField, Sponge_Bls12_377> = ChallengeGenerator::new_univariate(&mut test_sponge);
+let (comms, states) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap(); 
 
 // 4a. PolynomialCommitment::open
 // Opening proof at a single point.
-let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (challenge_generator.clone()), &rands, None).unwrap(); 
+let proof_single = PCS::open(&ck, [&labeled_poly], &comms, &point_1, &mut (test_sponge.clone()), &states, None).unwrap(); 
 
 // 5a. PolynomialCommitment::check
 // Verifying the proof at a single point, given the commitment, the point, the claimed evaluation, and the proof.
-assert!(PCS::check(&vk, &comms, &point_1, [secret_poly.evaluate(&point_1)], &proof_single, &mut (challenge_generator.clone()), Some(rng)).unwrap()); 
+assert!(PCS::check(&vk, &comms, &point_1, [secret_poly.evaluate(&point_1)], &proof_single, &mut (test_sponge.clone()), Some(rng)).unwrap()); 
 
 let mut query_set = QuerySet::new();
 let mut values = Evaluations::new();
@@ -155,8 +153,8 @@ let proof_batched = PCS::batch_open(
    [&labeled_poly],
    &comms,
    &query_set,
-   &mut (challenge_generator.clone()),
-   &rands,
+   &mut (test_sponge.clone()),
+   &states,
    Some(rng),
 ).unwrap();
 
@@ -167,7 +165,7 @@ assert!(PCS::batch_check(
    &query_set,
    &values,
    &proof_batched,
-   &mut (challenge_generator.clone()),
+   &mut (test_sponge.clone()),
    rng,
 ).unwrap());
 ```

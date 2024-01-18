@@ -1,3 +1,4 @@
+use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
 use ark_pcs_bench_templates::*;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 
@@ -8,7 +9,7 @@ use ark_poly_commit::hyrax::HyraxPC;
 use rand_chacha::ChaCha20Rng;
 
 // Hyrax PCS over BN254
-type Hyrax254 = HyraxPC<G1Affine, DenseMultilinearExtension<Fr>>;
+type Hyrax254 = HyraxPC<G1Affine, DenseMultilinearExtension<Fr>, PoseidonSponge<Fr>>;
 
 fn rand_poly_hyrax<F: PrimeField>(
     num_vars: usize,

@@ -1,30 +1,26 @@
-mod data_structures;
-mod utils;
-pub use data_structures::*;
-
-#[cfg(test)]
-mod tests;
-
-use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
+use crate::hyrax::utils::tensor_prime;
+use crate::to_bytes;
+use crate::utils::{inner_product, scalar_by_vector, vector_sum, Matrix};
+use crate::{
+    hyrax::utils::flat_to_matrix_column_major, Error, LabeledCommitment, LabeledPolynomial,
+    PolynomialCommitment,
+};
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::MultilinearExtension;
-use ark_std::{rand::RngCore, string::ToString, vec::Vec, UniformRand};
+use ark_std::{marker::PhantomData, rand::RngCore, string::ToString, vec::Vec, UniformRand};
 use blake2::Blake2s256;
-use core::marker::PhantomData;
 use digest::Digest;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-use crate::hyrax::utils::tensor_prime;
-use crate::utils::{inner_product, scalar_by_vector, vector_sum, IOPTranscript, Matrix};
-
-use crate::{
-    challenge::ChallengeGenerator, hyrax::utils::flat_to_matrix_column_major, Error,
-    LabeledCommitment, LabeledPolynomial, PolynomialCommitment,
-};
-
+mod data_structures;
+pub use data_structures::*;
+#[cfg(test)]
+mod tests;
+mod utils;
 /// String of bytes used to seed the randomness during the setup function.
 /// Note that the latter should never be used in production environments.
 pub const PROTOCOL_NAME: &'static [u8] = b"Hyrax protocol";
@@ -70,11 +66,18 @@ pub struct HyraxPC<
     G: AffineRepr,
     // A polynomial type representing multilinear polynomials
     P: MultilinearExtension<G::ScalarField>,
+    // The sponge used in the protocol as random oracle
+    S: CryptographicSponge,
 > {
-    _phantom: PhantomData<(G, P)>,
+    _phantom: PhantomData<(G, P, S)>,
 }
 
-impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>> HyraxPC<G, P> {
+impl<G, P, S> HyraxPC<G, P, S>
+where
+    G: AffineRepr,
+    P: MultilinearExtension<G::ScalarField>,
+    S: CryptographicSponge,
+{
     /// Pedersen commitment to a vector of scalars as described in appendix A.1
     /// of the reference article.
     /// The caller must either directly pass hiding exponent `r` inside Some,
@@ -116,19 +119,18 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>> HyraxPC<G, P> {
     }
 }
 
-impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
-    PolynomialCommitment<
-        G::ScalarField,
-        P,
-        // Dummy sponge - required by the trait, not used in this implementation
-        PoseidonSponge<G::ScalarField>,
-    > for HyraxPC<G, P>
+impl<G, P, S> PolynomialCommitment<G::ScalarField, P, S> for HyraxPC<G, P, S>
+where
+    G: AffineRepr,
+    G::ScalarField: Absorb,
+    P: MultilinearExtension<G::ScalarField>,
+    S: CryptographicSponge,
 {
     type UniversalParams = HyraxUniversalParams<G>;
     type CommitterKey = HyraxCommitterKey<G>;
     type VerifierKey = HyraxVerifierKey<G>;
     type Commitment = HyraxCommitment<G>;
-    type Randomness = HyraxRandomness<G::ScalarField>;
+    type CommitmentState = HyraxCommitmentState<G::ScalarField>;
     type Proof = Vec<HyraxProof<G>>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
@@ -222,7 +224,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
     ) -> Result<
         (
             Vec<LabeledCommitment<Self::Commitment>>,
-            Vec<Self::Randomness>,
+            Vec<Self::CommitmentState>,
         ),
         Self::Error,
     >
@@ -230,7 +232,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
         P: 'a,
     {
         let mut coms = Vec::new();
-        let mut rands = Vec::new();
+        let mut states = Vec::new();
 
         #[cfg(not(feature = "parallel"))]
         let rng_inner = rng.expect("Committing to polynomials requires a random generator");
@@ -270,10 +272,13 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
             let l_comm = LabeledCommitment::new(label.to_string(), com, Some(1));
 
             coms.push(l_comm);
-            rands.push(com_rands);
+            states.push(HyraxCommitmentState {
+                randomness: com_rands,
+                mat: Matrix::new_from_rows(m),
+            });
         }
 
-        Ok((coms, rands))
+        Ok((coms, states))
     }
 
     /// Opens a list of polynomial commitments at a desired point. This
@@ -292,25 +297,18 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
     /// polynomial.
     /// - The number of variables of a polynomial doesn't match that of the
     /// point.
-    ///
-    /// # Disregarded arguments
-    /// - `opening_challenges`
     fn open<'a>(
         ck: &Self::CommitterKey,
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        // Not used and not generic on the cryptographic sponge S
-        _opening_challenges: &mut ChallengeGenerator<
-            G::ScalarField,
-            PoseidonSponge<G::ScalarField>,
-        >,
-        rands: impl IntoIterator<Item = &'a Self::Randomness>,
+        sponge: &mut S,
+        states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
     where
         Self::Commitment: 'a,
-        Self::Randomness: 'a,
+        Self::CommitmentState: 'a,
         P: 'a,
     {
         let n = point.len();
@@ -339,9 +337,9 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
 
         let rng_inner = rng.expect("Opening polynomials requires randomness");
 
-        for (l_poly, (l_com, randomness)) in labeled_polynomials
+        for (l_poly, (l_com, state)) in labeled_polynomials
             .into_iter()
-            .zip(commitments.into_iter().zip(rands.into_iter()))
+            .zip(commitments.into_iter().zip(states.into_iter()))
         {
             let label = l_poly.label();
             if label != l_com.label() {
@@ -361,28 +359,24 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
                 });
             }
 
-            // Initialising the transcript
-            let mut transcript: IOPTranscript<G::ScalarField> = IOPTranscript::new(b"transcript");
-
             // Absorbing public parameters
-            transcript.append_serializable_element(b"public parameters", ck)?;
+            sponge.absorb(&to_bytes!(ck).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
-            transcript.append_serializable_element(b"commitment", &com.row_coms)?;
+            sponge.absorb(&to_bytes!(&com.row_coms).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the point
-            transcript.append_serializable_element(b"point", point)?;
+            sponge.absorb(point);
 
             // Commiting to the matrix formed by the polynomial coefficients
-            let t_aux = flat_to_matrix_column_major(&poly.to_evaluations(), dim, dim);
-            let t = Matrix::new_from_rows(t_aux);
+            let t = &state.mat;
 
             let lt = t.row_mul(&l);
 
             // t_prime coincides witht he Pedersen commitment to lt with the
             // randomnes r_lt computed here
             let r_lt = cfg_iter!(l)
-                .zip(cfg_iter!(randomness))
+                .zip(cfg_iter!(state.randomness))
                 .map(|(l, r)| *l * r)
                 .sum::<G::ScalarField>();
 
@@ -406,15 +400,15 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
             let (com_b, r_b) = Self::pedersen_commit(ck, &[b], None, Some(rng_inner));
 
             // Absorbing the commitment to the evaluation
-            transcript.append_serializable_element(b"com_eval", &com_eval)?;
+            sponge.absorb(&to_bytes!(&com_eval).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the two auxiliary commitments
-            transcript.append_serializable_element(b"com_d", &com_d)?;
-            transcript.append_serializable_element(b"com_b", &com_b)?;
+            sponge.absorb(&to_bytes!(&com_d).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&to_bytes!(&com_b).map_err(|_| Error::TranscriptError)?);
 
             // Receive the random challenge c from the verifier, i.e. squeeze
             // it from the transcript.
-            let c = transcript.get_and_append_challenge(b"c").unwrap();
+            let c = sponge.squeeze_field_elements(1)[0];
 
             let z = vector_sum(&d, &scalar_by_vector(c, &lt));
             let z_d = c * r_lt + r_d;
@@ -442,7 +436,6 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
     /// point (specifically, commitment length should be 2^(point-length/2)).
     ///
     /// # Disregarded arguments
-    /// - `opening_challenges`
     /// - `rng`
     fn check<'a>(
         vk: &Self::VerifierKey,
@@ -450,11 +443,7 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
         point: &'a P::Point,
         _values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        // Not used and not generic on the cryptographic sponge S
-        _opening_challenges: &mut ChallengeGenerator<
-            G::ScalarField,
-            PoseidonSponge<G::ScalarField>,
-        >,
+        sponge: &mut S,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -506,29 +495,25 @@ impl<G: AffineRepr, P: MultilinearExtension<G::ScalarField>>
                 .collect::<Vec<_>>();
             let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(row_coms, &l_bigint).into();
 
-            // Construct transcript and squeeze the challenge c from it
-
-            let mut transcript: IOPTranscript<G::ScalarField> = IOPTranscript::new(b"transcript");
-
             // Absorbing public parameters
-            transcript.append_serializable_element(b"public parameters", vk)?;
+            sponge.absorb(&to_bytes!(vk).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
-            transcript.append_serializable_element(b"commitment", row_coms)?;
+            sponge.absorb(&to_bytes!(row_coms).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the point
-            transcript.append_serializable_element(b"point", point)?;
+            sponge.absorb(point);
 
             // Absorbing the commitment to the evaluation
-            transcript.append_serializable_element(b"com_eval", com_eval)?;
+            sponge.absorb(&to_bytes!(com_eval).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the two auxiliary commitments
-            transcript.append_serializable_element(b"com_d", com_d)?;
-            transcript.append_serializable_element(b"com_b", com_b)?;
+            sponge.absorb(&to_bytes!(com_d).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&to_bytes!(com_b).map_err(|_| Error::TranscriptError)?);
 
             // Receive the random challenge c from the verifier, i.e. squeeze
             // it from the transcript.
-            let c = transcript.get_and_append_challenge(b"c").unwrap();
+            let c: G::ScalarField = sponge.squeeze_field_elements(1)[0];
 
             // First check
             let com_z_zd = Self::pedersen_commit(vk, z, Some(*z_d), None).0;

@@ -1,9 +1,10 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
+use ark_ec::scalar_mul::BatchMulPreprocessing;
 use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ec::{scalar_mul::fixed_base::FixedBase, VariableBaseMSM};
+use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
 use ark_ff::{Field, PrimeField};
 use ark_ff::{One, Zero};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
@@ -27,14 +28,11 @@ impl<E: Pairing> MultilinearPC<E> {
     /// setup
     pub fn setup<R: RngCore>(num_vars: usize, rng: &mut R) -> UniversalParams<E> {
         assert!(num_vars > 0, "constant polynomial not supported");
-        let g: E::G1 = E::G1::rand(rng);
-        let h: E::G2 = E::G2::rand(rng);
-        let g = g.into_affine();
-        let h = h.into_affine();
+        let g = E::G1::rand(rng);
+        let h = E::G2::rand(rng);
         let mut powers_of_g = Vec::new();
         let mut powers_of_h = Vec::new();
         let t: Vec<_> = (0..num_vars).map(|_| E::ScalarField::rand(rng)).collect();
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let mut eq: LinkedList<DenseMultilinearExtension<E::ScalarField>> =
             LinkedList::from_iter(eq_extension(&t).into_iter());
@@ -54,29 +52,15 @@ impl<E: Pairing> MultilinearPC<E> {
         }
 
         let mut pp_powers = Vec::new();
-        let mut total_scalars = 0;
         for i in 0..num_vars {
             let eq = eq_arr.pop_front().unwrap();
             let pp_k_powers = (0..(1 << (num_vars - i))).map(|x| eq[x]);
             pp_powers.extend(pp_k_powers);
-            total_scalars += 1 << (num_vars - i);
         }
-        let window_size = FixedBase::get_mul_window_size(total_scalars);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
-        let h_table = FixedBase::get_window_table(scalar_bits, window_size, h.into_group());
 
-        let pp_g = E::G1::normalize_batch(&FixedBase::msm(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &pp_powers,
-        ));
-        let pp_h = E::G2::normalize_batch(&FixedBase::msm(
-            scalar_bits,
-            window_size,
-            &h_table,
-            &pp_powers,
-        ));
+        let g_table = BatchMulPreprocessing::new(g, num_vars);
+        let pp_g = g_table.batch_mul(&pp_powers);
+        let pp_h = h.batch_mul(&pp_powers);
         let mut start = 0;
         for i in 0..num_vars {
             let size = 1 << (num_vars - i);
@@ -89,18 +73,14 @@ impl<E: Pairing> MultilinearPC<E> {
 
         // uncomment to measure the time for calculating vp
         // let vp_generation_timer = start_timer!(|| "VP generation");
-        let g_mask = {
-            let window_size = FixedBase::get_mul_window_size(num_vars);
-            let g_table = FixedBase::get_window_table(scalar_bits, window_size, g.into_group());
-            E::G1::normalize_batch(&FixedBase::msm(scalar_bits, window_size, &g_table, &t))
-        };
+        let g_mask = g_table.batch_mul(&t);
         // end_timer!(vp_generation_timer);
 
         UniversalParams {
             num_vars,
-            g,
+            g: g.into_affine(),
             g_mask,
-            h,
+            h: h.into_affine(),
             powers_of_g,
             powers_of_h,
         }
@@ -199,11 +179,7 @@ impl<E: Pairing> MultilinearPC<E> {
     ) -> bool {
         let left = E::pairing(commitment.g_product.into_group() - &vk.g.mul(value), vk.h);
 
-        let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
-        let window_size = FixedBase::get_mul_window_size(vk.nv);
-
-        let g_table = FixedBase::get_window_table(scalar_size, window_size, vk.g.into_group());
-        let g_mul: Vec<E::G1> = FixedBase::msm(scalar_size, window_size, &g_table, point);
+        let g_mul = vk.g.into_group().batch_mul(point);
 
         let pairing_lefts: Vec<_> = (0..vk.nv)
             .map(|i| vk.g_mask_random[i].into_group() - &g_mul[i])

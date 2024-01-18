@@ -3,7 +3,10 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{rand::RngCore, vec::Vec};
 
-use crate::{PCCommitment, PCCommitterKey, PCRandomness, PCUniversalParams, PCVerifierKey};
+use crate::{
+    utils::Matrix, PCCommitment, PCCommitmentState, PCCommitterKey, PCUniversalParams,
+    PCVerifierKey,
+};
 
 /// `UniversalParams` amounts to a Pederson commitment key of sufficient length
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
@@ -77,9 +80,24 @@ impl<G: AffineRepr> PCCommitment for HyraxCommitment<G> {
 
 pub(crate) type HyraxRandomness<F> = Vec<F>;
 
+/// Hyrax Commitment State blah blah blah blah
+/// blah blah blah blah
+/// blah blah blah blah
+/// blah blah blah blah
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
+pub struct HyraxCommitmentState<F>
+where
+    F: PrimeField,
+{
+    pub(crate) randomness: HyraxRandomness<F>,
+    pub(crate) mat: Matrix<F>,
+}
+
 /// A vector of scalars, each of which multiplies the distinguished group
 /// element in the Pederson commitment key for a different commitment
-impl<F: PrimeField> PCRandomness for HyraxRandomness<F> {
+impl<F: PrimeField> PCCommitmentState for HyraxCommitmentState<F> {
+    type Randomness = HyraxRandomness<F>;
     fn empty() -> Self {
         unimplemented!()
     }
@@ -89,7 +107,7 @@ impl<F: PrimeField> PCRandomness for HyraxRandomness<F> {
         _has_degree_bound: bool,
         _num_vars: Option<usize>,
         rng: &mut R,
-    ) -> Self {
+    ) -> Self::Randomness {
         (0..num_queries).map(|_| F::rand(rng)).collect()
     }
 }
