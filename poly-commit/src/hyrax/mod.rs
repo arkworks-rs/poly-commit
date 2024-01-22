@@ -1,5 +1,4 @@
 use crate::hyrax::utils::tensor_prime;
-use crate::to_bytes;
 use crate::utils::{inner_product, scalar_by_vector, vector_sum, Matrix};
 use crate::{
     hyrax::utils::flat_to_matrix_column_major, Error, LabeledCommitment, LabeledPolynomial,
@@ -9,6 +8,7 @@ use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::MultilinearExtension;
+use ark_serialize::serialize_to_vec;
 use ark_std::{marker::PhantomData, rand::RngCore, string::ToString, vec::Vec, UniformRand};
 use blake2::Blake2s256;
 use digest::Digest;
@@ -80,42 +80,19 @@ where
 {
     /// Pedersen commitment to a vector of scalars as described in appendix A.1
     /// of the reference article.
-    /// The caller must either directly pass hiding exponent `r` inside Some,
-    /// or provide an rng so that `r` can be sampled.
-    /// If there are `n` scalars, the first `n` elements of the key will be
-    /// multiplied by them in the same order, and its `n + 1`th element will be
-    /// multiplied by `r`.
+    /// The function does not add handle hiding term `h * r`.
+    /// It is only a wrapper around MSM.
     ///
     /// # Panics
     ///
-    /// Panics if both `r` and `rng` are None.
-    fn pedersen_commit(
-        key: &HyraxCommitterKey<G>,
-        scalars: &[G::ScalarField],
-        r: Option<G::ScalarField>,
-        rng: Option<&mut dyn RngCore>,
-    ) -> (G, G::ScalarField) {
-        // Cannot use unwrap_or, since its argument is always evaluated
-        let r = match r {
-            Some(v) => v,
-            None => G::ScalarField::rand(rng.expect("Either r or rng must be provided")),
-        };
-
-        let mut scalars_ext = Vec::from(scalars);
-        scalars_ext.push(r);
-
-        // Trimming the key to the length of the coefficient vector
-        let mut points_ext = key.com_key[0..scalars.len()].to_vec();
-        points_ext.push(key.h);
-
+    /// Panics if `key` and `scalars` do not have the same length
+    fn pedersen_commit(key: &[G], scalars: &[G::ScalarField]) -> G::Group {
+        assert_eq!(key.len(), scalars.len());
         let scalars_bigint = ark_std::cfg_iter!(scalars)
             .map(|s| s.into_bigint())
             .collect::<Vec<_>>();
-
         // Multi-exponentiation in the group of points of the EC
-        let com = <G::Group as VariableBaseMSM>::msm_bigint(&points_ext, &scalars_bigint);
-
-        (com.into(), r)
+        <G::Group as VariableBaseMSM>::msm_bigint(&key, &scalars_bigint)
     }
 }
 
@@ -260,10 +237,10 @@ where
             let (row_coms, com_rands): (Vec<_>, Vec<_>) = cfg_iter!(m)
                 .map(|row| {
                     #[cfg(not(feature = "parallel"))]
-                    let (c, r) = Self::pedersen_commit(ck, row, None, Some(rng_inner));
+                    let r = G::ScalarField::rand(rng_inner);
                     #[cfg(feature = "parallel")]
-                    let (c, r) =
-                        Self::pedersen_commit(ck, row, None, Some(&mut rand::thread_rng()));
+                    let r = G::ScalarField::rand(&mut rand::thread_rng());
+                    let c = (Self::pedersen_commit(&ck.com_key, row) + ck.h * r).into();
                     (c, r)
                 })
                 .unzip();
@@ -360,10 +337,10 @@ where
             }
 
             // Absorbing public parameters
-            sponge.absorb(&to_bytes!(ck).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*ck).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
-            sponge.absorb(&to_bytes!(&com.row_coms).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(com.row_coms).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the point
             sponge.absorb(point);
@@ -383,7 +360,10 @@ where
             let eval = inner_product(&lt, &r);
 
             // Singleton commit
-            let (com_eval, r_eval) = Self::pedersen_commit(ck, &[eval], None, Some(rng_inner));
+            let (com_eval, r_eval) = {
+                let r = G::ScalarField::rand(rng_inner);
+                ((ck.com_key[0] * eval + ck.h * r).into(), r)
+            };
 
             // ******** Dot product argument ********
             // Appendix A.2 in the reference article
@@ -394,17 +374,19 @@ where
             let b = inner_product(&r, &d);
 
             // Multi-commit
-            let (com_d, r_d) = Self::pedersen_commit(ck, &d, None, Some(rng_inner));
+            let r_d = G::ScalarField::rand(rng_inner);
+            let com_d = (Self::pedersen_commit(&ck.com_key, &d) + ck.h * r_d).into();
 
             // Singleton commit
-            let (com_b, r_b) = Self::pedersen_commit(ck, &[b], None, Some(rng_inner));
+            let r_b = G::ScalarField::rand(rng_inner);
+            let com_b = (ck.com_key[0] * b + ck.h * r_b).into();
 
             // Absorbing the commitment to the evaluation
-            sponge.absorb(&to_bytes!(&com_eval).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(com_eval).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the two auxiliary commitments
-            sponge.absorb(&to_bytes!(&com_d).map_err(|_| Error::TranscriptError)?);
-            sponge.absorb(&to_bytes!(&com_b).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(com_d).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(com_b).map_err(|_| Error::TranscriptError)?);
 
             // Receive the random challenge c from the verifier, i.e. squeeze
             // it from the transcript.
@@ -493,36 +475,36 @@ where
             let l_bigint = cfg_iter!(l)
                 .map(|chi| chi.into_bigint())
                 .collect::<Vec<_>>();
-            let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(row_coms, &l_bigint).into();
+            let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(&row_coms, &l_bigint).into();
 
             // Absorbing public parameters
-            sponge.absorb(&to_bytes!(vk).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
-            sponge.absorb(&to_bytes!(row_coms).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*row_coms).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the point
             sponge.absorb(point);
 
             // Absorbing the commitment to the evaluation
-            sponge.absorb(&to_bytes!(com_eval).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*com_eval).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the two auxiliary commitments
-            sponge.absorb(&to_bytes!(com_d).map_err(|_| Error::TranscriptError)?);
-            sponge.absorb(&to_bytes!(com_b).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*com_d).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(&serialize_to_vec!(*com_b).map_err(|_| Error::TranscriptError)?);
 
             // Receive the random challenge c from the verifier, i.e. squeeze
             // it from the transcript.
             let c: G::ScalarField = sponge.squeeze_field_elements(1)[0];
 
             // First check
-            let com_z_zd = Self::pedersen_commit(vk, z, Some(*z_d), None).0;
+            let com_z_zd = (Self::pedersen_commit(&vk.com_key, z) + vk.h * z_d).into();
             if com_z_zd != (t_prime.mul(c) + com_d).into() {
                 return Ok(false);
             }
 
             // Second check
-            let com_dp = Self::pedersen_commit(vk, &[inner_product(&r, z)], Some(*z_b), None).0;
+            let com_dp = (vk.com_key[0] * inner_product(&r, z) + vk.h * z_b).into();
             if com_dp != (com_eval.mul(c) + com_b).into() {
                 return Ok(false);
             }

@@ -4,21 +4,9 @@ use ark_std::vec::Vec;
 
 #[cfg(feature = "parallel")]
 use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     prelude::IndexedParallelIterator,
 };
-
-/// Takes as input a struct, and converts them to a series of bytes. All traits
-/// that implement `CanonicalSerialize` can be automatically converted to bytes
-/// in this manner.
-/// From jellyfish lib
-#[macro_export]
-macro_rules! to_bytes {
-    ($x:expr) => {{
-        let mut buf = ark_std::vec![];
-        ark_serialize::CanonicalSerialize::serialize_compressed($x, &mut buf).map(|_| buf)
-    }};
-}
 
 /// Return ceil(x / y).
 pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
@@ -70,11 +58,11 @@ impl<F: Field> Matrix<F> {
             self.n
         );
 
-        (0..self.m)
+        cfg_into_iter!(0..self.m)
             .map(|col| {
                 inner_product(
                     v,
-                    &(0..self.n)
+                    &cfg_into_iter!(0..self.m)
                         .map(|row| self.entries[row][col])
                         .collect::<Vec<F>>(),
                 )
