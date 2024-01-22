@@ -376,7 +376,7 @@ where
             // t_prime coincides witht he Pedersen commitment to lt with the
             // randomnes r_lt computed here
             let r_lt = cfg_iter!(l)
-                .zip(cfg_iter!(state.randomness))
+                .zip(&state.randomness)
                 .map(|(l, r)| *l * r)
                 .sum::<G::ScalarField>();
 
