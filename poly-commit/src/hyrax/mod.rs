@@ -337,7 +337,10 @@ where
             }
 
             // Absorbing public parameters
-            sponge.absorb(&serialize_to_vec!(*ck).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(
+                &Blake2s256::digest(serialize_to_vec!(*ck).map_err(|_| Error::TranscriptError)?)
+                    .as_slice(),
+            );
 
             // Absorbing the commitment to the polynomial
             sponge.absorb(&serialize_to_vec!(com.row_coms).map_err(|_| Error::TranscriptError)?);
@@ -478,7 +481,10 @@ where
             let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(&row_coms, &l_bigint).into();
 
             // Absorbing public parameters
-            sponge.absorb(&serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?);
+            sponge.absorb(
+                &Blake2s256::digest(serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?)
+                    .as_slice(),
+            );
 
             // Absorbing the commitment to the polynomial
             sponge.absorb(&serialize_to_vec!(*row_coms).map_err(|_| Error::TranscriptError)?);
