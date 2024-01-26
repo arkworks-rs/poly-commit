@@ -29,6 +29,7 @@ pub use multilinear_brakedown::MultilinearBrakedown;
 
 mod brakedown;
 mod data_structures;
+pub use data_structures::BrakedownPCParams;
 use data_structures::*;
 
 pub use data_structures::LinCodePCProof;
