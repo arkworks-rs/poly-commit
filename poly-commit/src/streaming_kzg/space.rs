@@ -6,7 +6,8 @@ use ark_std::borrow::Borrow;
 use ark_std::collections::VecDeque;
 use ark_std::vec::Vec;
 
-use crate::streaming_kzg::{ceil_div, vanishing_polynomial, FoldedPolynomialTree};
+use crate::streaming_kzg::{vanishing_polynomial, FoldedPolynomialTree};
+use crate::utils::ceil_div;
 use ark_ec::scalar_mul::variable_base::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
 use ark_std::iterable::{Iterable, Reverse};
 
