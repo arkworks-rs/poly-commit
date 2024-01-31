@@ -12,7 +12,7 @@ use ark_ff::PrimeField;
 use ark_std::log2;
 use ark_std::rand::RngCore;
 use ark_std::vec::Vec;
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), target_arch = "aarch64"))]
 use num_traits::Float;
 
 impl<F, C, H> PCUniversalParams for BrakedownPCParams<F, C, H>

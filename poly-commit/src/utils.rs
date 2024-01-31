@@ -1,4 +1,4 @@
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), target_arch = "aarch64"))]
 use num_traits::Float;
 
 #[cfg(feature = "parallel")]
