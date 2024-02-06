@@ -1,4 +1,5 @@
 use crate::*;
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ec::pairing::Pairing;
 use ark_ec::AdditiveGroup;
 use ark_ec::AffineRepr;
@@ -314,7 +315,7 @@ impl<E: Pairing> PreparedVerifierKey<E> {
 }
 
 /// `Commitment` commits to a polynomial. It is output by `KZG10::commit`.
-#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Absorb)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -324,12 +325,19 @@ impl<E: Pairing> PreparedVerifierKey<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Commitment<E: Pairing>(
+pub struct Commitment<E>(
     /// The commitment is a group element.
     pub E::G1Affine,
-);
+)
+where
+    E: Pairing,
+    E::G1Affine: Absorb;
 
-impl<E: Pairing> PCCommitment for Commitment<E> {
+impl<E> PCCommitment for Commitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     #[inline]
     fn empty() -> Self {
         Commitment(E::G1Affine::zero())
@@ -340,16 +348,21 @@ impl<E: Pairing> PCCommitment for Commitment<E> {
     }
 }
 
-impl<E: Pairing> ToConstraintField<<E::TargetField as Field>::BasePrimeField> for Commitment<E>
+impl<E> ToConstraintField<<E::TargetField as Field>::BasePrimeField> for Commitment<E>
 where
-    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField> + Absorb,
+    E: Pairing,
 {
     fn to_field_elements(&self) -> Option<Vec<<E::TargetField as Field>::BasePrimeField>> {
         self.0.to_field_elements()
     }
 }
 
-impl<'a, E: Pairing> AddAssign<(E::ScalarField, &'a Commitment<E>)> for Commitment<E> {
+impl<'a, E> AddAssign<(E::ScalarField, &'a Commitment<E>)> for Commitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     #[inline]
     fn add_assign(&mut self, (f, other): (E::ScalarField, &'a Commitment<E>)) {
         let mut other = other.0 * f;
@@ -373,7 +386,11 @@ pub struct PreparedCommitment<E: Pairing>(
     pub Vec<E::G1Affine>,
 );
 
-impl<E: Pairing> PreparedCommitment<E> {
+impl<E> PreparedCommitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     /// prepare `PreparedCommitment` from `Commitment`
     pub fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();

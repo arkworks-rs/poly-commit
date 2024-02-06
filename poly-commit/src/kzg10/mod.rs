@@ -6,6 +6,7 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCCommitmentState, ToString, Vec};
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ec::AffineRepr;
 use ark_ec::{pairing::Pairing, CurveGroup};
 use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
@@ -32,6 +33,7 @@ pub struct KZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>> {
 impl<E, P> KZG10<E, P>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,
 {
@@ -548,6 +550,7 @@ mod tests {
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
+        E::G1Affine: Absorb,
         P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
@@ -579,6 +582,7 @@ mod tests {
     fn linear_polynomial_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
+        E::G1Affine: Absorb,
         P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {
@@ -607,6 +611,7 @@ mod tests {
     fn batch_check_test_template<E, P>() -> Result<(), Error>
     where
         E: Pairing,
+        E::G1Affine: Absorb,
         P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
         for<'a, 'b> &'a P: Div<&'b P, Output = P>,
     {

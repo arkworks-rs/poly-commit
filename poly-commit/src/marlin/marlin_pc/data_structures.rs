@@ -2,6 +2,7 @@ use crate::{
     DenseUVPolynomial, PCCommitment, PCCommitmentState, PCCommitterKey, PCPreparedCommitment,
     PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ec::pairing::Pairing;
 use ark_ec::AdditiveGroup;
 use ark_ff::{Field, PrimeField, ToConstraintField};
@@ -213,7 +214,7 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Absorb)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -223,7 +224,11 @@ impl<E: Pairing> PCPreparedVerifierKey<VerifierKey<E>> for PreparedVerifierKey<E
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Commitment<E: Pairing> {
+pub struct Commitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     /// A KZG10 commitment to the polynomial.
     pub comm: kzg10::Commitment<E>,
 
@@ -235,7 +240,7 @@ pub struct Commitment<E: Pairing> {
 
 impl<E: Pairing> ToConstraintField<<E::TargetField as Field>::BasePrimeField> for Commitment<E>
 where
-    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField>,
+    E::G1Affine: ToConstraintField<<E::TargetField as Field>::BasePrimeField> + Absorb,
 {
     fn to_field_elements(&self) -> Option<Vec<<E::TargetField as Field>::BasePrimeField>> {
         let mut res = Vec::new();
@@ -249,7 +254,11 @@ where
     }
 }
 
-impl<E: Pairing> PCCommitment for Commitment<E> {
+impl<E> PCCommitment for Commitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     #[inline]
     fn empty() -> Self {
         Self {
@@ -272,12 +281,20 @@ impl<E: Pairing> PCCommitment for Commitment<E> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct PreparedCommitment<E: Pairing> {
+pub struct PreparedCommitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     pub(crate) prepared_comm: kzg10::PreparedCommitment<E>,
     pub(crate) shifted_comm: Option<kzg10::Commitment<E>>,
 }
 
-impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+impl<E> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     /// Prepare commitment to a polynomial that optionally enforces a degree bound.
     fn prepare(comm: &Commitment<E>) -> Self {
         let prepared_comm = kzg10::PreparedCommitment::<E>::prepare(&comm.comm);

@@ -12,7 +12,7 @@ use ark_std::rand::RngCore;
 use ark_std::{marker::PhantomData, ops::Div, vec};
 
 mod data_structures;
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 pub use data_structures::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,
@@ -57,6 +57,7 @@ pub(crate) fn shift_polynomial<E: Pairing, P: DenseUVPolynomial<E::ScalarField>>
 impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for MarlinKZG10<E, P, S>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,

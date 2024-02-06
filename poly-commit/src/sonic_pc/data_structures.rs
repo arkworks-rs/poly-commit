@@ -2,6 +2,7 @@ use crate::kzg10;
 use crate::{
     BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
 };
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ec::pairing::Pairing;
 use ark_ec::AdditiveGroup;
 use ark_serialize::{
@@ -21,7 +22,11 @@ pub type Commitment<E> = kzg10::Commitment<E>;
 /// `PreparedCommitment` is the prepared commitment for the KZG10 scheme.
 pub type PreparedCommitment<E> = kzg10::PreparedCommitment<E>;
 
-impl<E: Pairing> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E> {
+impl<E> PCPreparedCommitment<Commitment<E>> for PreparedCommitment<E>
+where
+    E: Pairing,
+    E::G1Affine: Absorb,
+{
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(comm: &Commitment<E>) -> Self {
         let mut prepared_comm = Vec::<E::G1Affine>::new();

@@ -24,7 +24,7 @@ pub use data_structures::*;
 mod combinations;
 use combinations::*;
 
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -146,6 +146,7 @@ impl<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge>
 impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for MarlinPST13<E, P, S>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     P: DenseMVPolynomial<E::ScalarField> + Sync,
     S: CryptographicSponge,
     P::Point: Index<usize, Output = E::ScalarField>,
