@@ -179,11 +179,21 @@ impl<'a, F: Field, P: Polynomial<F>> LabeledPolynomial<F, P> {
 }
 
 /// A commitment along with information about its degree bound (if any).
-#[derive(Clone, Absorb)]
+#[derive(Clone)]
 pub struct LabeledCommitment<C: PCCommitment> {
     label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
+}
+
+impl<C: PCCommitment> Absorb for LabeledCommitment<C> {
+    fn to_sponge_bytes(&self, dest: &mut Vec<u8>) {
+        self.commitment.to_sponge_bytes(dest)
+    }
+
+    fn to_sponge_field_elements<F: PrimeField>(&self, dest: &mut Vec<F>) {
+        self.commitment.to_sponge_field_elements(dest)
+    }
 }
 
 impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>
