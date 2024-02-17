@@ -1,5 +1,6 @@
 use crate::*;
 use crate::{PCCommitterKey, PCVerifierKey, Vec};
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ec::AffineRepr;
 use ark_ff::{Field, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -84,7 +85,7 @@ impl<G: AffineRepr> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierKe
 }
 
 /// Commitment to a polynomial that optionally enforces a degree bound.
-#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize, Absorb)]
 #[derivative(
     Default(bound = ""),
     Hash(bound = ""),
@@ -94,7 +95,7 @@ impl<G: AffineRepr> PCPreparedVerifierKey<VerifierKey<G>> for PreparedVerifierKe
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct Commitment<G: AffineRepr> {
+pub struct Commitment<G: AffineRepr + Absorb> {
     /// A Pedersen commitment to the polynomial.
     pub comm: G,
 
@@ -104,7 +105,7 @@ pub struct Commitment<G: AffineRepr> {
     pub shifted_comm: Option<G>,
 }
 
-impl<G: AffineRepr> PCCommitment for Commitment<G> {
+impl<G: AffineRepr + Absorb> PCCommitment for Commitment<G> {
     #[inline]
     fn empty() -> Self {
         Commitment {
@@ -121,7 +122,7 @@ impl<G: AffineRepr> PCCommitment for Commitment<G> {
 /// Nothing to do to prepare this commitment (for now).
 pub type PreparedCommitment<E> = Commitment<E>;
 
-impl<G: AffineRepr> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<G> {
+impl<G: AffineRepr + Absorb> PCPreparedCommitment<Commitment<G>> for PreparedCommitment<G> {
     /// prepare `PreparedCommitment` from `Commitment`
     fn prepare(vk: &Commitment<G>) -> Self {
         vk.clone()

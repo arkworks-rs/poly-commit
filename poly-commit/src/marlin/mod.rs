@@ -4,7 +4,7 @@ use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCCommitmentState, Polynomial, PolynomialCommitment};
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
@@ -44,6 +44,7 @@ where
 impl<E, S, P, PC> Marlin<E, S, P, PC>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     S: CryptographicSponge,
     P: Polynomial<E::ScalarField>,
     PC: PolynomialCommitment<E::ScalarField, P, S>,

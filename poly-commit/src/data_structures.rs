@@ -1,4 +1,5 @@
 use crate::{Polynomial, String, Vec};
+use ark_crypto_primitives::sponge::Absorb;
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
@@ -55,7 +56,7 @@ pub trait PCPreparedVerifierKey<Unprepared: PCVerifierKey> {
 
 /// Defines the minimal interface of commitments for any polynomial
 /// commitment scheme.
-pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize {
+pub trait PCCommitment: Clone + CanonicalSerialize + CanonicalDeserialize + Absorb {
     /// Outputs a non-hiding commitment to the zero polynomial.
     fn empty() -> Self;
 
@@ -183,6 +184,16 @@ pub struct LabeledCommitment<C: PCCommitment> {
     label: PolynomialLabel,
     commitment: C,
     degree_bound: Option<usize>,
+}
+
+impl<C: PCCommitment> Absorb for LabeledCommitment<C> {
+    fn to_sponge_bytes(&self, dest: &mut Vec<u8>) {
+        self.commitment.to_sponge_bytes(dest)
+    }
+
+    fn to_sponge_field_elements<F: PrimeField>(&self, dest: &mut Vec<F>) {
+        self.commitment.to_sponge_field_elements(dest)
+    }
 }
 
 impl<F: Field, C: PCCommitment + ToConstraintField<F>> ToConstraintField<F>

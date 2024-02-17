@@ -12,7 +12,7 @@ use ark_std::rand::RngCore;
 use ark_std::{convert::TryInto, marker::PhantomData, ops::Div, ops::Mul, vec};
 
 mod data_structures;
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 pub use data_structures::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement and
@@ -34,6 +34,7 @@ pub struct SonicKZG10<E: Pairing, P: DenseUVPolynomial<E::ScalarField>, S: Crypt
 impl<E, P, S> SonicKZG10<E, P, S>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     P: DenseUVPolynomial<E::ScalarField>,
     S: CryptographicSponge,
 {
@@ -137,6 +138,7 @@ where
 impl<E, P, S> PolynomialCommitment<E::ScalarField, P, S> for SonicKZG10<E, P, S>
 where
     E: Pairing,
+    E::G1Affine: Absorb,
     P: DenseUVPolynomial<E::ScalarField, Point = E::ScalarField>,
     S: CryptographicSponge,
     for<'a, 'b> &'a P: Div<&'b P, Output = P>,

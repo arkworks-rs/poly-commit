@@ -15,7 +15,7 @@ pub use data_structures::*;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 use digest::Digest;
 
 /// A polynomial commitment scheme based on the hardness of the
@@ -45,7 +45,7 @@ pub struct InnerProductArgPC<
 
 impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
 where
-    G: AffineRepr,
+    G: AffineRepr + Absorb,
     G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField>,
@@ -337,7 +337,7 @@ where
 
 impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgPC<G, D, P, S>
 where
-    G: AffineRepr,
+    G: AffineRepr + Absorb,
     G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField, Point = G::ScalarField>,
