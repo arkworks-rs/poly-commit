@@ -1056,8 +1056,6 @@ mod tests {
     #![allow(non_camel_case_types)]
 
     use super::InnerProductArgPC;
-    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
-    use ark_ec::AffineRepr;
     use ark_ed_on_bls12_381::{EdwardsAffine, Fr};
     use ark_ff::PrimeField;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
@@ -1065,7 +1063,6 @@ mod tests {
     use rand_chacha::ChaCha20Rng;
 
     type UniPoly = DensePoly<Fr>;
-    type Sponge = PoseidonSponge<<EdwardsAffine as AffineRepr>::ScalarField>;
     type PC<E, D, P> = InnerProductArgPC<E, D, P>;
     type PC_JJB2S = PC<EdwardsAffine, Blake2s256, UniPoly>;
 

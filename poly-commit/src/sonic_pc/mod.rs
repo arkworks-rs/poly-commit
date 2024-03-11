@@ -674,7 +674,6 @@ mod tests {
     use super::SonicKZG10;
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
-    use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
     use ark_ec::pairing::Pairing;
     use ark_ff::UniformRand;
     use ark_poly::{univariate::DensePolynomial as DensePoly, DenseUVPolynomial};
@@ -684,8 +683,6 @@ mod tests {
     type UniPoly_377 = DensePoly<<Bls12_377 as Pairing>::ScalarField>;
 
     type PC<E, P> = SonicKZG10<E, P>;
-    type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
-    type Sponge_Bls12_381 = PoseidonSponge<<Bls12_381 as Pairing>::ScalarField>;
     type PC_Bls12_377 = PC<Bls12_377, UniPoly_377>;
     type PC_Bls12_381 = PC<Bls12_381, UniPoly_381>;
 
