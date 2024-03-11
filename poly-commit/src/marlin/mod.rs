@@ -1,6 +1,6 @@
 use crate::CHALLENGE_SIZE;
 use crate::{kzg10, Error};
-use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
+use crate::{BTreeMap, BTreeSet, Debug, RngCore};
 use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
 use crate::{Evaluations, LabeledCommitment, QuerySet};
 use crate::{PCCommitmentState, Polynomial, PolynomialCommitment};
@@ -9,6 +9,8 @@ use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
 use ark_ff::{One, Zero};
+use ark_std::string::*;
+use ark_std::vec::*;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces

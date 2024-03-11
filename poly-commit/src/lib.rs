@@ -26,8 +26,8 @@ use ark_std::{
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
-    string::{String, ToString},
-    vec::Vec,
+    string::*,
+    vec::*,
 };
 
 /// Data structures used by a polynomial commitment scheme.
@@ -263,7 +263,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>>: Sized {
         // order to gather (i.e. batch) all polynomials that should be queried at
         // the same point, then opening their commitments simultaneously with a
         // single call to `open` (per point)
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let rng = &mut optional_rng::OptionalRng(rng);
         let poly_st_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
             .zip(states)

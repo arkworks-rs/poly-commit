@@ -1,5 +1,8 @@
 use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
-use crate::{BTreeMap, BTreeSet, ToString, Vec};
+use crate::{BTreeMap, BTreeSet};
+use ark_std::string::*;
+use ark_std::vec::*;
+
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};

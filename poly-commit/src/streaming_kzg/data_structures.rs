@@ -1,6 +1,6 @@
 use ark_ff::Field;
 use ark_std::borrow::Borrow;
-use ark_std::vec::Vec;
+use ark_std::vec::*;
 
 use crate::streaming_kzg::ceil_div;
 use ark_std::iterable::Iterable;

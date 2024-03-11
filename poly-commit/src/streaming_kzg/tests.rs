@@ -1,7 +1,7 @@
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::DenseUVPolynomial;
-use ark_std::vec::Vec;
+use ark_std::vec::*;
 use ark_std::{UniformRand, Zero};
 
 use crate::streaming_kzg::space::CommitterKeyStream;

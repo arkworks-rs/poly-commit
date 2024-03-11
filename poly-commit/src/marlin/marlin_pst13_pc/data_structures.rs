@@ -1,4 +1,4 @@
-use crate::{BTreeMap, Vec};
+use crate::BTreeMap;
 use crate::{
     PCCommitmentState, PCCommitterKey, PCPreparedVerifierKey, PCUniversalParams, PCVerifierKey,
 };
@@ -14,6 +14,7 @@ use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
 use ark_std::rand::RngCore;
+use ark_std::vec::*;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
 #[derive(Derivative)]

@@ -13,7 +13,7 @@ use ark_std::iter::FromIterator;
 use ark_std::marker::PhantomData;
 use ark_std::ops::Mul;
 use ark_std::rand::RngCore;
-use ark_std::vec::Vec;
+use ark_std::vec::*;
 use ark_std::UniformRand;
 
 /// data structures used by multilinear extension commitment scheme
@@ -244,7 +244,7 @@ mod tests {
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
     use ark_std::rand::RngCore;
     use ark_std::test_rng;
-    use ark_std::vec::Vec;
+    use ark_std::vec::*;
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
 

@@ -5,7 +5,8 @@ use ark_ec::scalar_mul::ScalarMul;
 use ark_ec::CurveGroup;
 use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, vec::Vec, UniformRand};
+use ark_std::vec::*;
+use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, UniformRand};
 
 use crate::streaming_kzg::{
     linear_combination, msm, powers, Commitment, EvaluationProof, VerifierKey,

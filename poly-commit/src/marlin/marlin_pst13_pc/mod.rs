@@ -6,7 +6,6 @@ use crate::{
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
-use crate::{ToString, Vec};
 use ark_ec::AffineRepr;
 use ark_ec::{
     pairing::Pairing,
@@ -16,6 +15,8 @@ use ark_ec::{
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::rand::RngCore;
+use ark_std::string::*;
+use ark_std::vec::*;
 use ark_std::{marker::PhantomData, ops::Index, ops::Mul, vec};
 
 mod data_structures;
@@ -706,7 +707,7 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         DenseMVPolynomial,
     };
-    use ark_std::vec::Vec;
+    use ark_std::vec::*;
     use rand_chacha::ChaCha20Rng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::ScalarField, SparseTerm>;

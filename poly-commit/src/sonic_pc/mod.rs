@@ -1,10 +1,12 @@
 use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
-use crate::{BTreeMap, BTreeSet, String, ToString, Vec};
+use crate::{BTreeMap, BTreeSet};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
+use ark_std::string::*;
+use ark_std::vec::*;
 
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, UniformRand, Zero};
