@@ -622,7 +622,6 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 pub mod tests {
     use crate::*;
     use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonSponge};
-    use ark_poly::Polynomial;
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,

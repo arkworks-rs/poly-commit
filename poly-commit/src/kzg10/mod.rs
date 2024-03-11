@@ -481,7 +481,6 @@ mod tests {
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
-    use ark_ec::pairing::Pairing;
     use ark_poly::univariate::DensePolynomial as DensePoly;
     use ark_std::test_rng;
 
