@@ -20,7 +20,7 @@ pub use paste::paste;
 pub fn bench_pcs_method<
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 >(
     c: &mut Criterion,
     range: Vec<usize>,
@@ -56,7 +56,7 @@ pub fn bench_pcs_method<
 pub fn commit<
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 >(
     ck: &PCS::CommitterKey,
     _vk: &PCS::VerifierKey,
@@ -77,7 +77,7 @@ pub fn commit<
 pub fn commitment_size<
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 >(
     num_vars: usize,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
@@ -106,7 +106,7 @@ pub fn open<F, P, PCS>(
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
     P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -123,7 +123,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -136,7 +136,7 @@ pub fn proof_size<F, P, PCS>(num_vars: usize, rand_poly: fn(usize, &mut ChaCha20
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 
     P::Point: UniformRand,
 {
@@ -156,7 +156,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -177,7 +177,7 @@ pub fn verify<F, P, PCS>(
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
     P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -193,7 +193,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -206,7 +206,7 @@ where
         &point,
         [claimed_eval],
         &proof,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         None,
     )
     .unwrap();

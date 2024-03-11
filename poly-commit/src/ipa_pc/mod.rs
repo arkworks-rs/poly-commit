@@ -31,25 +31,18 @@ use digest::Digest;
 ///
 /// [pcdas]: https://eprint.iacr.org/2020/499
 /// [marlin]: https://eprint.iacr.org/2019/1047
-pub struct InnerProductArgPC<
-    G: AffineRepr,
-    D: Digest,
-    P: DenseUVPolynomial<G::ScalarField>,
-    S: CryptographicSponge,
-> {
+pub struct InnerProductArgPC<G: AffineRepr, D: Digest, P: DenseUVPolynomial<G::ScalarField>> {
     _projective: PhantomData<G>,
     _digest: PhantomData<D>,
     _poly: PhantomData<P>,
-    _sponge: PhantomData<S>,
 }
 
-impl<G, D, P, S> InnerProductArgPC<G, D, P, S>
+impl<G, D, P> InnerProductArgPC<G, D, P>
 where
     G: AffineRepr,
     G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField>,
-    S: CryptographicSponge,
 {
     /// `PROTOCOL_NAME` is used as a seed for the setup function.
     pub const PROTOCOL_NAME: &'static [u8] = b"PC-DL-2020";
@@ -104,7 +97,7 @@ where
         point: G::ScalarField,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Proof<G>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
     ) -> Option<SuccinctCheckPolynomial<G::ScalarField>> {
         let check_time = start_timer!(|| "Succinct checking");
 
@@ -335,13 +328,12 @@ where
     }
 }
 
-impl<G, D, P, S> PolynomialCommitment<G::ScalarField, P, S> for InnerProductArgPC<G, D, P, S>
+impl<G, D, P> PolynomialCommitment<G::ScalarField, P> for InnerProductArgPC<G, D, P>
 where
     G: AffineRepr,
     G::Group: VariableBaseMSM<MulBase = G>,
     D: Digest,
     P: DenseUVPolynomial<G::ScalarField, Point = G::ScalarField>,
-    S: CryptographicSponge,
 {
     type UniversalParams = UniversalParams<G>;
     type CommitterKey = CommitterKey<G>;
@@ -488,7 +480,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -739,7 +731,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -789,7 +781,7 @@ where
         query_set: &QuerySet<P::Point>,
         values: &Evaluations<G::ScalarField, P::Point>,
         proof: &Self::BatchProof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -869,7 +861,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<G::ScalarField, Self::BatchProof>, Self::Error>
@@ -980,7 +972,7 @@ where
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, G::ScalarField>,
         proof: &BatchLCProof<G::ScalarField, Self::BatchProof>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -1074,8 +1066,8 @@ mod tests {
 
     type UniPoly = DensePoly<Fr>;
     type Sponge = PoseidonSponge<<EdwardsAffine as AffineRepr>::ScalarField>;
-    type PC<E, D, P, S> = InnerProductArgPC<E, D, P, S>;
-    type PC_JJB2S = PC<EdwardsAffine, Blake2s256, UniPoly, Sponge>;
+    type PC<E, D, P> = InnerProductArgPC<E, D, P>;
+    type PC_JJB2S = PC<EdwardsAffine, Blake2s256, UniPoly>;
 
     fn rand_poly<F: PrimeField>(
         degree: usize,
@@ -1104,7 +1096,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1116,7 +1108,7 @@ mod tests {
             None,
             constant_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1127,7 +1119,7 @@ mod tests {
         quadratic_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1138,7 +1130,7 @@ mod tests {
         linear_poly_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1149,7 +1141,7 @@ mod tests {
         single_poly_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1160,7 +1152,7 @@ mod tests {
         single_poly_degree_bound_multiple_queries_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1171,7 +1163,7 @@ mod tests {
         two_polys_degree_bound_single_query_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
     }
@@ -1183,7 +1175,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1196,7 +1188,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1209,7 +1201,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1221,7 +1213,7 @@ mod tests {
         two_equation_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1234,7 +1226,7 @@ mod tests {
             None,
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
@@ -1247,7 +1239,7 @@ mod tests {
         bad_degree_bound_test::<_, _, PC_JJB2S, _>(
             rand_poly::<Fr>,
             rand_point::<Fr>,
-            poseidon_sponge_for_test,
+            poseidon_sponge_for_test::<Fr>,
         )
         .expect("test failed for ed_on_bls12_381-blake2s");
         println!("Finished ed_on_bls12_381-blake2s");
