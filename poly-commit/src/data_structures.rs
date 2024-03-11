@@ -1,7 +1,9 @@
-use crate::{Polynomial, String, Vec};
+use crate::Polynomial;
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
+use ark_std::string::*;
+use ark_std::vec::*;
 use ark_std::{
     borrow::Borrow,
     marker::PhantomData,

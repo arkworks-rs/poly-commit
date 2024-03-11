@@ -1,6 +1,6 @@
 //! Compute all combinations of values in a given list
 //! Credit: https://github.com/meltinglava/uniquecombinations/
-use crate::Vec;
+use ark_std::vec::*;
 
 /// Compute all combinations of values in a given list.
 pub(crate) struct Combinations<T>

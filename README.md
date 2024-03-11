@@ -69,8 +69,7 @@ use rand_chacha::ChaCha20Rng;
 use ark_ff::PrimeField;
 
 type UniPoly_377 = DensePolynomial<<Bls12_377 as Pairing>::ScalarField>;
-type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
-type PCS = MarlinKZG10<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
+type PCS = MarlinKZG10<Bls12_377, UniPoly_377>;
 
 let rng = &mut test_rng();
 

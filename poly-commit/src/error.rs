@@ -1,4 +1,4 @@
-use crate::String;
+use ark_std::string::*;
 
 /// The error type for `PolynomialCommitment`.
 #[derive(Debug)]
