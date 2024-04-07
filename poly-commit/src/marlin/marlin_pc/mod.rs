@@ -1,8 +1,5 @@
 use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
 use crate::{BTreeMap, BTreeSet};
-use ark_std::string::*;
-use ark_std::vec::*;
-
 use crate::{BatchLCProof, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
@@ -12,7 +9,9 @@ use ark_ec::CurveGroup;
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, ops::Div, vec};
+use ark_std::{marker::PhantomData, ops::Div};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 
 mod data_structures;
 use ark_crypto_primitives::sponge::CryptographicSponge;

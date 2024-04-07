@@ -1,6 +1,7 @@
 use ark_ec::pairing::Pairing;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::vec::*;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 #[allow(type_alias_bounds)]
 /// Evaluations over {0,1}^n for G1
 pub type EvaluationHyperCubeOnG1<E: Pairing> = Vec<E::G1Affine>;

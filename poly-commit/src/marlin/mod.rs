@@ -9,9 +9,12 @@ use ark_ec::pairing::Pairing;
 use ark_ec::AffineRepr;
 use ark_ec::CurveGroup;
 use ark_ff::{One, Zero};
-use ark_std::string::*;
-use ark_std::vec::*;
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
+#[cfg(not(feature = "std"))]
+use ark_std::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by

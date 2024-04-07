@@ -1,7 +1,6 @@
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::DenseUVPolynomial;
-use ark_std::vec::*;
 use ark_std::{UniformRand, Zero};
 
 use crate::streaming_kzg::space::CommitterKeyStream;
@@ -10,6 +9,8 @@ use crate::streaming_kzg::{vanishing_polynomial, VerifierKey};
 use ark_ff::Field;
 use ark_std::borrow::Borrow;
 use ark_std::iterable::{Iterable, Reverse};
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 
 /// Polynomial evaluation, assuming that the
 /// coefficients are in little-endian.

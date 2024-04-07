@@ -5,7 +5,8 @@ use ark_ec::scalar_mul::ScalarMul;
 use ark_ec::CurveGroup;
 use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-use ark_std::vec::*;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, UniformRand};
 
 use crate::streaming_kzg::{
