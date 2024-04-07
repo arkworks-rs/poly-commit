@@ -1,9 +1,9 @@
-use crate::streaming_kzg::ceil_div;
 use ark_ff::Field;
 use ark_std::borrow::Borrow;
+use ark_std::vec::*;
+
+use crate::streaming_kzg::ceil_div;
 use ark_std::iterable::Iterable;
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
 
 /// A `Streamer` folding a vector of coefficients
 /// with the given challenges, and producing a stream of items

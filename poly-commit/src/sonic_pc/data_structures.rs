@@ -6,8 +6,7 @@ use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
 use ark_std::io::{Read, Write};
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
+use ark_std::vec::*;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;

@@ -7,9 +7,9 @@ use ark_poly::Polynomial;
 use ark_r1cs_std::fields::emulated_fp::EmulatedFpVar;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
+use ark_std::string::*;
+use ark_std::vec::*;
 use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash};
-#[cfg(not(feature = "std"))]
-use ark_std::{string::String, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 /// Define the minimal interface of prepared allocated structures.

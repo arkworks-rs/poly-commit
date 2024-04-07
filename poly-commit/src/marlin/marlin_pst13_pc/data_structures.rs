@@ -4,17 +4,17 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_poly::DenseMVPolynomial;
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
-};
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
 use ark_std::{
     io::{Read, Write},
     marker::PhantomData,
     ops::{Add, AddAssign, Index},
-    rand::RngCore,
 };
+
+use ark_serialize::{
+    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
+};
+use ark_std::rand::RngCore;
+use ark_std::vec::*;
 
 /// `UniversalParams` are the universal parameters for the MarlinPST13 scheme.
 #[derive(Derivative)]

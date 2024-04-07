@@ -1,5 +1,4 @@
-#[cfg(not(feature = "std"))]
-use ark_std::string::String;
+use ark_std::string::*;
 
 /// The error type for `PolynomialCommitment`.
 #[derive(Debug)]
