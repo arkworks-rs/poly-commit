@@ -1,11 +1,11 @@
 use crate::Polynomial;
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::rand::RngCore;
 use ark_std::{
     borrow::Borrow,
     marker::PhantomData,
     ops::{AddAssign, MulAssign, SubAssign},
+    rand::RngCore,
 };
 #[cfg(not(feature = "std"))]
 use ark_std::{string::String, vec::Vec};

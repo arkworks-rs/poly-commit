@@ -19,13 +19,12 @@ extern crate ark_std;
 
 use ark_ff::{Field, PrimeField};
 pub use ark_poly::{DenseUVPolynomial, Polynomial};
-use ark_std::rand::RngCore;
-
 use ark_std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
+    rand::RngCore,
 };
 #[cfg(not(feature = "std"))]
 use ark_std::{

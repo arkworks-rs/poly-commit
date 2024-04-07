@@ -1,7 +1,7 @@
-use crate::kzg10;
-use crate::{BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey};
-use ark_ec::pairing::Pairing;
-use ark_ec::AdditiveGroup;
+use crate::{
+    kzg10, BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey,
+};
+use ark_ec::{pairing::Pairing, AdditiveGroup};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };

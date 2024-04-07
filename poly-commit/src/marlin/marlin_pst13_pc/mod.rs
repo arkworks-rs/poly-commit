@@ -1,17 +1,14 @@
 use crate::{
     kzg10,
     marlin::{marlin_pc, Marlin},
-    CHALLENGE_SIZE,
+    BatchLCProof, Error, Evaluations, LabeledCommitment, LabeledPolynomial, LinearCombination,
+    PCCommitmentState, PCUniversalParams, PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
 };
-use crate::{BatchLCProof, Error, Evaluations, QuerySet};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
 use ark_crypto_primitives::sponge::CryptographicSponge;
-use ark_ec::AffineRepr;
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{BatchMulPreprocessing, ScalarMul},
-    CurveGroup, VariableBaseMSM,
+    AffineRepr, CurveGroup, VariableBaseMSM,
 };
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};

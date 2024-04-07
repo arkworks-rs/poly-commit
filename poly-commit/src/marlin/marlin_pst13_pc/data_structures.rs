@@ -1,6 +1,6 @@
-use crate::BTreeMap;
 use crate::{
-    PCCommitmentState, PCCommitterKey, PCPreparedVerifierKey, PCUniversalParams, PCVerifierKey,
+    BTreeMap, PCCommitmentState, PCCommitterKey, PCPreparedVerifierKey, PCUniversalParams,
+    PCVerifierKey,
 };
 use ark_ec::pairing::Pairing;
 use ark_poly::DenseMVPolynomial;

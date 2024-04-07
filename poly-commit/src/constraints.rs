@@ -4,8 +4,10 @@ use crate::{
 };
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
-use ark_r1cs_std::fields::emulated_fp::EmulatedFpVar;
-use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
+use ark_r1cs_std::{
+    fields::{emulated_fp::EmulatedFpVar, fp::FpVar},
+    prelude::*,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
 use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash};
 #[cfg(not(feature = "std"))]

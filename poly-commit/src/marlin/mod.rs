@@ -1,13 +1,10 @@
-use crate::CHALLENGE_SIZE;
-use crate::{kzg10, Error};
-use crate::{BTreeMap, BTreeSet, Debug, RngCore};
-use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
-use crate::{Evaluations, LabeledCommitment, QuerySet};
-use crate::{PCCommitmentState, Polynomial, PolynomialCommitment};
+use crate::{
+    kzg10, BTreeMap, BTreeSet, BatchLCProof, Debug, Error, Evaluations, LabeledCommitment,
+    LabeledPolynomial, LinearCombination, PCCommitmentState, Polynomial, PolynomialCommitment,
+    QuerySet, RngCore, CHALLENGE_SIZE,
+};
 use ark_crypto_primitives::sponge::CryptographicSponge;
-use ark_ec::pairing::Pairing;
-use ark_ec::AffineRepr;
-use ark_ec::CurveGroup;
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
 #[cfg(not(feature = "std"))]

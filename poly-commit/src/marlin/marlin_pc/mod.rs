@@ -1,20 +1,17 @@
-use crate::{kzg10, marlin::Marlin, PCCommitterKey, CHALLENGE_SIZE};
-use crate::{BTreeMap, BTreeSet};
-use crate::{BatchLCProof, Error, Evaluations, QuerySet};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
-use ark_ec::pairing::Pairing;
-use ark_ec::AffineRepr;
-use ark_ec::CurveGroup;
+use crate::{
+    kzg10, marlin::Marlin, BTreeMap, BTreeSet, BatchLCProof, Error, Evaluations, LabeledCommitment,
+    LabeledPolynomial, LinearCombination, PCCommitmentState, PCCommitterKey, PCUniversalParams,
+    PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
+};
+use ark_crypto_primitives::sponge::CryptographicSponge;
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
-use ark_std::rand::RngCore;
-use ark_std::{marker::PhantomData, ops::Div};
+use ark_std::{marker::PhantomData, ops::Div, rand::RngCore};
 #[cfg(not(feature = "std"))]
 use ark_std::{string::ToString, vec::Vec};
 
 mod data_structures;
-use ark_crypto_primitives::sponge::CryptographicSponge;
 pub use data_structures::*;
 
 /// Polynomial commitment based on [[KZG10]][kzg], with degree enforcement, batching,

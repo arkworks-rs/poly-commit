@@ -6,13 +6,10 @@
 //! This construction achieves extractability in the algebraic group model (AGM).
 
 use crate::{BTreeMap, Error, LabeledPolynomial, PCCommitmentState};
-use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
+use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
-use ark_std::rand::RngCore;
-use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul};
+use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, rand::RngCore};
 #[cfg(not(feature = "std"))]
 use ark_std::{string::ToString, vec::Vec};
 #[cfg(feature = "parallel")]

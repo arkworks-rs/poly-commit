@@ -1,26 +1,24 @@
-use crate::{BTreeMap, BTreeSet, CHALLENGE_SIZE};
-use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCCommitmentState, PCCommitterKey, PCUniversalParams, PolynomialCommitment};
+use crate::{
+    BTreeMap, BTreeSet, BatchLCProof, DenseUVPolynomial, Error, Evaluations, LabeledCommitment,
+    LabeledPolynomial, LinearCombination, PCCommitmentState, PCCommitterKey, PCUniversalParams,
+    PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
+};
+use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
-use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul};
+use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul, rand::RngCore};
 #[cfg(not(feature = "std"))]
 use ark_std::{
     string::{String, ToString},
     vec::Vec,
 };
-
-mod data_structures;
-pub use data_structures::*;
-
+use digest::Digest;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-use ark_crypto_primitives::sponge::CryptographicSponge;
-use digest::Digest;
+mod data_structures;
+pub use data_structures::*;
 
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups.

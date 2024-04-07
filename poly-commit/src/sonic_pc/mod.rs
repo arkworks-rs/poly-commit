@@ -1,8 +1,8 @@
-use crate::{kzg10, PCCommitterKey, CHALLENGE_SIZE};
-use crate::{BTreeMap, BTreeSet};
-use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
-use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
-use crate::{PCCommitmentState, PCUniversalParams, PolynomialCommitment};
+use crate::{
+    kzg10, BTreeMap, BTreeSet, BatchLCProof, DenseUVPolynomial, Error, Evaluations,
+    LabeledCommitment, LabeledPolynomial, LinearCombination, PCCommitmentState, PCCommitterKey,
+    PCUniversalParams, PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
+};
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{One, UniformRand, Zero};
