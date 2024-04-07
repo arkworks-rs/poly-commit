@@ -1,20 +1,19 @@
 use crate::multilinear_pc::data_structures::{
     Commitment, CommitterKey, Proof, UniversalParams, VerifierKey,
 };
-use ark_ec::scalar_mul::BatchMulPreprocessing;
-use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
-use ark_ff::{Field, PrimeField};
-use ark_ff::{One, Zero};
+use ark_ec::{
+    pairing::Pairing,
+    scalar_mul::{BatchMulPreprocessing, ScalarMul},
+    AffineRepr, CurveGroup, VariableBaseMSM,
+};
+use ark_ff::{Field, One, PrimeField, Zero};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-use ark_std::collections::LinkedList;
-use ark_std::iter::FromIterator;
-use ark_std::marker::PhantomData;
-use ark_std::ops::Mul;
-use ark_std::rand::RngCore;
-use ark_std::vec::*;
-use ark_std::UniformRand;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
+use ark_std::{
+    collections::LinkedList, iter::FromIterator, marker::PhantomData, ops::Mul, rand::RngCore,
+    UniformRand,
+};
 
 /// data structures used by multilinear extension commitment scheme
 pub mod data_structures;
@@ -244,7 +243,8 @@ mod tests {
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
     use ark_std::rand::RngCore;
     use ark_std::test_rng;
-    use ark_std::vec::*;
+    #[cfg(not(feature = "std"))]
+    use ark_std::vec::Vec;
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
 

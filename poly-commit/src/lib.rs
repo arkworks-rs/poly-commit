@@ -26,8 +26,11 @@ use ark_std::{
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
-    string::*,
-    vec::*,
+};
+#[cfg(not(feature = "std"))]
+use ark_std::{
+    string::{String, ToString},
+    vec::Vec,
 };
 
 /// Data structures used by a polynomial commitment scheme.

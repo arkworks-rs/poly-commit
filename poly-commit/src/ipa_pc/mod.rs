@@ -2,14 +2,16 @@ use crate::{BTreeMap, BTreeSet, CHALLENGE_SIZE};
 use crate::{BatchLCProof, DenseUVPolynomial, Error, Evaluations, QuerySet};
 use crate::{LabeledCommitment, LabeledPolynomial, LinearCombination};
 use crate::{PCCommitmentState, PCCommitterKey, PCUniversalParams, PolynomialCommitment};
-use ark_std::string::*;
-use ark_std::vec::*;
-
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
-use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul, vec};
+use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul};
+#[cfg(not(feature = "std"))]
+use ark_std::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 mod data_structures;
 pub use data_structures::*;
