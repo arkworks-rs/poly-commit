@@ -69,7 +69,7 @@ impl<E: Pairing, P: DenseMVPolynomial<E::ScalarField>, S: CryptographicSponge>
                 if term.is_constant() {
                     continue;
                 }
-                // If the current term contains `X_i` then divide appropiately,
+                // If the current term contains `X_i` then divide appropriately,
                 // otherwise add it to the remainder
                 let mut term_vec = (&*term).to_vec();
                 match term_vec.binary_search_by(|(var, _)| var.cmp(&i)) {
