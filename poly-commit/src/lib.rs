@@ -318,7 +318,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
             let proof_time = start_timer!(|| "Creating proof");
 
             // Simultaneously opening the commitments of all polynomials that
-            // refer to the the current point using the plain `open` function
+            // refer to the current point using the plain `open` function
             let proof = Self::open(
                 ck,
                 query_polys,
