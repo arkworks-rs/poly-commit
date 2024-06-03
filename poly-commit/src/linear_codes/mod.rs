@@ -85,7 +85,8 @@ where
     type LinCodePCParams: PCUniversalParams
         + PCCommitterKey
         + PCVerifierKey
-        + LinCodeParametersInfo<C, H>;
+        + LinCodeParametersInfo<C, H>
+        + Sync;
 
     /// Does a default setup for the PCS.
     fn setup<R: RngCore>(
