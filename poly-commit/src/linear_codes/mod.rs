@@ -413,7 +413,6 @@ where
             };
 
             // 1. Seed the transcript with the point and the recieved vector
-            // TODO Consider removing the evaluation point from the transcript.
             let point_vec = L::point_to_vec(point.clone());
             sponge.absorb(&point_vec);
             sponge.absorb(&proof.opening.v);
