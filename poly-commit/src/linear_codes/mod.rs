@@ -442,8 +442,12 @@ where
                     return Err(Error::InvalidCommitment);
                 }
 
-                path.verify(leaf_hash_param, two_to_one_hash_param, root, leaf.clone())
-                    .map_err(|_| Error::InvalidCommitment)?;
+                if !path
+                    .verify(leaf_hash_param, two_to_one_hash_param, root, leaf.clone())
+                    .map_err(|_| Error::InvalidCommitment)?
+                {
+                    return Ok(false);
+                }
             }
 
             // Helper closure: checks if a.b = c.
