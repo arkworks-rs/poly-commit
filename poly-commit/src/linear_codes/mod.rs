@@ -421,17 +421,14 @@ where
             let indices = get_indices_from_sponge(n_ext_cols, t, sponge)?;
 
             // 3. Hash the received columns into leaf hashes.
-            let col_hashes: Vec<C::Leaf> = proof
-                .opening
-                .columns
-                .iter()
-                .map(|c| {
-                    H::evaluate(vk.col_hash_params(), c.clone())
-                        .map_err(|_| Error::HashingError)
-                        .unwrap()
-                        .into()
-                })
-                .collect();
+            let mut col_hashes: Vec<C::Leaf> = Vec::new();
+            
+            for c in proof.opening.columns.iter() {
+                match H::evaluate(vk.col_hash_params(), c.clone()) {
+                    Ok(a) => col_hashes.push(a.into()),
+                    Err(_) => return Err(Error::HashingError),
+                }
+            }
 
             // 4. Verify the paths for each of the leaf hashes - this is only run once,
             // even if we have a well-formedness check (i.e., we save sending and checking the columns).
