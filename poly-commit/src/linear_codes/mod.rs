@@ -422,7 +422,7 @@ where
 
             // 3. Hash the received columns into leaf hashes.
             let mut col_hashes: Vec<C::Leaf> = Vec::new();
-            
+
             for c in proof.opening.columns.iter() {
                 match H::evaluate(vk.col_hash_params(), c.clone()) {
                     Ok(a) => col_hashes.push(a.into()),
@@ -447,15 +447,6 @@ where
                 }
             }
 
-            // Helper closure: checks if a.b = c.
-            let check_inner_product = |a, b, c| -> Result<(), Error> {
-                if inner_product(a, b) != c {
-                    return Err(Error::InvalidCommitment);
-                }
-
-                Ok(())
-            };
-
             // 5. Compute the encoding w = E(v).
             let w = L::encode(&proof.opening.v, vk);
 
@@ -468,24 +459,21 @@ where
             if let (Some(well_formedness), Some(r)) = out {
                 let w_well_formedness = L::encode(well_formedness, vk);
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
-                    check_inner_product(
-                        &r,
-                        &proof.opening.columns[transcript_index],
-                        w_well_formedness[*matrix_index],
-                    )?;
-                    check_inner_product(
-                        &b,
-                        &proof.opening.columns[transcript_index],
-                        w[*matrix_index],
-                    )?;
+                    if inner_product(&r, &proof.opening.columns[transcript_index])
+                        != w_well_formedness[*matrix_index]
+                        || inner_product(&b, &proof.opening.columns[transcript_index])
+                            != w[*matrix_index]
+                    {
+                        return Err(Error::InvalidCommitment);
+                    }
                 }
             } else {
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
-                    check_inner_product(
-                        &b,
-                        &proof.opening.columns[transcript_index],
-                        w[*matrix_index],
-                    )?;
+                    if inner_product(&b, &proof.opening.columns[transcript_index])
+                        != w[*matrix_index]
+                    {
+                        return Err(Error::InvalidCommitment);
+                    }
                 }
             }
 
