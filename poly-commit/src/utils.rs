@@ -62,7 +62,7 @@ impl<F: Field> Matrix<F> {
             .map(|col| {
                 inner_product(
                     v,
-                    &cfg_into_iter!(0..self.m)
+                    &cfg_into_iter!(0..self.n)
                         .map(|row| self.entries[row][col])
                         .collect::<Vec<F>>(),
                 )

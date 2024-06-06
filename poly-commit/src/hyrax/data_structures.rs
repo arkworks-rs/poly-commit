@@ -80,10 +80,8 @@ impl<G: AffineRepr> PCCommitment for HyraxCommitment<G> {
 
 pub(crate) type HyraxRandomness<F> = Vec<F>;
 
-/// Hyrax Commitment State blah blah blah blah
-/// blah blah blah blah
-/// blah blah blah blah
-/// blah blah blah blah
+/// Hyrax Commitment state: matrix of polynomial coefficients and list of random
+/// scalars used in each of the row-wise Pedersen commitments
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct HyraxCommitmentState<F>

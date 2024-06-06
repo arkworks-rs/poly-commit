@@ -1,4 +1,4 @@
-use ark_std::rand::RngCore;
+use ark_std::rand::{Error, RngCore};
 use core::num::NonZeroU32;
 
 /// `OptionalRng` is a hack that is necessary because `Option<&mut R>` is not implicitly reborrowed
@@ -35,12 +35,10 @@ impl<R: RngCore> RngCore for OptionalRng<R> {
     }
 
     #[inline]
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ark_std::rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
         match &mut self.0 {
             Some(r) => r.try_fill_bytes(dest),
-            None => Err(NonZeroU32::new(ark_std::rand::Error::CUSTOM_START)
-                .unwrap()
-                .into()),
+            None => Err(NonZeroU32::new(Error::CUSTOM_START).unwrap().into()),
         }
     }
 }
