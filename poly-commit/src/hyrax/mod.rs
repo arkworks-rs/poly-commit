@@ -474,12 +474,6 @@ where
                 });
             }
 
-            // Computing t_prime with a multi-exponentiation
-            let l_bigint = cfg_iter!(l)
-                .map(|chi| chi.into_bigint())
-                .collect::<Vec<_>>();
-            let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(&row_coms, &l_bigint).into();
-
             // Absorbing public parameters
             sponge.absorb(
                 &Blake2s256::digest(serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?)
@@ -503,15 +497,22 @@ where
             // it from the transcript.
             let c: G::ScalarField = sponge.squeeze_field_elements(1)[0];
 
-            // First check
-            let com_z_zd = (Self::pedersen_commit(&vk.com_key, z) + vk.h * z_d).into();
-            if com_z_zd != (t_prime.mul(c) + com_d).into() {
+            // Second check from the paper (figure 6, equation (14))
+            // Moved here for potential early return
+            let com_dp = (vk.com_key[0] * inner_product(&r, z) + vk.h * z_b).into();
+            if com_dp != (com_eval.mul(c) + com_b).into() {
                 return Ok(false);
             }
 
-            // Second check
-            let com_dp = (vk.com_key[0] * inner_product(&r, z) + vk.h * z_b).into();
-            if com_dp != (com_eval.mul(c) + com_b).into() {
+            // Computing t_prime with a multi-exponentiation
+            let l_bigint = cfg_iter!(l)
+                .map(|chi| chi.into_bigint())
+                .collect::<Vec<_>>();
+            let t_prime: G = <G::Group as VariableBaseMSM>::msm_bigint(&row_coms, &l_bigint).into();
+
+            // First check from the paper (figure 6, equation (13))
+            let com_z_zd = (Self::pedersen_commit(&vk.com_key, z) + vk.h * z_d).into();
+            if com_z_zd != (t_prime.mul(c) + com_d).into() {
                 return Ok(false);
             }
         }
