@@ -269,7 +269,7 @@ fn interpolate_poly<E: Pairing>(
 ) -> DensePolynomial<E::ScalarField> {
     let mut res = DensePolynomial::from_coefficients_vec(vec![E::ScalarField::zero()]);
     for (j, (_x_j, y_j)) in eval_points.iter().zip(evals.iter()).enumerate() {
-        let l_poly = lang[j].mul(sca_inverse[j] * y_j);
+        let l_poly = (&lang[j]).mul(sca_inverse[j] * y_j);
         res = (&res).add(&l_poly);
     }
     res
