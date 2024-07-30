@@ -197,7 +197,7 @@ pub struct Proof<G: AffineRepr> {
     pub rand: Option<G::ScalarField>,
 }
 
-/// `SuccinctCheckPolynomial` is a succinctly-representated polynomial
+/// `SuccinctCheckPolynomial` is a succinctly-represented polynomial
 /// generated from the `log_d` random oracle challenges generated in `open`.
 /// It has the special property that can be evaluated in `O(log_d)` time.
 pub struct SuccinctCheckPolynomial<F: Field>(pub Vec<F>);
