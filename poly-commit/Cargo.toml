@@ -16,12 +16,13 @@ ark-poly = {version = "^0.4.0", default-features = false }
 ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
 ark-std = { version = "^0.4.0", default-features = false }
 
+derivative = { version = "2", features = [ "use_core" ] }
+digest = "0.10"
+
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-hashbrown = { version = "0.13", default-features = false, optional = true}
 
-digest = "0.10"
-derivative = { version = "2", features = [ "use_core" ] }
+hashbrown = { version = "0.13", default-features = false, optional = true}
 rayon = { version = "1", optional = true }
 
 [[bench]]
