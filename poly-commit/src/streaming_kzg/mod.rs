@@ -93,6 +93,7 @@ pub use data_structures::*;
 pub use space::CommitterKeyStream;
 pub use time::CommitterKey;
 
+/// Dummy docs
 #[cfg(test)]
 pub mod tests;
 
