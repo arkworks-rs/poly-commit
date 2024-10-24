@@ -10,8 +10,6 @@ use ark_ff::PrimeField;
 use ark_poly::MultilinearExtension;
 use ark_serialize::serialize_to_vec;
 use ark_std::{marker::PhantomData, rand::RngCore, string::ToString, vec::Vec, UniformRand};
-use blake2::Blake2s256;
-use digest::Digest;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -146,16 +144,15 @@ where
         // generators, since the point at infinity should theoretically occur)
         let points: Vec<_> = ark_std::cfg_into_iter!(0u64..dim + 1)
             .map(|i| {
-                let mut hash =
-                    Blake2s256::digest([PROTOCOL_NAME, &i.to_le_bytes()].concat().as_slice());
-                let mut p = G::from_random_bytes(&hash);
+                let hash = blake3::hash([PROTOCOL_NAME, &i.to_le_bytes()].concat().as_slice());
+                let mut p = G::from_random_bytes(hash.as_bytes());
                 let mut j = 0u64;
                 while p.is_none() {
                     let mut bytes = PROTOCOL_NAME.to_vec();
                     bytes.extend(i.to_le_bytes());
                     bytes.extend(j.to_le_bytes());
-                    hash = Blake2s256::digest(bytes.as_slice());
-                    p = G::from_random_bytes(&hash);
+                    let hash = blake3::hash(bytes.as_slice());
+                    p = G::from_random_bytes(hash.as_bytes());
                     j += 1;
                 }
                 let point = p.unwrap();
@@ -337,10 +334,7 @@ where
             }
 
             // Absorbing public parameters
-            sponge.absorb(
-                &Blake2s256::digest(serialize_to_vec!(*ck).map_err(|_| Error::TranscriptError)?)
-                    .as_slice(),
-            );
+            sponge.absorb(&serialize_to_vec!(*ck).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
             sponge.absorb(&serialize_to_vec!(com.row_coms).map_err(|_| Error::TranscriptError)?);
@@ -475,10 +469,7 @@ where
             }
 
             // Absorbing public parameters
-            sponge.absorb(
-                &Blake2s256::digest(serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?)
-                    .as_slice(),
-            );
+            sponge.absorb(&serialize_to_vec!(*vk).map_err(|_| Error::TranscriptError)?);
 
             // Absorbing the commitment to the polynomial
             sponge.absorb(&serialize_to_vec!(*row_coms).map_err(|_| Error::TranscriptError)?);

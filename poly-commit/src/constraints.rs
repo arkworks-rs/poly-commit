@@ -8,8 +8,32 @@ use ark_poly::Polynomial;
 use ark_r1cs_std::fields::emulated_fp::EmulatedFpVar;
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
+use ark_std::{
+    borrow::Borrow,
+    cmp::Eq,
+    cmp::PartialEq,
+    hash::{BuildHasherDefault, Hash},
+    marker::Sized,
+};
 use hashbrown::{HashMap, HashSet};
+
+#[cfg(all(
+    target_has_atomic = "8",
+    target_has_atomic = "16",
+    target_has_atomic = "32",
+    target_has_atomic = "64",
+    target_has_atomic = "ptr"
+))]
+type DefaultHasher = ahash::AHasher;
+
+#[cfg(not(all(
+    target_has_atomic = "8",
+    target_has_atomic = "16",
+    target_has_atomic = "32",
+    target_has_atomic = "64",
+    target_has_atomic = "ptr"
+)))]
+type DefaultHasher = fnv::FnvHasher;
 
 /// Define the minimal interface of prepared allocated structures.
 pub trait PrepareGadget<Unprepared, ConstraintF: PrimeField>: Sized {
@@ -178,13 +202,17 @@ pub struct LabeledPointVar<TargetField: PrimeField, BaseField: PrimeField> {
 /// An allocated version of `QuerySet`.
 #[derive(Clone)]
 pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub HashSet<(String, LabeledPointVar<TargetField, BaseField>)>,
+    pub HashSet<(String, LabeledPointVar<TargetField, BaseField>), DefaultHasher>,
 );
 
 /// An allocated version of `Evaluations`.
 #[derive(Clone)]
 pub struct EvaluationsVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub HashMap<LabeledPointVar<TargetField, BaseField>, EmulatedFpVar<TargetField, BaseField>>,
+    pub  HashMap<
+        LabeledPointVar<TargetField, BaseField>,
+        EmulatedFpVar<TargetField, BaseField>,
+        BuildHasherDefault<DefaultHasher>,
+    >,
 );
 
 impl<TargetField: PrimeField, BaseField: PrimeField> EvaluationsVar<TargetField, BaseField> {
