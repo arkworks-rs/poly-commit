@@ -183,6 +183,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
 [pst]: https://ia.cr/2011/587
+[brakedown]: https://ia.cr/2021/1043
 [ligero]: https://ia.cr/2022/1608
 [hyrax]: https://eprint.iacr.org/2017/1132
 
@@ -219,6 +220,10 @@ CCS 2017
 [Doubly-efficient zkSNARKs without trusted setup][hyrax]
 Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
 2018 IEEE Symposium on Security and Privacy
+
+[Brakedown: Linear-time and field-agnostic SNARKs for R1CS][brakedown]    
+Alexander Golovnev, Jonathan Lee, Srinath Setty, Justin Thaler, Riad S. Wahby    
+CRYPTO 2023
 
 ## Acknowledgements
 

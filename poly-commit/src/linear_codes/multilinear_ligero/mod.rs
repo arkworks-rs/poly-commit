@@ -1,6 +1,9 @@
-use super::{
-    utils::{reed_solomon, tensor_vec},
-    LigeroPCParams, LinearEncode,
+use crate::{
+    linear_codes::{
+        utils::{reed_solomon, tensor_vec},
+        LigeroPCParams, LinearEncode,
+    },
+    Error,
 };
 use ark_crypto_primitives::{
     crh::{CRHScheme, TwoToOneCRHScheme},
@@ -52,8 +55,8 @@ where
         )
     }
 
-    fn encode(msg: &[F], param: &Self::LinCodePCParams) -> Vec<F> {
-        reed_solomon(msg, param.rho_inv)
+    fn encode(msg: &[F], param: &Self::LinCodePCParams) -> Result<Vec<F>, Error> {
+        Ok(reed_solomon(msg, param.rho_inv))
     }
 
     fn poly_to_vec(polynomial: &P) -> Vec<F> {

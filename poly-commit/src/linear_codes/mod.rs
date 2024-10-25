@@ -1,4 +1,8 @@
 use crate::{
+    linear_codes::{
+        data_structures::*,
+        utils::{calculate_t, get_indices_from_sponge},
+    },
     to_bytes,
     utils::{inner_product, Matrix},
     Error, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams, PCVerifierKey,
@@ -18,21 +22,22 @@ use ark_std::{string::ToString, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
+mod data_structures;
 mod utils;
+
+mod brakedown;
+
+mod ligero;
+
+mod multilinear_brakedown;
 
 mod multilinear_ligero;
 mod univariate_ligero;
 
+pub use data_structures::{BrakedownPCParams, LigeroPCParams, LinCodePCProof};
+pub use multilinear_brakedown::MultilinearBrakedown;
 pub use multilinear_ligero::MultilinearLigero;
 pub use univariate_ligero::UnivariateLigero;
-
-mod data_structures;
-mod ligero;
-use data_structures::*;
-
-pub use data_structures::{LigeroPCParams, LinCodePCProof};
-
-use utils::{calculate_t, get_indices_from_sponge};
 
 const FIELD_SIZE_ERROR: &str = "This field is not suitable for the proposed parameters";
 
@@ -97,7 +102,7 @@ where
 
     /// Encode a message, which is interpreted as a vector of coefficients
     /// of a polynomial of degree m - 1.
-    fn encode(msg: &[F], param: &Self::LinCodePCParams) -> Vec<F>;
+    fn encode(msg: &[F], param: &Self::LinCodePCParams) -> Result<Vec<F>, Error>;
 
     /// Represent the polynomial as either coefficients,
     /// in the univariate case, or evaluations over
@@ -123,8 +128,11 @@ where
 
         // 2. Apply encoding row-wise
         let rows = mat.rows();
-        let ext_mat =
-            Matrix::new_from_rows(cfg_iter!(rows).map(|r| Self::encode(r, param)).collect());
+        let ext_mat = Matrix::new_from_rows(
+            cfg_iter!(rows)
+                .map(|r| Self::encode(r, param).unwrap())
+                .collect(),
+        );
 
         (mat, ext_mat)
     }
@@ -179,7 +187,7 @@ where
 
     /// This is only a default setup with reasonable parameters.
     /// To create your own public parameters (from which vk/ck can be derived by `trim`),
-    /// see the documentation for `LigeroPCUniversalParams`.
+    /// see the documentation for `BrakedownPCUniversalParams` or `LigeroPCUniversalParams`.
     fn setup<R: RngCore>(
         max_degree: usize,
         num_vars: Option<usize>,
@@ -408,6 +416,7 @@ where
             };
 
             // 1. Seed the transcript with the point and the recieved vector
+            // TODO Consider removing the evaluation point from the transcript.
             let point_vec = L::point_to_vec(point.clone());
             sponge.absorb(&point_vec);
             sponge.absorb(&proof.opening.v);
@@ -416,14 +425,17 @@ where
             let indices = get_indices_from_sponge(n_ext_cols, t, sponge)?;
 
             // 3. Hash the received columns into leaf hashes.
-            let mut col_hashes: Vec<C::Leaf> = Vec::new();
-
-            for c in proof.opening.columns.iter() {
-                match H::evaluate(vk.col_hash_params(), c.clone()) {
-                    Ok(a) => col_hashes.push(a.into()),
-                    Err(_) => return Err(Error::HashingError),
-                }
-            }
+            let col_hashes: Vec<C::Leaf> = proof
+                .opening
+                .columns
+                .iter()
+                .map(|c| {
+                    H::evaluate(vk.col_hash_params(), c.clone())
+                        .map_err(|_| Error::HashingError)
+                        .unwrap()
+                        .into()
+                })
+                .collect();
 
             // 4. Verify the paths for each of the leaf hashes - this is only run once,
             // even if we have a well-formedness check (i.e., we save sending and checking the columns).
@@ -434,16 +446,21 @@ where
                     return Err(Error::InvalidCommitment);
                 }
 
-                if !path
-                    .verify(leaf_hash_param, two_to_one_hash_param, root, leaf.clone())
-                    .map_err(|_| Error::InvalidCommitment)?
-                {
-                    return Ok(false);
-                }
+                path.verify(leaf_hash_param, two_to_one_hash_param, root, leaf.clone())
+                    .map_err(|_| Error::InvalidCommitment)?;
             }
 
+            // Helper closure: checks if a.b = c.
+            let check_inner_product = |a, b, c| -> Result<(), Error> {
+                if inner_product(a, b) != c {
+                    return Err(Error::InvalidCommitment);
+                }
+
+                Ok(())
+            };
+
             // 5. Compute the encoding w = E(v).
-            let w = L::encode(&proof.opening.v, vk);
+            let w = L::encode(&proof.opening.v, vk)?;
 
             // 6. Compute `a`, `b` to right- and left- multiply with the matrix `M`.
             let (a, b) = L::tensor(point, n_cols, n_rows);
@@ -452,23 +469,26 @@ where
             // matches with what the verifier computed for himself.
             // Note: we sacrifice some code repetition in order not to repeat execution.
             if let (Some(well_formedness), Some(r)) = out {
-                let w_well_formedness = L::encode(well_formedness, vk);
+                let w_well_formedness = L::encode(well_formedness, vk)?;
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
-                    if inner_product(&r, &proof.opening.columns[transcript_index])
-                        != w_well_formedness[*matrix_index]
-                        || inner_product(&b, &proof.opening.columns[transcript_index])
-                            != w[*matrix_index]
-                    {
-                        return Err(Error::InvalidCommitment);
-                    }
+                    check_inner_product(
+                        &r,
+                        &proof.opening.columns[transcript_index],
+                        w_well_formedness[*matrix_index],
+                    )?;
+                    check_inner_product(
+                        &b,
+                        &proof.opening.columns[transcript_index],
+                        w[*matrix_index],
+                    )?;
                 }
             } else {
                 for (transcript_index, matrix_index) in indices.iter().enumerate() {
-                    if inner_product(&b, &proof.opening.columns[transcript_index])
-                        != w[*matrix_index]
-                    {
-                        return Err(Error::InvalidCommitment);
-                    }
+                    check_inner_product(
+                        &b,
+                        &proof.opening.columns[transcript_index],
+                        w[*matrix_index],
+                    )?;
                 }
             }
 

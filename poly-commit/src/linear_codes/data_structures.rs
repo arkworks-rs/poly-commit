@@ -1,4 +1,4 @@
-use crate::{utils::Matrix, PCCommitment, PCCommitmentState};
+use crate::{linear_codes::utils::SprsMat, utils::Matrix, PCCommitment, PCCommitmentState};
 use ark_crypto_primitives::{
     crh::CRHScheme,
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
@@ -8,6 +8,57 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 #[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
 use ark_std::{marker::PhantomData, rand::RngCore};
+
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+/// The public parameters for Brakedown PCS.
+pub struct BrakedownPCParams<F: PrimeField, C: Config, H: CRHScheme> {
+    /// The security parameter
+    pub(crate) sec_param: usize,
+    /// alpha in the paper
+    pub(crate) alpha: (usize, usize),
+    /// beta in the paper
+    pub(crate) beta: (usize, usize),
+    /// The inverse of the code rate.
+    pub(crate) rho_inv: (usize, usize),
+    /// Threshold of the base case to encode with RS
+    pub(crate) base_len: usize,
+    /// Length of each column in the matrix that represents the polynomials
+    pub(crate) n: usize,
+    /// Length of each row in the matrix that represents the polynomials
+    pub(crate) m: usize,
+    /// Length of each row in the matrix that represents the polynomials, **after encoding**
+    pub(crate) m_ext: usize,
+    /// Constarints on A matrices. `a_dims[i]` is `(n, m, c)`, where `n` is
+    /// the number of rows, `m` is the number of columns, `c` is the number of
+    /// non-zero elements in each row, for the matrix A in the `i`th step of
+    /// the encoding.
+    pub(crate) a_dims: Vec<(usize, usize, usize)>,
+    /// Same as `a_dims`, but for B matrices.
+    pub(crate) b_dims: Vec<(usize, usize, usize)>,
+    /// By having `a_dims` and `b_dims`, we compute a vector of indices that
+    /// specfies where is the beginning of the sub-chunk that we need to
+    /// encode during the recursive encoding. Notice that we do not recurse
+    /// in this implementation, instead we do it iteratively.
+    pub(crate) start: Vec<usize>,
+    /// Same as `start`, but stores the end index of those chunks.
+    pub(crate) end: Vec<usize>,
+    /// A vector of all A matrices we need for encoding.
+    pub(crate) a_mats: Vec<SprsMat<F>>,
+    /// A vector of all B matrices we need for encoding.
+    pub(crate) b_mats: Vec<SprsMat<F>>,
+    /// This is a flag which determines if the random linear combination is done.
+    pub(crate) check_well_formedness: bool,
+    /// Parameters for hash function of Merkle tree leaves
+    #[derivative(Debug = "ignore")]
+    pub(crate) leaf_hash_param: LeafParam<C>,
+    /// Parameters for hash function of Merke tree combining two nodes into one
+    #[derivative(Debug = "ignore")]
+    pub(crate) two_to_one_hash_param: TwoToOneParam<C>,
+    // Parameters for obtaining leaf digest from leaf value.
+    #[derivative(Debug = "ignore")]
+    pub(crate) col_hash_params: H::Parameters,
+}
 
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]

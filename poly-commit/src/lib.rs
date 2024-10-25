@@ -131,6 +131,7 @@ pub mod streaming_kzg;
 /// Scheme based on the Ligero construction in [[Ligero]][ligero].
 ///
 /// [ligero]: https://eprint.iacr.org/2022/1608
+/// [brakedown]: https://eprint.iacr.org/2021/1043.pdf
 pub mod linear_codes;
 
 /// A polynomial commitment scheme based on the hardness of the

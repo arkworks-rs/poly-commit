@@ -119,6 +119,9 @@ pub enum Error {
     /// Error resulting from hashing in linear code - based PCS.
     HashingError,
 
+    /// Shows that encoding is not feasible
+    EncodingError,
+
     /// This means a commitment with a certain label was matched with a
     /// a polynomial which has a different label - which shouldn't happen
     MismatchedLabels {
@@ -235,6 +238,7 @@ impl core::fmt::Display for Error {
             Error::TranscriptError => write!(f, "Incorrect transcript manipulation"),
             Error::InvalidParameters(err) => write!(f, "{}", err),
             Error::HashingError => write!(f, "Error resulting from hashing"),
+            Error::EncodingError => write!(f, "Encoding failed"),
             Error::MismatchedLabels { commitment_label, polynomial_label } =>
                 write!(f, "Mismatched labels: commitment label: {}, polynomial label: {}",
                     commitment_label,

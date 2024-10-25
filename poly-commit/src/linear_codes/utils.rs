@@ -1,11 +1,110 @@
 use crate::{utils::ceil_div, Error};
 use ark_crypto_primitives::sponge::CryptographicSponge;
-use ark_ff::{FftField, PrimeField};
+use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 #[cfg(not(feature = "std"))]
 use ark_std::{string::ToString, vec::Vec};
-#[cfg(not(feature = "std"))]
+
+#[cfg(all(not(feature = "std"), target_arch = "aarch64"))]
 use num_traits::Float;
+
+#[cfg(test)]
+use {
+    crate::to_bytes,
+    ark_crypto_primitives::crh::CRHScheme,
+    ark_std::{borrow::Borrow, marker::PhantomData, rand::RngCore},
+    digest::Digest,
+};
+
+/// This is CSC format
+/// https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_(CSC_or_CCS)
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+pub struct SprsMat<F: Field> {
+    /// Number of rows.
+    pub(crate) n: usize,
+    /// Number of columns.
+    pub(crate) m: usize,
+    /// Number of non-zero entries in each row.
+    pub(crate) d: usize,
+    /// Numbers of non-zero elements in each columns.
+    ind_ptr: Vec<usize>,
+    /// The indices in each columns where exists a non-zero element.
+    col_ind: Vec<usize>,
+    // The values of non-zero entries.
+    val: Vec<F>,
+}
+
+impl<F: Field> SprsMat<F> {
+    /// Calulates v.M
+    pub(crate) fn row_mul(&self, v: &[F]) -> Vec<F> {
+        (0..self.m)
+            .map(|j| {
+                let ij = self.ind_ptr[j]..self.ind_ptr[j + 1];
+                self.col_ind[ij.clone()]
+                    .iter()
+                    .zip(&self.val[ij])
+                    .map(|(&idx, x)| v[idx] * x)
+                    .sum::<F>()
+            })
+            .collect::<Vec<_>>()
+    }
+    /// Create a new `SprsMat` from list of elements that represents the
+    /// matrix in column major order. `n` is the number of rows, `m` is
+    /// the number of columns, and `d` is NNZ in each row.
+    pub fn new_from_flat(n: usize, m: usize, d: usize, list: &[F]) -> Self {
+        let nnz = d * n;
+        let mut ind_ptr = vec![0; m + 1];
+        let mut col_ind = Vec::<usize>::with_capacity(nnz);
+        let mut val = Vec::<F>::with_capacity(nnz);
+        assert!(list.len() == m * n, "The dimension is incorrect.");
+        for i in 0..m {
+            for (c, &v) in list[i * n..(i + 1) * n].iter().enumerate() {
+                if v != F::zero() {
+                    ind_ptr[i + 1] += 1;
+                    col_ind.push(c);
+                    val.push(v);
+                }
+            }
+            ind_ptr[i + 1] += ind_ptr[i];
+        }
+        assert!(ind_ptr[m] <= nnz, "The dimension or NNZ is incorrect.");
+        Self {
+            n,
+            m,
+            d,
+            ind_ptr,
+            col_ind,
+            val,
+        }
+    }
+    pub fn new_from_columns(n: usize, m: usize, d: usize, list: &[Vec<(usize, F)>]) -> Self {
+        let nnz = d * n;
+        let mut ind_ptr = vec![0; m + 1];
+        let mut col_ind = Vec::<usize>::with_capacity(nnz);
+        let mut val = Vec::<F>::with_capacity(nnz);
+        assert!(list.len() == m, "The dimension is incorrect.");
+        for j in 0..m {
+            for (i, v) in list[j].iter() {
+                ind_ptr[j + 1] += 1;
+                col_ind.push(*i);
+                val.push(*v);
+            }
+            assert!(list[j].len() <= n, "The dimension is incorrect.");
+            ind_ptr[j + 1] += ind_ptr[j];
+        }
+        assert!(ind_ptr[m] <= nnz, "The dimension or NNZ is incorrect.");
+        Self {
+            n,
+            m,
+            d,
+            ind_ptr,
+            col_ind,
+            val,
+        }
+    }
+}
 
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of some FFT domain in F.
@@ -84,6 +183,60 @@ pub(crate) fn calculate_t<F: PrimeField>(
     Ok(if t < codeword_len { t } else { codeword_len })
 }
 
+#[cfg(test)]
+pub(crate) struct LeafIdentityHasher;
+
+#[cfg(test)]
+impl CRHScheme for LeafIdentityHasher {
+    type Input = Vec<u8>;
+    type Output = Vec<u8>;
+    type Parameters = ();
+
+    fn setup<R: RngCore>(_: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
+        Ok(())
+    }
+
+    fn evaluate<T: Borrow<Self::Input>>(
+        _: &Self::Parameters,
+        input: T,
+    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
+        Ok(input.borrow().to_vec().into())
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct FieldToBytesColHasher<F, D>
+where
+    F: PrimeField + CanonicalSerialize,
+    D: Digest,
+{
+    _phantom: PhantomData<(F, D)>,
+}
+
+#[cfg(test)]
+impl<F, D> CRHScheme for FieldToBytesColHasher<F, D>
+where
+    F: PrimeField + CanonicalSerialize,
+    D: Digest,
+{
+    type Input = Vec<F>;
+    type Output = Vec<u8>;
+    type Parameters = ();
+
+    fn setup<R: RngCore>(_rng: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
+        Ok(())
+    }
+
+    fn evaluate<T: Borrow<Self::Input>>(
+        _parameters: &Self::Parameters,
+        input: T,
+    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
+        let mut dig = D::new();
+        dig.update(to_bytes!(input.borrow()).unwrap());
+        Ok(dig.finalize().to_vec())
+    }
+}
+
 pub(crate) fn tensor_vec<F: PrimeField>(values: &[F]) -> Vec<F> {
     let one = F::one();
     let anti_values: Vec<F> = values.iter().map(|v| one - *v).collect();
@@ -106,17 +259,46 @@ pub(crate) fn tensor_vec<F: PrimeField>(values: &[F]) -> Vec<F> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-
-    use super::*;
-
+    use crate::linear_codes::utils::{calculate_t, get_num_bytes, reed_solomon, SprsMat};
+    use crate::utils::to_field;
     use ark_bls12_377::Fq;
     use ark_bls12_377::Fr;
+    use ark_ff::PrimeField;
     use ark_poly::{
         domain::general::GeneralEvaluationDomain, univariate::DensePolynomial, DenseUVPolynomial,
-        Polynomial,
+        EvaluationDomain, Polynomial,
     };
     use ark_std::test_rng;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+
+    #[test]
+    fn test_sprs_row_mul() {
+        // The columns major representation of a matrix.
+        let mat: Vec<Fr> = to_field(vec![10, 23, 55, 100, 1, 58, 4, 0, 9]);
+
+        let mat = SprsMat::new_from_flat(3, 3, 3, &mat);
+        let v: Vec<Fr> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fr
+        // we ensure the test will still pass even if Fr changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fr>(vec![4088, 4431, 543]));
+    }
+
+    #[test]
+    fn test_sprs_row_mul_sparse_mat() {
+        // The columns major representation of a matrix.
+        let mat: Vec<Fr> = to_field(vec![10, 23, 55, 100, 1, 58, 4, 0, 9]);
+        let mat = vec![
+            vec![(0usize, mat[0]), (1usize, mat[1]), (2usize, mat[2])],
+            vec![(0usize, mat[3]), (1usize, mat[4]), (2usize, mat[5])],
+            vec![(0usize, mat[6]), (1usize, mat[7]), (2usize, mat[8])],
+        ];
+
+        let mat = SprsMat::new_from_columns(3, 3, 3, &mat);
+        let v: Vec<Fr> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fr
+        // we ensure the test will still pass even if Fr changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fr>(vec![4088, 4431, 543]));
+    }
 
     #[test]
     fn test_reed_solomon() {
