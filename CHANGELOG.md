@@ -13,6 +13,7 @@
 - [\#82](https://github.com/arkworks-rs/poly-commit/pull/82) Add multivariate opening challenge strategy. Integrate with sponge API.
 
 ### Improvements
+- [\#152](https://github.com/arkworks-rs/poly-commit/issues/152) Expose `kzg10::open_with_witness_polynomial` and `open` downstream.
 
 ### Bug fixes
 

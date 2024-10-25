@@ -67,17 +67,14 @@ pub struct HyraxPC<
     G: AffineRepr,
     // A polynomial type representing multilinear polynomials
     P: MultilinearExtension<G::ScalarField>,
-    // The sponge used in the protocol as random oracle
-    S: CryptographicSponge,
 > {
-    _phantom: PhantomData<(G, P, S)>,
+    _phantom: PhantomData<(G, P)>,
 }
 
-impl<G, P, S> HyraxPC<G, P, S>
+impl<G, P> HyraxPC<G, P>
 where
     G: AffineRepr,
     P: MultilinearExtension<G::ScalarField>,
-    S: CryptographicSponge,
 {
     /// Pedersen commitment to a vector of scalars as described in appendix A.1
     /// of the reference article.
@@ -97,12 +94,11 @@ where
     }
 }
 
-impl<G, P, S> PolynomialCommitment<G::ScalarField, P, S> for HyraxPC<G, P, S>
+impl<G, P> PolynomialCommitment<G::ScalarField, P> for HyraxPC<G, P>
 where
     G: AffineRepr,
     G::ScalarField: Absorb,
     P: MultilinearExtension<G::ScalarField>,
-    S: CryptographicSponge,
 {
     type UniversalParams = HyraxUniversalParams<G>;
     type CommitterKey = HyraxCommitterKey<G>;
@@ -280,7 +276,7 @@ where
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<G::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -426,7 +422,7 @@ where
         point: &'a P::Point,
         _values: impl IntoIterator<Item = G::ScalarField>,
         proof: &Self::Proof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where

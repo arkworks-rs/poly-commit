@@ -1,15 +1,17 @@
-use crate::CHALLENGE_SIZE;
-use crate::{kzg10, Error};
-use crate::{BTreeMap, BTreeSet, Debug, RngCore, String, ToString, Vec};
-use crate::{BatchLCProof, LabeledPolynomial, LinearCombination};
-use crate::{Evaluations, LabeledCommitment, QuerySet};
-use crate::{PCCommitmentState, Polynomial, PolynomialCommitment};
+use crate::{
+    kzg10, BTreeMap, BTreeSet, BatchLCProof, Debug, Error, Evaluations, LabeledCommitment,
+    LabeledPolynomial, LinearCombination, PCCommitmentState, Polynomial, PolynomialCommitment,
+    QuerySet, RngCore, CHALLENGE_SIZE,
+};
 use ark_crypto_primitives::sponge::CryptographicSponge;
-use ark_ec::pairing::Pairing;
-use ark_ec::AffineRepr;
-use ark_ec::CurveGroup;
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::{One, Zero};
 use ark_std::{convert::TryInto, hash::Hash, ops::AddAssign, ops::Mul};
+#[cfg(not(feature = "std"))]
+use ark_std::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Polynomial commitment scheme from [[KZG10]][kzg] that enforces
 /// strict degree bounds and (optionally) enables hiding commitments by
@@ -28,25 +30,22 @@ pub mod marlin_pc;
 pub mod marlin_pst13_pc;
 
 /// Common functionalities between `marlin_pc` and `marlin_pst13_pc`
-struct Marlin<E, S, P, PC>
+struct Marlin<E, P, PC>
 where
     E: Pairing,
-    S: CryptographicSponge,
     P: Polynomial<E::ScalarField>,
-    PC: PolynomialCommitment<E::ScalarField, P, S>,
+    PC: PolynomialCommitment<E::ScalarField, P>,
 {
     _engine: core::marker::PhantomData<E>,
-    _sponge: core::marker::PhantomData<S>,
     _poly: core::marker::PhantomData<P>,
     _pc: core::marker::PhantomData<PC>,
 }
 
-impl<E, S, P, PC> Marlin<E, S, P, PC>
+impl<E, P, PC> Marlin<E, P, PC>
 where
     E: Pairing,
-    S: CryptographicSponge,
     P: Polynomial<E::ScalarField>,
-    PC: PolynomialCommitment<E::ScalarField, P, S>,
+    PC: PolynomialCommitment<E::ScalarField, P>,
 {
     /// MSM for `commitments` and `coeffs`
     fn combine_commitments<'a>(
@@ -110,7 +109,7 @@ where
     fn accumulate_commitments_and_values<'a>(
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         values: impl IntoIterator<Item = E::ScalarField>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(E::G1, E::ScalarField), Error> {
         let acc_time = start_timer!(|| "Accumulating commitments and values");
@@ -153,7 +152,7 @@ where
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<marlin_pc::Commitment<E>>>,
         query_set: &QuerySet<D>,
         evaluations: &Evaluations<D, E::ScalarField>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         vk: Option<&marlin_pc::VerifierKey<E>>,
     ) -> Result<(Vec<kzg10::Commitment<E>>, Vec<D>, Vec<E::ScalarField>), Error>
     where
@@ -228,7 +227,7 @@ where
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<E::ScalarField, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<PC::Commitment>>,
         query_set: &QuerySet<D>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a PC::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<E::ScalarField, PC::BatchProof>, Error>
@@ -238,7 +237,6 @@ where
         PC: PolynomialCommitment<
             E::ScalarField,
             P,
-            S,
             Commitment = marlin_pc::Commitment<E>,
             Error = Error,
         >,
@@ -324,7 +322,7 @@ where
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<P::Point, E::ScalarField>,
         proof: &BatchLCProof<E::ScalarField, PC::BatchProof>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: &mut R,
     ) -> Result<bool, Error>
     where
@@ -334,7 +332,6 @@ where
         PC: PolynomialCommitment<
             E::ScalarField,
             P,
-            S,
             Commitment = marlin_pc::Commitment<E>,
             Error = Error,
         >,
