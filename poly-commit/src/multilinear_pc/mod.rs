@@ -238,7 +238,7 @@ mod tests {
     use crate::multilinear_pc::{data_structures::UniversalParams, MultilinearPC};
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
     #[cfg(not(feature = "std"))]
     use ark_std::vec::Vec;
     use ark_std::{rand::RngCore, test_rng, UniformRand};

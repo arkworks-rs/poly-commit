@@ -633,7 +633,6 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
     poly_query_set
 }
 
-/// Dummy doc
 #[cfg(test)]
 pub mod tests {
     #![allow(missing_docs)]
@@ -660,7 +659,6 @@ pub mod tests {
         sponge: fn() -> S,
     }
 
-    /// Dummy doc
     pub fn bad_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -754,7 +752,6 @@ pub mod tests {
         Ok(())
     }
 
-    /// Dummy doc
     fn test_template<F, P, PC, S>(info: TestInfo<F, P, S>) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -896,7 +893,6 @@ pub mod tests {
         Ok(())
     }
 
-    /// Dummy doc
     fn equation_test_template<F, P, PC, S>(info: TestInfo<F, P, S>) -> Result<(), PC::Error>
     where
         F: PrimeField,
@@ -1078,7 +1074,6 @@ pub mod tests {
         Ok(())
     }
 
-    /// Dummy doc
     pub fn single_poly_test<F, P, PC, S>(
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
@@ -1107,7 +1102,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn linear_poly_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -1135,7 +1129,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn single_poly_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -1163,7 +1156,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn quadratic_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -1191,7 +1183,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn single_poly_degree_bound_multiple_queries_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -1219,7 +1210,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn two_polys_degree_bound_single_query_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,
@@ -1247,7 +1237,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn full_end_to_end_test<F, P, PC, S>(
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
@@ -1276,7 +1265,6 @@ pub mod tests {
         test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn full_end_to_end_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
@@ -1305,7 +1293,6 @@ pub mod tests {
         equation_test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn single_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
@@ -1334,7 +1321,6 @@ pub mod tests {
         equation_test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn two_equation_test<F, P, PC, S>(
         num_vars: Option<usize>,
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
@@ -1363,7 +1349,6 @@ pub mod tests {
         equation_test_template::<F, P, PC, S>(info)
     }
 
-    /// Dummy doc
     pub fn two_equation_degree_bound_test<F, P, PC, S>(
         rand_poly: fn(usize, Option<usize>, &mut ChaCha20Rng) -> P,
         rand_point: fn(Option<usize>, &mut ChaCha20Rng) -> P::Point,

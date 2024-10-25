@@ -108,7 +108,6 @@ where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-    P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -138,7 +137,6 @@ where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-
     P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -180,7 +178,6 @@ where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-    P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
