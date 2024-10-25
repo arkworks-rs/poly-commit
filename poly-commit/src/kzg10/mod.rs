@@ -211,9 +211,9 @@ where
 
     /// Compute witness polynomial.
     ///
-    /// The witness polynomial w(x) the quotient of the division (p(x) - p(z)) / (x - z)
-    /// Observe that this quotient does not change with z because
-    /// p(z) is the remainder term. We can therefore omit p(z) when computing the quotient.
+    /// The witness polynomial $w(x)$ the quotient of the division (p(x) - p(z)) / (x - z)
+    /// Observe that this quotient does not change with $z$ because
+    /// $p(z)$ is the remainder term. We can therefore omit $p(z)$ when computing the quotient.
     pub fn compute_witness_polynomial(
         p: &P,
         point: P::Point,
@@ -239,7 +239,8 @@ where
         Ok((witness_polynomial, random_witness_polynomial))
     }
 
-    pub(crate) fn open_with_witness_polynomial<'a>(
+    /// Yields a [`Proof`] with a witness polynomial.
+    pub fn open_with_witness_polynomial<'a>(
         powers: &Powers<E>,
         point: P::Point,
         randomness: &Randomness<E::ScalarField, P>,
@@ -282,8 +283,8 @@ where
         })
     }
 
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the same.
-    pub(crate) fn open<'a>(
+    /// On input a polynomial `p` and a `point`, outputs a [`Proof`] for the same.
+    pub fn open<'a>(
         powers: &Powers<E>,
         p: &P,
         point: P::Point,
