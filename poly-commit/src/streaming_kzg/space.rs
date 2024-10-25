@@ -1,17 +1,22 @@
 //! Space-efficient implementation of the polynomial commitment of Kate et al.
-use ark_ec::{pairing::Pairing, CurveGroup};
+use crate::streaming_kzg::{
+    ceil_div, time::CommitterKey, vanishing_polynomial, Commitment, EvaluationProof,
+    FoldedPolynomialTree, VerifierKey,
+};
+use ark_ec::{
+    pairing::Pairing,
+    scalar_mul::variable_base::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM},
+    CurveGroup,
+};
 use ark_ff::{PrimeField, Zero};
 use ark_poly::Polynomial;
-use ark_std::borrow::Borrow;
-use ark_std::collections::VecDeque;
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
-
-use crate::streaming_kzg::{ceil_div, vanishing_polynomial, FoldedPolynomialTree};
-use ark_ec::scalar_mul::variable_base::{ChunkedPippenger, HashMapPippenger, VariableBaseMSM};
-use ark_std::iterable::{Iterable, Reverse};
-
-use super::{time::CommitterKey, VerifierKey};
-use super::{Commitment, EvaluationProof};
+use ark_std::{
+    borrow::Borrow,
+    collections::VecDeque,
+    iterable::{Iterable, Reverse},
+};
 
 const LENGTH_MISMATCH_MSG: &str = "Expecting at least one element in the committer key.";
 

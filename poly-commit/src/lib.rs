@@ -19,13 +19,15 @@ extern crate ark_std;
 
 use ark_ff::{Field, PrimeField};
 pub use ark_poly::{DenseUVPolynomial, Polynomial};
-use ark_std::rand::RngCore;
-
 use ark_std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     hash::Hash,
     iter::FromIterator,
+    rand::RngCore,
+};
+#[cfg(not(feature = "std"))]
+use ark_std::{
     string::{String, ToString},
     vec::Vec,
 };
@@ -140,9 +142,7 @@ pub type Evaluations<T, F> = BTreeMap<(String, T), F>;
 /// a sender to commit to multiple polynomials and later provide a succinct proof
 /// of evaluation for the corresponding commitments at a query set `Q`, while
 /// enforcing per-polynomial degree bounds.
-pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: CryptographicSponge>:
-    Sized
-{
+pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>>: Sized {
     /// The universal parameters for the commitment scheme. These are "trimmed"
     /// down to `Self::CommitterKey` and `Self::VerifierKey` by `Self::trim`.
     type UniversalParams: PCUniversalParams;
@@ -216,7 +216,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -232,7 +232,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof: &Self::Proof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where
@@ -252,7 +252,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::BatchProof, Self::Error>
@@ -265,7 +265,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         // order to gather (i.e. batch) all polynomials that should be queried at
         // the same point, then opening their commitments simultaneously with a
         // single call to `open` (per point)
-        let rng = &mut crate::optional_rng::OptionalRng(rng);
+        let rng = &mut optional_rng::OptionalRng(rng);
         let poly_st_comm: BTreeMap<_, _> = labeled_polynomials
             .into_iter()
             .zip(states)
@@ -357,7 +357,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         query_set: &QuerySet<P::Point>,
         evaluations: &Evaluations<P::Point, F>,
         proof: &Self::BatchProof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -429,7 +429,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         query_set: &QuerySet<P::Point>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         rng: Option<&mut dyn RngCore>,
     ) -> Result<BatchLCProof<F, Self::BatchProof>, Self::Error>
@@ -474,7 +474,7 @@ pub trait PolynomialCommitment<F: PrimeField, P: Polynomial<F>, S: Cryptographic
         eqn_query_set: &QuerySet<P::Point>,
         eqn_evaluations: &Evaluations<P::Point, F>,
         proof: &BatchLCProof<F, Self::BatchProof>,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         rng: &mut R,
     ) -> Result<bool, Self::Error>
     where
@@ -622,9 +622,9 @@ fn lc_query_set_to_poly_query_set<'a, F: Field, T: Clone + Ord>(
 
 #[cfg(test)]
 pub mod tests {
+    #![allow(missing_docs)]
     use crate::*;
     use ark_crypto_primitives::sponge::poseidon::{PoseidonConfig, PoseidonSponge};
-    use ark_poly::Polynomial;
     use ark_std::rand::{
         distributions::{Distribution, Uniform},
         Rng, SeedableRng,
@@ -654,7 +654,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let sponge = sponge();
@@ -743,7 +743,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let TestInfo {
@@ -884,7 +884,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let TestInfo {
@@ -1070,7 +1070,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1097,7 +1097,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1124,7 +1124,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1151,7 +1151,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1178,7 +1178,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1205,7 +1205,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1233,7 +1233,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1261,7 +1261,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1289,7 +1289,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1317,7 +1317,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {
@@ -1344,7 +1344,7 @@ pub mod tests {
     where
         F: PrimeField,
         P: Polynomial<F>,
-        PC: PolynomialCommitment<F, P, S>,
+        PC: PolynomialCommitment<F, P>,
         S: CryptographicSponge,
     {
         let info = TestInfo {

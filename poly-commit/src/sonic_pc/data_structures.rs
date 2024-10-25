@@ -1,13 +1,13 @@
-use crate::kzg10;
 use crate::{
-    BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey, Vec,
+    kzg10, BTreeMap, PCCommitterKey, PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey,
 };
-use ark_ec::pairing::Pairing;
-use ark_ec::AdditiveGroup;
+use ark_ec::{pairing::Pairing, AdditiveGroup};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
 use ark_std::io::{Read, Write};
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;

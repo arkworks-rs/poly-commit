@@ -82,28 +82,28 @@
 //! assert!(vk.verify(&commitment, &alpha, &evaluation, &proof).is_ok())
 //! ```
 
+use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup, VariableBaseMSM};
+use ark_ff::{Field, One, PrimeField, Zero};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
+use ark_serialize::{CanonicalSerialize, Compress};
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
+use ark_std::{
+    borrow::Borrow,
+    fmt,
+    ops::{Add, Mul},
+};
+
 mod data_structures;
 mod space;
 mod time;
-
-use ark_ec::CurveGroup;
-use ark_serialize::{CanonicalSerialize, Compress};
-use ark_std::vec::Vec;
 pub use data_structures::*;
 pub use space::CommitterKeyStream;
 pub use time::CommitterKey;
 
+/// Dummy docs
 #[cfg(test)]
 pub mod tests;
-
-use ark_ff::{Field, One, PrimeField, Zero};
-use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-use ark_std::ops::{Add, Mul};
-
-use ark_std::borrow::Borrow;
-use ark_std::fmt;
-
-use ark_ec::{pairing::Pairing, AffineRepr, VariableBaseMSM};
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

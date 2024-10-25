@@ -5,15 +5,13 @@
 //! proposed by Kate, Zaverucha, and Goldberg ([KZG10](http://cacr.uwaterloo.ca/techreports/2010/cacr2010-10.pdf)).
 //! This construction achieves extractability in the algebraic group model (AGM).
 
-use crate::{BTreeMap, Error, LabeledPolynomial, PCCommitmentState, ToString, Vec};
-use ark_ec::AffineRepr;
-use ark_ec::{pairing::Pairing, CurveGroup};
-use ark_ec::{scalar_mul::ScalarMul, VariableBaseMSM};
+use crate::{BTreeMap, Error, LabeledPolynomial, PCCommitmentState};
+use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
-use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, vec};
-
-use ark_std::rand::RngCore;
+use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, rand::RngCore};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -479,7 +477,6 @@ mod tests {
     use ark_bls12_377::Bls12_377;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
-    use ark_ec::pairing::Pairing;
     use ark_poly::univariate::DensePolynomial as DensePoly;
     use ark_std::test_rng;
 
