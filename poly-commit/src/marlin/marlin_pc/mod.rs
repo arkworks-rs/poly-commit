@@ -8,8 +8,8 @@ use ark_ec::{pairing::Pairing, AffineRepr, CurveGroup};
 use ark_ff::Zero;
 use ark_poly::DenseUVPolynomial;
 use ark_std::{marker::PhantomData, ops::Div, rand::RngCore};
-// #[cfg(not(feature = "std"))]
-// use ark_std::{string::ToString, vec::Vec};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 
 mod data_structures;
 pub use data_structures::*;

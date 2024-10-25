@@ -1,12 +1,11 @@
-use ark_ec::AffineRepr;
-use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{rand::RngCore, vec::Vec};
-
 use crate::{
     utils::Matrix, PCCommitment, PCCommitmentState, PCCommitterKey, PCUniversalParams,
     PCVerifierKey,
 };
+use ark_ec::AffineRepr;
+use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::{rand::RngCore, vec::Vec};
 
 /// `UniversalParams` amounts to a Pederson commitment key of sufficient length
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]

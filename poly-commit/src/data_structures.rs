@@ -7,8 +7,8 @@ use ark_std::{
     ops::{AddAssign, MulAssign, SubAssign},
     rand::RngCore,
 };
-// #[cfg(not(feature = "std"))]
-// use ark_std::{string::String, vec::Vec};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::String, vec::Vec};
 
 /// Labels a `LabeledPolynomial` or a `LabeledCommitment`.
 pub type PolynomialLabel = String;

@@ -8,11 +8,11 @@ use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{convert::TryInto, format, marker::PhantomData, ops::Mul, rand::RngCore};
-// #[cfg(not(feature = "std"))]
-// use ark_std::{
-//     string::{String, ToString},
-//     vec::Vec,
-// };
+#[cfg(not(feature = "std"))]
+use ark_std::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use digest::Digest;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;

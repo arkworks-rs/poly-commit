@@ -13,8 +13,8 @@ use ark_ec::{
 };
 use ark_ff::{PrimeField, Zero};
 use ark_poly::Polynomial;
-// #[cfg(not(feature = "std"))]
-// use ark_std::vec::Vec;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 use ark_std::{
     borrow::Borrow,
     collections::VecDeque,

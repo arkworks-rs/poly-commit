@@ -10,8 +10,8 @@ use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, AffineRepr, CurveGroup, Va
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::DenseUVPolynomial;
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, rand::RngCore};
-// #[cfg(not(feature = "std"))]
-// use ark_std::{string::ToString, vec::Vec};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 

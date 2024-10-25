@@ -1,4 +1,5 @@
 use ark_ff::Field;
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
 
 #[cfg(feature = "parallel")]

@@ -7,8 +7,8 @@ use ark_poly::DenseMVPolynomial;
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Validate,
 };
-// #[cfg(not(feature = "std"))]
-// use ark_std::vec::Vec;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 use ark_std::{
     io::{Read, Write},
     marker::PhantomData,

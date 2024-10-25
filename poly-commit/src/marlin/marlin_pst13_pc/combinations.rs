@@ -1,7 +1,7 @@
 //! Compute all combinations of values in a given list
 //! Credit: https://github.com/meltinglava/uniquecombinations/
-// #[cfg(not(feature = "std"))]
-// use ark_std::vec::Vec;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 /// Compute all combinations of values in a given list.
 pub(crate) struct Combinations<T>
 where

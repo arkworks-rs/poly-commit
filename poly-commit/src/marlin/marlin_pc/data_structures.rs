@@ -5,8 +5,8 @@ use crate::{
 use ark_ec::{pairing::Pairing, AdditiveGroup};
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-// #[cfg(not(feature = "std"))]
-// use ark_std::vec::Vec;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
 use ark_std::{
     ops::{Add, AddAssign},
     rand::RngCore,

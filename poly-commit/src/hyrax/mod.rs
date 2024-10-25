@@ -1,8 +1,7 @@
-use crate::hyrax::utils::tensor_prime;
-use crate::utils::{inner_product, scalar_by_vector, vector_sum, Matrix};
 use crate::{
-    hyrax::utils::flat_to_matrix_column_major, Error, LabeledCommitment, LabeledPolynomial,
-    PolynomialCommitment,
+    hyrax::utils::{flat_to_matrix_column_major, tensor_prime},
+    utils::{inner_product, scalar_by_vector, vector_sum, Matrix},
+    Error, LabeledCommitment, LabeledPolynomial, PolynomialCommitment,
 };
 use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};

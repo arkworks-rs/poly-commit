@@ -1,7 +1,6 @@
-use crate::hyrax::HyraxPC;
-use crate::tests::*;
-use crate::utils::test_sponge;
-use crate::{LabeledPolynomial, PolynomialCommitment};
+use crate::{
+    hyrax::HyraxPC, tests::*, utils::test_sponge, LabeledPolynomial, PolynomialCommitment,
+};
 use ark_bls12_377::G1Affine;
 use ark_ec::AffineRepr;
 use ark_ed_on_bls12_381::EdwardsAffine;
