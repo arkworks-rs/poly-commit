@@ -8,6 +8,18 @@ use rayon::{
     prelude::IndexedParallelIterator,
 };
 
+/// Takes as input a struct, and converts them to a series of bytes. All traits
+/// that implement `CanonicalSerialize` can be automatically converted to bytes
+/// in this manner.
+/// From jellyfish lib
+#[macro_export]
+macro_rules! to_bytes {
+    ($x:expr) => {{
+        let mut buf = ark_std::vec![];
+        ark_serialize::CanonicalSerialize::serialize_compressed($x, &mut buf).map(|_| buf)
+    }};
+}
+
 /// Return ceil(x / y).
 pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
     // XXX. warning: this expression can overflow.
@@ -16,13 +28,36 @@ pub(crate) fn ceil_div(x: usize, y: usize) -> usize {
 
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
-pub(crate) struct Matrix<F: Field> {
+pub struct Matrix<F: Field> {
     pub(crate) n: usize,
     pub(crate) m: usize,
     entries: Vec<Vec<F>>,
 }
 
 impl<F: Field> Matrix<F> {
+    /// Returns a Matrix of dimensions n x m given a list of n * m field elements.
+    /// The list should be ordered row-first, i.e. [a11, ..., a1m, a21, ..., a2m, ...].
+    ///
+    /// # Panics
+    /// Panics if the dimensions do not match the length of the list
+    pub(crate) fn new_from_flat(n: usize, m: usize, entry_list: &[F]) -> Self {
+        assert_eq!(
+            entry_list.len(),
+            n * m,
+            "Invalid matrix construction: dimensions are {} x {} but entry vector has {} entries",
+            n,
+            m,
+            entry_list.len()
+        );
+
+        // TODO more efficient to run linearly?
+        let entries: Vec<Vec<F>> = (0..n)
+            .map(|row| (0..m).map(|col| entry_list[m * row + col]).collect())
+            .collect();
+
+        Self { n, m, entries }
+    }
+
     /// Returns a Matrix given a list of its rows, each in turn represented as a list of field elements.
     ///
     /// # Panics
@@ -43,6 +78,28 @@ impl<F: Field> Matrix<F> {
             m,
             entries: row_list,
         }
+    }
+
+    /// Returns the entry in position (i, j). **Indexing starts at 0 in both coordinates**,
+    /// i.e. the first element is in position (0, 0) and the last one in (n - 1, j - 1),
+    /// where n and m are the number of rows and columns, respectively.
+    ///
+    /// Index bound checks are waived for efficiency and behaviour under invalid indexing is undefined
+    #[cfg(test)]
+    pub(crate) fn entry(&self, i: usize, j: usize) -> F {
+        self.entries[i][j]
+    }
+
+    /// Returns self as a list of rows
+    pub(crate) fn rows(&self) -> Vec<Vec<F>> {
+        self.entries.clone()
+    }
+
+    /// Returns self as a list of columns
+    pub(crate) fn cols(&self) -> Vec<Vec<F>> {
+        (0..self.m)
+            .map(|col| (0..self.n).map(|row| self.entries[row][col]).collect())
+            .collect()
     }
 
     /// Returns the product v * self, where v is interpreted as a row vector. In other words,
@@ -92,6 +149,12 @@ pub(crate) fn vector_sum<F: Field>(v1: &[F], v2: &[F]) -> Vec<F> {
         .collect()
 }
 
+#[inline]
+#[cfg(test)]
+pub(crate) fn to_field<F: Field>(v: Vec<u64>) -> Vec<F> {
+    v.iter().map(|x| F::from(*x)).collect::<Vec<F>>()
+}
+
 // TODO: replace by https://github.com/arkworks-rs/crypto-primitives/issues/112.
 #[cfg(test)]
 use ark_crypto_primitives::sponge::poseidon::PoseidonSponge;
@@ -126,4 +189,81 @@ pub(crate) fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
     }
     let config = PoseidonConfig::new(full_rounds, partial_rounds, alpha, mds, v, 2, 1);
     PoseidonSponge::new(&config)
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use ark_bls12_377::Fr;
+
+    #[test]
+    fn test_matrix_constructor_flat() {
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67, 44, 50]);
+        let mat = Matrix::new_from_flat(2, 3, &entries);
+        assert_eq!(mat.entry(1, 2), Fr::from(50));
+    }
+
+    #[test]
+    fn test_matrix_constructor_flat_square() {
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67]);
+        let mat = Matrix::new_from_flat(2, 2, &entries);
+        assert_eq!(mat.entry(1, 1), Fr::from(67));
+    }
+
+    #[test]
+    #[should_panic(expected = "dimensions are 2 x 3 but entry vector has 5 entries")]
+    fn test_matrix_constructor_flat_panic() {
+        let entries: Vec<Fr> = to_field(vec![10, 100, 4, 67, 44]);
+        Matrix::new_from_flat(2, 3, &entries);
+    }
+
+    #[test]
+    fn test_matrix_constructor_rows() {
+        let rows: Vec<Vec<Fr>> = vec![
+            to_field(vec![10, 100, 4]),
+            to_field(vec![23, 1, 0]),
+            to_field(vec![55, 58, 9]),
+        ];
+        let mat = Matrix::new_from_rows(rows);
+        assert_eq!(mat.entry(2, 0), Fr::from(55));
+    }
+
+    #[test]
+    #[should_panic(expected = "not all rows have the same length")]
+    fn test_matrix_constructor_rows_panic() {
+        let rows: Vec<Vec<Fr>> = vec![
+            to_field(vec![10, 100, 4]),
+            to_field(vec![23, 1, 0]),
+            to_field(vec![55, 58]),
+        ];
+        Matrix::new_from_rows(rows);
+    }
+
+    #[test]
+    fn test_cols() {
+        let rows: Vec<Vec<Fr>> = vec![
+            to_field(vec![4, 76]),
+            to_field(vec![14, 92]),
+            to_field(vec![17, 89]),
+        ];
+
+        let mat = Matrix::new_from_rows(rows);
+
+        assert_eq!(mat.cols()[1], to_field(vec![76, 92, 89]));
+    }
+
+    #[test]
+    fn test_row_mul() {
+        let rows: Vec<Vec<Fr>> = vec![
+            to_field(vec![10, 100, 4]),
+            to_field(vec![23, 1, 0]),
+            to_field(vec![55, 58, 9]),
+        ];
+
+        let mat = Matrix::new_from_rows(rows);
+        let v: Vec<Fr> = to_field(vec![12, 41, 55]);
+        // by giving the result in the integers and then converting to Fr
+        // we ensure the test will still pass even if Fr changes
+        assert_eq!(mat.row_mul(&v), to_field::<Fr>(vec![4088, 4431, 543]));
+    }
 }

@@ -128,6 +128,11 @@ pub use marlin::marlin_pst13_pc;
 /// [bdfg]: https://eprint.iacr.org/2020/081.pdf
 pub mod streaming_kzg;
 
+/// Scheme based on the Ligero construction in [[Ligero]][ligero].
+///
+/// [ligero]: https://eprint.iacr.org/2022/1608
+pub mod linear_codes;
+
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups. This is a
 /// Fiat-Shamired version of the PCS described in the Hyrax paper

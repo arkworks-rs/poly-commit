@@ -1,17 +1,23 @@
-use ark_crypto_primitives::sponge::{
-    poseidon::{PoseidonConfig, PoseidonSponge},
-    CryptographicSponge,
+use ark_crypto_primitives::{
+    crh::{sha256::digest::Digest, CRHScheme},
+    sponge::{
+        poseidon::{PoseidonConfig, PoseidonSponge},
+        CryptographicSponge,
+    },
 };
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
 use ark_serialize::{CanonicalSerialize, Compress};
 use ark_std::{test_rng, UniformRand};
-use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+use rand_chacha::{
+    rand_core::{RngCore, SeedableRng},
+    ChaCha20Rng,
+};
 
 use core::time::Duration;
-use std::time::Instant;
+use std::{borrow::Borrow, marker::PhantomData, time::Instant};
 
-use ark_poly_commit::{LabeledPolynomial, PolynomialCommitment};
+use ark_poly_commit::{to_bytes, LabeledPolynomial, PolynomialCommitment};
 
 pub use criterion::*;
 pub use paste::paste;
@@ -275,4 +281,58 @@ macro_rules! bench {
             );
         }
     };
+}
+
+/**** Auxiliary methods for linear-code-based PCSs ****/
+
+/// Needed for benches and tests.
+pub struct LeafIdentityHasher;
+
+impl CRHScheme for LeafIdentityHasher {
+    type Input = Vec<u8>;
+    type Output = Vec<u8>;
+    type Parameters = ();
+
+    fn setup<R: RngCore>(_: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
+        Ok(())
+    }
+
+    fn evaluate<T: Borrow<Self::Input>>(
+        _: &Self::Parameters,
+        input: T,
+    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
+        Ok(input.borrow().to_vec().into())
+    }
+}
+
+/// Needed for benches and tests.
+pub struct FieldToBytesColHasher<F, D>
+where
+    F: PrimeField + CanonicalSerialize,
+    D: Digest,
+{
+    _phantom: PhantomData<(F, D)>,
+}
+
+impl<F, D> CRHScheme for FieldToBytesColHasher<F, D>
+where
+    F: PrimeField + CanonicalSerialize,
+    D: Digest,
+{
+    type Input = Vec<F>;
+    type Output = Vec<u8>;
+    type Parameters = ();
+
+    fn setup<R: RngCore>(_rng: &mut R) -> Result<Self::Parameters, ark_crypto_primitives::Error> {
+        Ok(())
+    }
+
+    fn evaluate<T: Borrow<Self::Input>>(
+        _parameters: &Self::Parameters,
+        input: T,
+    ) -> Result<Self::Output, ark_crypto_primitives::Error> {
+        let mut dig = D::new();
+        dig.update(to_bytes!(input.borrow()).unwrap());
+        Ok(dig.finalize().to_vec())
+    }
 }

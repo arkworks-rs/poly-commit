@@ -1,7 +1,7 @@
 use crate::{
-    BTreeMap, BTreeSet, BatchLCProof, DenseUVPolynomial, Error, Evaluations, LabeledCommitment,
-    LabeledPolynomial, LinearCombination, PCCommitmentState, PCCommitterKey, PCUniversalParams,
-    PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
+    utils::inner_product, BTreeMap, BTreeSet, BatchLCProof, DenseUVPolynomial, Error, Evaluations,
+    LabeledCommitment, LabeledPolynomial, LinearCombination, PCCommitmentState, PCCommitterKey,
+    PCUniversalParams, PolynomialCommitment, QuerySet, CHALLENGE_SIZE,
 };
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
@@ -84,11 +84,6 @@ where
         }
 
         challenge.unwrap()
-    }
-
-    #[inline]
-    fn inner_product(l: &[G::ScalarField], r: &[G::ScalarField]) -> G::ScalarField {
-        ark_std::cfg_iter!(l).zip(r).map(|(li, ri)| *li * ri).sum()
     }
 
     /// The succinct portion of `PC::check`. This algorithm runs in time
@@ -674,10 +669,10 @@ where
             let (key_proj_l, _) = key_proj.split_at_mut(n / 2);
 
             let l = Self::cm_commit(key_l, coeffs_r, None, None)
-                + &h_prime.mul(Self::inner_product(coeffs_r, z_l));
+                + &h_prime.mul(inner_product(coeffs_r, z_l));
 
             let r = Self::cm_commit(key_r, coeffs_l, None, None)
-                + &h_prime.mul(Self::inner_product(coeffs_l, z_r));
+                + &h_prime.mul(inner_product(coeffs_l, z_r));
 
             let lr = G::Group::normalize_batch(&[l, r]);
             l_vec.push(lr[0]);
