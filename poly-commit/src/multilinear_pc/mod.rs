@@ -8,8 +8,8 @@ use ark_ec::{
 };
 use ark_ff::{Field, One, PrimeField, Zero};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
+// #[cfg(not(feature = "std"))]
+// use ark_std::vec::Vec;
 use ark_std::{
     collections::LinkedList, iter::FromIterator, marker::PhantomData, ops::Mul, rand::RngCore,
     UniformRand,
@@ -238,9 +238,11 @@ mod tests {
     use crate::multilinear_pc::{data_structures::UniversalParams, MultilinearPC};
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
-    #[cfg(not(feature = "std"))]
-    use ark_std::vec::Vec;
+    use ark_poly::{
+        DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
+    };
+    // #[cfg(not(feature = "std"))]
+    // use ark_std::vec::Vec;
     use ark_std::{rand::RngCore, test_rng, UniformRand};
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;

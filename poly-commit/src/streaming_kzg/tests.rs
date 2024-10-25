@@ -4,8 +4,8 @@ use crate::streaming_kzg::{
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
+// #[cfg(not(feature = "std"))]
+// use ark_std::vec::Vec;
 use ark_std::{
     borrow::Borrow,
     iterable::{Iterable, Reverse},

@@ -14,8 +14,8 @@ use ark_std::{
     cmp::{Eq, PartialEq},
     hash::{BuildHasherDefault, Hash},
 };
-#[cfg(not(feature = "std"))]
-use ark_std::{string::String, vec::Vec};
+// #[cfg(not(feature = "std"))]
+// use ark_std::{string::String, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 #[cfg(all(

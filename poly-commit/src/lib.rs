@@ -26,11 +26,11 @@ use ark_std::{
     iter::FromIterator,
     rand::RngCore,
 };
-#[cfg(not(feature = "std"))]
-use ark_std::{
-    string::{String, ToString},
-    vec::Vec,
-};
+// #[cfg(not(feature = "std"))]
+// use ark_std::{
+//     string::{String, ToString},
+//     vec::Vec,
+// };
 
 /// Data structures used by a polynomial commitment scheme.
 pub mod data_structures;

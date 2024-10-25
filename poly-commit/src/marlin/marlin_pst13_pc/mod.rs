@@ -13,8 +13,8 @@ use ark_ec::{
 use ark_ff::{One, PrimeField, UniformRand, Zero};
 use ark_poly::{multivariate::Term, DenseMVPolynomial};
 use ark_std::{marker::PhantomData, ops::Index, ops::Mul, rand::RngCore};
-#[cfg(not(feature = "std"))]
-use ark_std::{string::ToString, vec::Vec};
+// #[cfg(not(feature = "std"))]
+// use ark_std::{string::ToString, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -702,8 +702,8 @@ mod tests {
         multivariate::{SparsePolynomial as SparsePoly, SparseTerm},
         DenseMVPolynomial,
     };
-    #[cfg(not(feature = "std"))]
-    use ark_std::vec::Vec;
+    // #[cfg(not(feature = "std"))]
+    // use ark_std::vec::Vec;
     use rand_chacha::ChaCha20Rng;
 
     type MVPoly_381 = SparsePoly<<Bls12_381 as Pairing>::ScalarField, SparseTerm>;

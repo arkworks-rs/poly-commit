@@ -6,8 +6,8 @@ use crate::streaming_kzg::{
 use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, CurveGroup};
 use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-#[cfg(not(feature = "std"))]
-use ark_std::vec::Vec;
+// #[cfg(not(feature = "std"))]
+// use ark_std::vec::Vec;
 use ark_std::{borrow::Borrow, ops::Div, ops::Mul, rand::RngCore, UniformRand};
 
 /// The SRS for the polynomial commitment scheme for a max
