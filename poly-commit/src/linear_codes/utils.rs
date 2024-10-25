@@ -1,13 +1,9 @@
 use crate::{utils::ceil_div, Error};
-
 use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::{FftField, PrimeField};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::string::ToString;
-use ark_std::vec::Vec;
-
 #[cfg(not(feature = "std"))]
-use num_traits::Float;
+use ark_std::{string::ToString, vec::Vec};
 
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of some FFT domain in F.

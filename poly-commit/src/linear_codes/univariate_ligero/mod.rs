@@ -1,11 +1,12 @@
-use super::utils::reed_solomon;
-use super::{LigeroPCParams, LinearEncode};
-
-use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
-use ark_crypto_primitives::{merkle_tree::Config, sponge::CryptographicSponge};
+use super::{utils::reed_solomon, LigeroPCParams, LinearEncode};
+use ark_crypto_primitives::{
+    crh::{CRHScheme, TwoToOneCRHScheme},
+    merkle_tree::Config,
+};
 use ark_ff::PrimeField;
 use ark_poly::DenseUVPolynomial;
 use ark_std::marker::PhantomData;
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
 
 mod tests;
@@ -16,21 +17,14 @@ mod tests;
 /// Note: The scheme currently does not support hiding.
 ///
 /// [ligero]: https://eprint.iacr.org/2022/1608.pdf
-pub struct UnivariateLigero<
-    F: PrimeField,
-    C: Config,
-    S: CryptographicSponge,
-    P: DenseUVPolynomial<F>,
-    H: CRHScheme,
-> {
-    _phantom: PhantomData<(F, C, S, P, H)>,
+pub struct UnivariateLigero<F: PrimeField, C: Config, P: DenseUVPolynomial<F>, H: CRHScheme> {
+    _phantom: PhantomData<(F, C, P, H)>,
 }
 
-impl<F, C, S, P, H> LinearEncode<F, C, P, H> for UnivariateLigero<F, C, S, P, H>
+impl<F, C, P, H> LinearEncode<F, C, P, H> for UnivariateLigero<F, C, P, H>
 where
     F: PrimeField,
     C: Config,
-    S: CryptographicSponge,
     P: DenseUVPolynomial<F>,
     P::Point: Into<F>,
     H: CRHScheme,

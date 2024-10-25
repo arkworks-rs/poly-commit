@@ -4,7 +4,7 @@ use ark_std::vec::Vec;
 
 #[cfg(feature = "parallel")]
 use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     prelude::IndexedParallelIterator,
 };
 
@@ -115,11 +115,11 @@ impl<F: Field> Matrix<F> {
             self.n
         );
 
-        (0..self.m)
+        cfg_into_iter!(0..self.m)
             .map(|col| {
                 inner_product(
                     v,
-                    &(0..self.n)
+                    &cfg_into_iter!(0..self.n)
                         .map(|row| self.entries[row][col])
                         .collect::<Vec<F>>(),
                 )
@@ -134,6 +134,19 @@ pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
         .zip(v2)
         .map(|(li, ri)| *li * ri)
         .sum()
+}
+
+#[inline]
+pub(crate) fn scalar_by_vector<F: Field>(s: F, v: &[F]) -> Vec<F> {
+    ark_std::cfg_iter!(v).map(|x| *x * s).collect()
+}
+
+#[inline]
+pub(crate) fn vector_sum<F: Field>(v1: &[F], v2: &[F]) -> Vec<F> {
+    ark_std::cfg_iter!(v1)
+        .zip(v2)
+        .map(|(li, ri)| *li + ri)
+        .collect()
 }
 
 #[inline]
@@ -180,9 +193,7 @@ pub(crate) fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-
     use super::*;
-
     use ark_bls12_377::Fr;
 
     #[test]

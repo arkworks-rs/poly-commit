@@ -1,15 +1,16 @@
 use crate::{
-    DenseUVPolynomial, PCCommitment, PCCommitmentState, PCCommitterKey, PCPreparedCommitment,
-    PCPreparedVerifierKey, PCVerifierKey, Vec,
+    kzg10, DenseUVPolynomial, PCCommitment, PCCommitmentState, PCCommitterKey,
+    PCPreparedCommitment, PCPreparedVerifierKey, PCVerifierKey,
 };
-use ark_ec::pairing::Pairing;
-use ark_ec::AdditiveGroup;
+use ark_ec::{pairing::Pairing, AdditiveGroup};
 use ark_ff::{Field, PrimeField, ToConstraintField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::ops::{Add, AddAssign};
-use ark_std::rand::RngCore;
-
-use crate::kzg10;
+#[cfg(not(feature = "std"))]
+use ark_std::vec::Vec;
+use ark_std::{
+    ops::{Add, AddAssign},
+    rand::RngCore,
+};
 /// `UniversalParams` are the universal parameters for the KZG10 scheme.
 pub type UniversalParams<E> = kzg10::UniversalParams<E>;
 

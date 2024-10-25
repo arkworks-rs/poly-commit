@@ -1,22 +1,19 @@
-use crate::utils::{inner_product, Matrix};
 use crate::{
-    to_bytes, Error, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams,
-    PCVerifierKey, PolynomialCommitment,
+    to_bytes,
+    utils::{inner_product, Matrix},
+    Error, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams, PCVerifierKey,
+    PolynomialCommitment,
 };
-
-use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
-use ark_crypto_primitives::merkle_tree::MerkleTree;
 use ark_crypto_primitives::{
-    merkle_tree::Config,
+    crh::{CRHScheme, TwoToOneCRHScheme},
+    merkle_tree::{Config, MerkleTree},
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
-use ark_std::borrow::Borrow;
-use ark_std::marker::PhantomData;
-use ark_std::rand::RngCore;
-use ark_std::string::ToString;
-use ark_std::vec::Vec;
+use ark_std::{borrow::Borrow, marker::PhantomData, rand::RngCore};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -142,24 +139,22 @@ where
 }
 
 /// Any linear-code-based commitment scheme.
-pub struct LinearCodePCS<L, F, P, S, C, H>
+pub struct LinearCodePCS<L, F, P, C, H>
 where
     F: PrimeField,
     C: Config,
-    S: CryptographicSponge,
     P: Polynomial<F>,
     H: CRHScheme,
     L: LinearEncode<F, C, P, H>,
 {
-    _phantom: PhantomData<(L, F, P, S, C, H)>,
+    _phantom: PhantomData<(L, F, P, C, H)>,
 }
 
-impl<L, F, P, S, C, H> PolynomialCommitment<F, P, S> for LinearCodePCS<L, F, P, S, C, H>
+impl<L, F, P, C, H> PolynomialCommitment<F, P> for LinearCodePCS<L, F, P, C, H>
 where
     L: LinearEncode<F, C, P, H>,
     F: PrimeField + Absorb,
     P: Polynomial<F>,
-    S: CryptographicSponge,
     C: Config + 'static,
     Vec<F>: Borrow<<H as CRHScheme>::Input>,
     H::Output: Into<C::Leaf> + Send,
@@ -299,7 +294,7 @@ where
         _labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -375,7 +370,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof_array: &Self::Proof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where

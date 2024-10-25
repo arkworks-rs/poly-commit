@@ -69,8 +69,7 @@ use rand_chacha::ChaCha20Rng;
 use ark_ff::PrimeField;
 
 type UniPoly_377 = DensePolynomial<<Bls12_377 as Pairing>::ScalarField>;
-type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
-type PCS = MarlinKZG10<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
+type PCS = MarlinKZG10<Bls12_377, UniPoly_377>;
 
 let rng = &mut test_rng();
 
@@ -185,6 +184,7 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [pcd-acc]: https://ia.cr/2020/499
 [pst]: https://ia.cr/2011/587
 [ligero]: https://ia.cr/2022/1608
+[hyrax]: https://eprint.iacr.org/2017/1132
 
 ## Reference papers
 
@@ -215,6 +215,10 @@ TCC 2013
 [Ligero: Lightweight Sublinear Arguments Without a Trusted Setup][ligero]    
 Scott Ames, Carmit Hazay, Yuval Ishai, Muthuramakrishnan Venkitasubramaniam    
 CCS 2017
+
+[Doubly-efficient zkSNARKs without trusted setup][hyrax]
+Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
+2018 IEEE Symposium on Security and Privacy
 
 ## Acknowledgements
 

@@ -16,12 +16,15 @@ ark-poly = {version = "^0.4.0", default-features = false }
 ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
 ark-std = { version = "^0.4.0", default-features = false }
 
+blake2 = { version = "0.10", default-features = false }
+derivative = { version = "2", features = [ "use_core" ] }
+digest = "0.10"
+
 ark-relations = { version = "^0.4.0", default-features = false, optional = true }
 ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-hashbrown = { version = "0.14", default-features = false, optional = true }
 
-digest = "0.10"
-derivative = { version = "2", features = [ "use_core" ] }
+hashbrown = { version = "0.15", default-features = false, features = ["inline-more", "allocator-api2"], optional = true }
+rand = { version = "0.8.0", optional = true }
 rayon = { version = "1", optional = true }
 merlin = { version = "3.0.0", default-features = false }
 
@@ -35,17 +38,28 @@ name = "ligero_ml_times"
 path = "benches/ligero_ml_times.rs"
 harness = false
 
+
+[[bench]]
+name = "hyrax_times"
+path = "benches/hyrax_times.rs"
+harness = false
+
 [[bench]]
 name = "size"
 path = "benches/size.rs"
 harness = false
+
+[target.'cfg(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64", target_has_atomic = "ptr"))'.dependencies]
+ahash = { version = "0.8", default-features = false}
+
+[target.'cfg(not(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64", target_has_atomic = "ptr")))'.dependencies]
+fnv = { version = "1.0", default-features = false }
 
 [dev-dependencies]
 ark-ed-on-bls12-381 = { version = "^0.4.0", default-features = false }
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bls12-377 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
 ark-bn254 = { version = "^0.4.0", default-features = false, features = [ "curve" ] }
-blake2 = { version = "0.10", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
 ark-pcs-bench-templates = { path = "../bench-templates" }
 
@@ -57,4 +71,4 @@ default = [ "std", "parallel" ]
 std = [ "ark-ff/std", "ark-ec/std", "ark-poly/std", "ark-std/std", "ark-relations/std", "ark-serialize/std", "ark-crypto-primitives/std"]
 r1cs = [ "ark-relations", "ark-r1cs-std", "hashbrown", "ark-crypto-primitives/r1cs"]
 print-trace = [ "ark-std/print-trace" ]
-parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon" ]
+parallel = [ "std", "ark-ff/parallel", "ark-ec/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon", "rand" ]

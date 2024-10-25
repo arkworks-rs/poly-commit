@@ -22,14 +22,13 @@ use ark_poly_commit::{to_bytes, LabeledPolynomial, PolynomialCommitment};
 pub use criterion::*;
 pub use paste::paste;
 
-/// Measure the time cost of {commit/open/verify} across a range of num_vars
-pub fn bench_pcs_method<
-    F: PrimeField,
-    P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
->(
+/// Measure the time cost of `method` (i.e., commit/open/verify) of a
+/// multilinear PCS for all `num_vars` specified in `nv_list`.
+/// `rand_poly` is a function that outputs a random multilinear polynomial.
+/// `rand_point` is a function that outputs a random point in the domain of polynomial.
+pub fn bench_pcs_method<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitment<F, P>>(
     c: &mut Criterion,
-    range: Vec<usize>,
+    nv_list: Vec<usize>,
     msg: &str,
     method: impl Fn(
         &PCS::CommitterKey,
@@ -44,7 +43,7 @@ pub fn bench_pcs_method<
     let mut group = c.benchmark_group(msg);
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
-    for num_vars in range {
+    for num_vars in nv_list {
         let pp = PCS::setup(num_vars, Some(num_vars), rng).unwrap();
         let (ck, vk) = PCS::trim(&pp, num_vars, num_vars, None).unwrap();
 
@@ -67,11 +66,7 @@ pub fn bench_pcs_method<
 }
 
 /// Report the time cost of a commitment
-pub fn commit<
-    F: PrimeField,
-    P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
->(
+pub fn commit<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitment<F, P>>(
     ck: &PCS::CommitterKey,
     _vk: &PCS::VerifierKey,
     num_vars: usize,
@@ -89,11 +84,7 @@ pub fn commit<
 }
 
 /// Report the size of a commitment
-pub fn commitment_size<
-    F: PrimeField,
-    P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
->(
+pub fn commitment_size<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitment<F, P>>(
     num_vars: usize,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
 ) -> usize {
@@ -122,7 +113,7 @@ pub fn open<F, P, PCS>(
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -138,7 +129,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -151,8 +142,7 @@ pub fn proof_size<F, P, PCS>(num_vars: usize, rand_poly: fn(usize, &mut ChaCha20
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
-
+    PCS: PolynomialCommitment<F, P>,
     P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -171,7 +161,7 @@ where
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -193,7 +183,7 @@ pub fn verify<F, P, PCS>(
 where
     F: PrimeField,
     P: Polynomial<F>,
-    PCS: PolynomialCommitment<F, P, PoseidonSponge<F>>,
+    PCS: PolynomialCommitment<F, P>,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -202,14 +192,13 @@ where
 
     let (coms, states) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
     let point = rand_point(num_vars, rng);
-
     let claimed_eval = labeled_poly.evaluate(&point);
     let proof = PCS::open(
         &ck,
         [&labeled_poly],
         &coms,
         &point,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         &states,
         Some(rng),
     )
@@ -222,7 +211,7 @@ where
         &point,
         [claimed_eval],
         &proof,
-        &mut test_sponge(),
+        &mut test_sponge::<F>(),
         None,
     )
     .unwrap();
