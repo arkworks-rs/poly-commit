@@ -101,8 +101,8 @@ pub use data_structures::*;
 pub use space::CommitterKeyStream;
 pub use time::CommitterKey;
 
-/// Dummy docs
 #[cfg(test)]
+#[allow(missing_docs)]
 pub mod tests;
 
 /// A Kate polynomial commitment over a bilinear group, represented as a single \\(\GG_1\\) element.
