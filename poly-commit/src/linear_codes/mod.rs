@@ -1,40 +1,43 @@
-use crate::utils::{inner_product, Matrix};
 use crate::{
-    to_bytes, Error, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams,
-    PCVerifierKey, PolynomialCommitment,
+    linear_codes::{
+        data_structures::*,
+        utils::{calculate_t, get_indices_from_sponge},
+    },
+    to_bytes,
+    utils::{inner_product, Matrix},
+    Error, LabeledCommitment, LabeledPolynomial, PCCommitterKey, PCUniversalParams, PCVerifierKey,
+    PolynomialCommitment,
 };
-
-use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
-use ark_crypto_primitives::merkle_tree::MerkleTree;
 use ark_crypto_primitives::{
-    merkle_tree::Config,
+    crh::{CRHScheme, TwoToOneCRHScheme},
+    merkle_tree::{Config, MerkleTree},
     sponge::{Absorb, CryptographicSponge},
 };
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
-use ark_std::borrow::Borrow;
-use ark_std::marker::PhantomData;
-use ark_std::rand::RngCore;
-use ark_std::string::ToString;
-use ark_std::vec::Vec;
+use ark_std::{borrow::Borrow, marker::PhantomData, rand::RngCore};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::ToString, vec::Vec};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
+mod data_structures;
 mod utils;
+
+mod brakedown;
+
+mod ligero;
 
 mod multilinear_brakedown;
 
+mod multilinear_ligero;
+mod univariate_ligero;
+
+pub use data_structures::{BrakedownPCParams, LigeroPCParams, LinCodePCProof};
 pub use multilinear_brakedown::MultilinearBrakedown;
-
-mod brakedown;
-mod data_structures;
-pub use data_structures::BrakedownPCParams;
-use data_structures::*;
-
-pub use data_structures::LinCodePCProof;
-
-use utils::{calculate_t, get_indices_from_sponge};
+pub use multilinear_ligero::MultilinearLigero;
+pub use univariate_ligero::UnivariateLigero;
 
 const FIELD_SIZE_ERROR: &str = "This field is not suitable for the proposed parameters";
 
@@ -84,7 +87,8 @@ where
     type LinCodePCParams: PCUniversalParams
         + PCCommitterKey
         + PCVerifierKey
-        + LinCodeParametersInfo<C, H>;
+        + LinCodeParametersInfo<C, H>
+        + Sync;
 
     /// Does a default setup for the PCS.
     fn setup<R: RngCore>(
@@ -143,24 +147,22 @@ where
 }
 
 /// Any linear-code-based commitment scheme.
-pub struct LinearCodePCS<L, F, P, S, C, H>
+pub struct LinearCodePCS<L, F, P, C, H>
 where
     F: PrimeField,
     C: Config,
-    S: CryptographicSponge,
     P: Polynomial<F>,
     H: CRHScheme,
     L: LinearEncode<F, C, P, H>,
 {
-    _phantom: PhantomData<(L, F, P, S, C, H)>,
+    _phantom: PhantomData<(L, F, P, C, H)>,
 }
 
-impl<L, F, P, S, C, H> PolynomialCommitment<F, P, S> for LinearCodePCS<L, F, P, S, C, H>
+impl<L, F, P, C, H> PolynomialCommitment<F, P> for LinearCodePCS<L, F, P, C, H>
 where
     L: LinearEncode<F, C, P, H>,
     F: PrimeField + Absorb,
     P: Polynomial<F>,
-    S: CryptographicSponge,
     C: Config + 'static,
     Vec<F>: Borrow<<H as CRHScheme>::Input>,
     H::Output: Into<C::Leaf> + Send,
@@ -185,7 +187,7 @@ where
 
     /// This is only a default setup with reasonable parameters.
     /// To create your own public parameters (from which vk/ck can be derived by `trim`),
-    /// see the documentation for `BrakedownPCUniversalParams`.
+    /// see the documentation for `BrakedownPCUniversalParams` or `LigeroPCUniversalParams`.
     fn setup<R: RngCore>(
         max_degree: usize,
         num_vars: Option<usize>,
@@ -265,7 +267,7 @@ where
                 leaves,
             };
             let mut leaves: Vec<C::Leaf> =
-                state.leaves.clone().into_iter().map(|h| h.into()).collect();
+                state.leaves.clone().into_iter().map(|h| h.into()).collect(); // TODO cfg_inter
             let col_tree = create_merkle_tree::<C>(
                 &mut leaves,
                 ck.leaf_hash_param(),
@@ -300,7 +302,7 @@ where
         _labeled_polynomials: impl IntoIterator<Item = &'a LabeledPolynomial<F, P>>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Self::Commitment>>,
         point: &'a P::Point,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         states: impl IntoIterator<Item = &'a Self::CommitmentState>,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<Self::Proof, Self::Error>
@@ -325,7 +327,7 @@ where
                 leaves: col_hashes,
             } = state;
             let mut col_hashes: Vec<C::Leaf> =
-                col_hashes.clone().into_iter().map(|h| h.into()).collect();
+                col_hashes.clone().into_iter().map(|h| h.into()).collect(); // TODO cfg_inter
 
             let col_tree = create_merkle_tree::<C>(
                 &mut col_hashes,
@@ -376,7 +378,7 @@ where
         point: &'a P::Point,
         values: impl IntoIterator<Item = F>,
         proof_array: &Self::Proof,
-        sponge: &mut S,
+        sponge: &mut impl CryptographicSponge,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Self::Error>
     where

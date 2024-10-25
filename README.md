@@ -69,8 +69,7 @@ use rand_chacha::ChaCha20Rng;
 use ark_ff::PrimeField;
 
 type UniPoly_377 = DensePolynomial<<Bls12_377 as Pairing>::ScalarField>;
-type Sponge_Bls12_377 = PoseidonSponge<<Bls12_377 as Pairing>::ScalarField>;
-type PCS = MarlinKZG10<Bls12_377, UniPoly_377, Sponge_Bls12_377>;
+type PCS = MarlinKZG10<Bls12_377, UniPoly_377>;
 
 let rng = &mut test_rng();
 
@@ -184,7 +183,12 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [aurora-light]: https://ia.cr/2019/601
 [pcd-acc]: https://ia.cr/2020/499
 [pst]: https://ia.cr/2011/587
+<<<<<<< HEAD
 [brakedown]: https://ia.cr/2021/1043
+=======
+[ligero]: https://ia.cr/2022/1608
+[hyrax]: https://eprint.iacr.org/2017/1132
+>>>>>>> ligero-uni-and-ml
 
 ## Reference papers
 
@@ -211,6 +215,14 @@ TCC 2020
 [Signatures of Correct Computation][pst]    
 Charalampos Papamanthou, Elaine Shi, Roberto Tamassia   
 TCC 2013
+
+[Ligero: Lightweight Sublinear Arguments Without a Trusted Setup][ligero]    
+Scott Ames, Carmit Hazay, Yuval Ishai, Muthuramakrishnan Venkitasubramaniam    
+CCS 2017
+
+[Doubly-efficient zkSNARKs without trusted setup][hyrax]
+Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
+2018 IEEE Symposium on Security and Privacy
 
 [Brakedown: Linear-time and field-agnostic SNARKs for R1CS][brakedown]    
 Alexander Golovnev, Jonathan Lee, Srinath Setty, Justin Thaler, Riad S. Wahby    

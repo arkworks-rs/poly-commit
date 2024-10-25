@@ -1,15 +1,14 @@
-#[cfg(all(not(feature = "std"), target_arch = "aarch64"))]
-use num_traits::Float;
-
-#[cfg(feature = "parallel")]
-use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
-    prelude::IndexedParallelIterator,
-};
-
 use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+#[cfg(all(not(feature = "std")))]
 use ark_std::vec::Vec;
+#[cfg(all(not(feature = "std"), target_arch = "aarch64"))]
+use num_traits::Float;
+#[cfg(feature = "parallel")]
+use rayon::{
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    prelude::IndexedParallelIterator,
+};
 
 /// Takes as input a struct, and converts them to a series of bytes. All traits
 /// that implement `CanonicalSerialize` can be automatically converted to bytes
@@ -134,11 +133,11 @@ impl<F: Field> Matrix<F> {
             self.n
         );
 
-        (0..self.m)
+        cfg_into_iter!(0..self.m)
             .map(|col| {
                 inner_product(
                     v,
-                    &(0..self.n)
+                    &cfg_into_iter!(0..self.n)
                         .map(|row| self.entries[row][col])
                         .collect::<Vec<F>>(),
                 )
@@ -153,6 +152,19 @@ pub(crate) fn inner_product<F: Field>(v1: &[F], v2: &[F]) -> F {
         .zip(v2)
         .map(|(li, ri)| *li * ri)
         .sum()
+}
+
+#[inline]
+pub(crate) fn scalar_by_vector<F: Field>(s: F, v: &[F]) -> Vec<F> {
+    ark_std::cfg_iter!(v).map(|x| *x * s).collect()
+}
+
+#[inline]
+pub(crate) fn vector_sum<F: Field>(v1: &[F], v2: &[F]) -> Vec<F> {
+    ark_std::cfg_iter!(v1)
+        .zip(v2)
+        .map(|(li, ri)| *li + ri)
+        .collect()
 }
 
 #[inline]
@@ -199,9 +211,7 @@ pub(crate) fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-
     use super::*;
-
     use ark_bls12_377::Fr;
 
     #[test]

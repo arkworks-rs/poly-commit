@@ -1,13 +1,13 @@
-use super::utils::SprsMat;
-use crate::{utils::Matrix, PCCommitment, PCCommitmentState};
+use crate::{linear_codes::utils::SprsMat, utils::Matrix, PCCommitment, PCCommitmentState};
 use ark_crypto_primitives::{
     crh::CRHScheme,
     merkle_tree::{Config, LeafParam, Path, TwoToOneParam},
 };
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::rand::RngCore;
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
+use ark_std::{marker::PhantomData, rand::RngCore};
 
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
@@ -47,6 +47,28 @@ pub struct BrakedownPCParams<F: PrimeField, C: Config, H: CRHScheme> {
     pub(crate) a_mats: Vec<SprsMat<F>>,
     /// A vector of all B matrices we need for encoding.
     pub(crate) b_mats: Vec<SprsMat<F>>,
+    /// This is a flag which determines if the random linear combination is done.
+    pub(crate) check_well_formedness: bool,
+    /// Parameters for hash function of Merkle tree leaves
+    #[derivative(Debug = "ignore")]
+    pub(crate) leaf_hash_param: LeafParam<C>,
+    /// Parameters for hash function of Merke tree combining two nodes into one
+    #[derivative(Debug = "ignore")]
+    pub(crate) two_to_one_hash_param: TwoToOneParam<C>,
+    // Parameters for obtaining leaf digest from leaf value.
+    #[derivative(Debug = "ignore")]
+    pub(crate) col_hash_params: H::Parameters,
+}
+
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone(bound = ""), Debug(bound = ""))]
+/// The public parameters for Ligero PCS.
+pub struct LigeroPCParams<F: PrimeField, C: Config, H: CRHScheme> {
+    pub(crate) _field: PhantomData<F>,
+    /// The security parameter
+    pub(crate) sec_param: usize,
+    /// The inverse of the code rate.
+    pub(crate) rho_inv: usize,
     /// This is a flag which determines if the random linear combination is done.
     pub(crate) check_well_formedness: bool,
     /// Parameters for hash function of Merkle tree leaves

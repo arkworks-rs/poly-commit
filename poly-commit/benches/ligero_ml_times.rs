@@ -8,11 +8,11 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
 
-use ark_poly_commit::linear_codes::{LinearCodePCS, MultilinearBrakedown};
+use ark_poly_commit::linear_codes::{LinearCodePCS, MultilinearLigero};
 use blake2::Blake2s256;
 use rand_chacha::ChaCha20Rng;
 
-// Brakedown PCS over BN254
+// Ligero PCS over BN254
 struct MerkleTreeParams;
 type LeafH = LeafIdentityHasher;
 type CompressH = Sha256;
@@ -30,30 +30,26 @@ impl Config for MerkleTreeParams {
 pub type MLE<F> = DenseMultilinearExtension<F>;
 type MTConfig = MerkleTreeParams;
 type ColHasher<F> = FieldToBytesColHasher<F, Blake2s256>;
-type Brakedown<F> = LinearCodePCS<
-    MultilinearBrakedown<F, MTConfig, MLE<F>, ColHasher<F>>,
+type Ligero<F> = LinearCodePCS<
+    MultilinearLigero<F, MTConfig, MLE<F>, ColHasher<F>>,
     F,
     MLE<F>,
     MTConfig,
     ColHasher<F>,
 >;
 
-fn rand_poly_brakedown_ml<F: PrimeField>(
+fn rand_poly_ligero_ml<F: PrimeField>(
     num_vars: usize,
     rng: &mut ChaCha20Rng,
 ) -> DenseMultilinearExtension<F> {
     DenseMultilinearExtension::rand(num_vars, rng)
 }
 
-fn rand_point_brakedown_ml<F: PrimeField>(num_vars: usize, rng: &mut ChaCha20Rng) -> Vec<F> {
+fn rand_point_ligero_ml<F: PrimeField>(num_vars: usize, rng: &mut ChaCha20Rng) -> Vec<F> {
     (0..num_vars).map(|_| F::rand(rng)).collect()
 }
 
 const MIN_NUM_VARS: usize = 12;
 const MAX_NUM_VARS: usize = 22;
 
-bench!(
-    Brakedown<Fr>,
-    rand_poly_brakedown_ml,
-    rand_point_brakedown_ml
-);
+bench!(Ligero<Fr>, rand_poly_ligero_ml, rand_point_ligero_ml);

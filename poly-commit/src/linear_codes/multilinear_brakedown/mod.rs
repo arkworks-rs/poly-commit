@@ -2,14 +2,15 @@ use crate::Error;
 
 use super::utils::tensor_vec;
 use super::{BrakedownPCParams, LinearEncode};
-use ark_crypto_primitives::crh::{CRHScheme, TwoToOneCRHScheme};
-use ark_crypto_primitives::{merkle_tree::Config, sponge::CryptographicSponge};
+use ark_crypto_primitives::{
+    crh::{CRHScheme, TwoToOneCRHScheme},
+    merkle_tree::Config,
+};
 use ark_ff::{Field, PrimeField};
 use ark_poly::{MultilinearExtension, Polynomial};
-use ark_std::log2;
-use ark_std::marker::PhantomData;
-use ark_std::rand::RngCore;
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
+use ark_std::{log2, marker::PhantomData, rand::RngCore};
 
 mod tests;
 
@@ -19,21 +20,15 @@ mod tests;
 /// Note: The scheme currently does not support hiding.
 ///
 /// [bd]: https://eprint.iacr.org/2021/1043.pdf
-pub struct MultilinearBrakedown<
-    F: PrimeField,
-    C: Config,
-    S: CryptographicSponge,
-    P: MultilinearExtension<F>,
-    H: CRHScheme,
-> {
-    _phantom: PhantomData<(F, C, S, P, H)>,
+pub struct MultilinearBrakedown<F: PrimeField, C: Config, P: MultilinearExtension<F>, H: CRHScheme>
+{
+    _phantom: PhantomData<(F, C, P, H)>,
 }
 
-impl<F, C, S, P, H> LinearEncode<F, C, P, H> for MultilinearBrakedown<F, C, S, P, H>
+impl<F, C, P, H> LinearEncode<F, C, P, H> for MultilinearBrakedown<F, C, P, H>
 where
     F: PrimeField,
     C: Config,
-    S: CryptographicSponge,
     P: MultilinearExtension<F>,
     <P as Polynomial<F>>::Point: Into<Vec<F>>,
     H: CRHScheme,
