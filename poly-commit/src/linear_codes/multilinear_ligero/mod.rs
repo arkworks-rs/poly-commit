@@ -8,9 +8,9 @@ use ark_crypto_primitives::{
 };
 use ark_ff::{FftField, PrimeField};
 use ark_poly::{MultilinearExtension, Polynomial};
-use ark_std::{log2, marker::PhantomData};
 #[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
+use ark_std::{log2, marker::PhantomData};
 
 mod tests;
 

@@ -4,6 +4,8 @@ use ark_ff::{FftField, PrimeField};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 #[cfg(not(feature = "std"))]
 use ark_std::{string::ToString, vec::Vec};
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
 
 /// Apply reed-solomon encoding to msg.
 /// Assumes msg.len() is equal to the order of some FFT domain in F.

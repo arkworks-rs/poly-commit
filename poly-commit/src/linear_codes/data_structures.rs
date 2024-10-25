@@ -5,6 +5,7 @@ use ark_crypto_primitives::{
 };
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+#[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;
 use ark_std::{marker::PhantomData, rand::RngCore};
 
