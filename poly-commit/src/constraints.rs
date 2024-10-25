@@ -1,14 +1,17 @@
 use crate::{
     data_structures::LabeledCommitment, BatchLCProof, LCTerm, LinearCombination,
-    PCPreparedCommitment, PCPreparedVerifierKey, PolynomialCommitment, String, Vec,
+    PCPreparedCommitment, PCPreparedVerifierKey, PolynomialCommitment,
 };
-use ark_crypto_primitives::sponge::CryptographicSponge;
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
-use ark_r1cs_std::fields::emulated_fp::EmulatedFpVar;
-use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
+use ark_r1cs_std::{
+    fields::{emulated_fp::EmulatedFpVar, fp::FpVar},
+    prelude::*,
+};
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, Result as R1CSResult, SynthesisError};
-use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash, marker::Sized};
+use ark_std::{borrow::Borrow, cmp::Eq, cmp::PartialEq, hash::Hash};
+#[cfg(not(feature = "std"))]
+use ark_std::{string::String, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 /// Define the minimal interface of prepared allocated structures.
@@ -94,9 +97,8 @@ pub struct PCCheckRandomDataVar<TargetField: PrimeField, BaseField: PrimeField> 
 pub trait PCCheckVar<
     PCF: PrimeField,
     P: Polynomial<PCF>,
-    PC: PolynomialCommitment<PCF, P, S>,
+    PC: PolynomialCommitment<PCF, P>,
     ConstraintF: PrimeField,
-    S: CryptographicSponge,
 >: Clone
 {
     /// The prepared verifier key for the scheme; used to check an evaluation proof.
