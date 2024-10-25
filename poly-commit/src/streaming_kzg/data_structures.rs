@@ -1,4 +1,4 @@
-use crate::streaming_kzg::ceil_div;
+use crate::utils::ceil_div;
 use ark_ff::Field;
 #[cfg(not(feature = "std"))]
 use ark_std::vec::Vec;

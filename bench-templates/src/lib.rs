@@ -16,23 +16,28 @@ use ark_poly_commit::{LabeledPolynomial, PolynomialCommitment};
 pub use criterion::*;
 pub use paste::paste;
 
-/// Measure the time cost of {commit/open/verify} across a range of num_vars
+/// Measure the time cost of `method` (i.e., commit/open/verify) of a
+/// multilinear PCS for all `num_vars` specified in `nv_list`.
+/// `rand_poly` is a function that outputs a random multilinear polynomial.
+/// `rand_point` is a function that outputs a random point in the domain of polynomial.
 pub fn bench_pcs_method<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitment<F, P>>(
     c: &mut Criterion,
-    range: Vec<usize>,
+    nv_list: Vec<usize>,
     msg: &str,
     method: impl Fn(
         &PCS::CommitterKey,
         &PCS::VerifierKey,
         usize,
         fn(usize, &mut ChaCha20Rng) -> P,
+        fn(usize, &mut ChaCha20Rng) -> P::Point,
     ) -> Duration,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
+    rand_point: fn(usize, &mut ChaCha20Rng) -> P::Point,
 ) {
     let mut group = c.benchmark_group(msg);
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
-    for num_vars in range {
+    for num_vars in nv_list {
         let pp = PCS::setup(num_vars, Some(num_vars), rng).unwrap();
         let (ck, vk) = PCS::trim(&pp, num_vars, num_vars, None).unwrap();
 
@@ -40,7 +45,13 @@ pub fn bench_pcs_method<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitme
             BenchmarkId::from_parameter(num_vars),
             &num_vars,
             |b, num_vars| {
-                b.iter(|| method(&ck, &vk, *num_vars, rand_poly));
+                b.iter_custom(|i| {
+                    let mut time = Duration::from_nanos(0);
+                    for _ in 0..i {
+                        time += method(&ck, &vk, *num_vars, rand_poly, rand_point);
+                    }
+                    time
+                });
             },
         );
     }
@@ -54,6 +65,7 @@ pub fn commit<F: PrimeField, P: Polynomial<F>, PCS: PolynomialCommitment<F, P>>(
     _vk: &PCS::VerifierKey,
     num_vars: usize,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
+    _rand_point: fn(usize, &mut ChaCha20Rng) -> P::Point,
 ) -> Duration {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -90,12 +102,12 @@ pub fn open<F, P, PCS>(
     _vk: &PCS::VerifierKey,
     num_vars: usize,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
+    rand_point: fn(usize, &mut ChaCha20Rng) -> P::Point,
 ) -> Duration
 where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-    P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -103,7 +115,7 @@ where
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
     let (coms, states) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
-    let point = P::Point::rand(rng);
+    let point = rand_point(num_vars, rng);
 
     let start = Instant::now();
     let _ = PCS::open(
@@ -125,7 +137,6 @@ where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-
     P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
@@ -161,12 +172,12 @@ pub fn verify<F, P, PCS>(
     vk: &PCS::VerifierKey,
     num_vars: usize,
     rand_poly: fn(usize, &mut ChaCha20Rng) -> P,
+    rand_point: fn(usize, &mut ChaCha20Rng) -> P::Point,
 ) -> Duration
 where
     F: PrimeField,
     P: Polynomial<F>,
     PCS: PolynomialCommitment<F, P>,
-    P::Point: UniformRand,
 {
     let rng = &mut ChaCha20Rng::from_rng(test_rng()).unwrap();
 
@@ -174,7 +185,7 @@ where
         LabeledPolynomial::new("test".to_string(), rand_poly(num_vars, rng), None, None);
 
     let (coms, states) = PCS::commit(&ck, [&labeled_poly], Some(rng)).unwrap();
-    let point = P::Point::rand(rng);
+    let point = rand_point(num_vars, rng);
     let claimed_eval = labeled_poly.evaluate(&point);
     let proof = PCS::open(
         &ck,
@@ -231,7 +242,7 @@ fn test_sponge<F: PrimeField>() -> PoseidonSponge<F> {
 
 #[macro_export]
 macro_rules! bench_method {
-    ($c:expr, $method:ident, $scheme_type:ty, $rand_poly:ident) => {
+    ($c:expr, $method:ident, $scheme_type:ty, $rand_poly:ident, $rand_point:ident) => {
         let scheme_type_str = stringify!($scheme_type);
         let bench_name = format!("{} {}", stringify!($method), scheme_type_str);
         bench_pcs_method::<_, _, $scheme_type>(
@@ -240,6 +251,7 @@ macro_rules! bench_method {
             &bench_name,
             $method::<_, _, $scheme_type>,
             $rand_poly::<_>,
+            $rand_point::<_>,
         );
     };
 }
@@ -247,12 +259,12 @@ macro_rules! bench_method {
 #[macro_export]
 macro_rules! bench {
     (
-        $scheme_type:ty, $rand_poly:ident
+        $scheme_type:ty, $rand_poly:ident, $rand_point:ident
     ) => {
         fn bench_pcs(c: &mut Criterion) {
-            bench_method!(c, commit, $scheme_type, $rand_poly);
-            bench_method!(c, open, $scheme_type, $rand_poly);
-            bench_method!(c, verify, $scheme_type, $rand_poly);
+            bench_method!(c, commit, $scheme_type, $rand_poly, $rand_point);
+            bench_method!(c, open, $scheme_type, $rand_poly, $rand_point);
+            bench_method!(c, verify, $scheme_type, $rand_poly, $rand_point);
         }
 
         criterion_group!(benches, bench_pcs);

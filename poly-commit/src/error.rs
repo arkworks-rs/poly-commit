@@ -94,6 +94,49 @@ pub enum Error {
         /// Index of the offending polynomial.
         label: String,
     },
+
+    /// This means a failure in verifying the commitment or the opening.
+    InvalidCommitment,
+
+    /// This means during opening or verification, a commitment of incorrect
+    /// size (for example, with an insufficient number of entries) was
+    /// encountered
+    IncorrectCommitmentSize {
+        /// Encountered commitment size
+        encountered: usize,
+        /// Expected commitment size
+        expected: usize,
+    },
+
+    /// For PCS which rely on Fiat-Shamir to be rendered non-interactive,
+    /// these are errors that result from incorrect transcript manipulation.
+    TranscriptError,
+
+    /// This means the required soundness error bound is inherently impossible.
+    /// E.g., the field is not big enough.
+    InvalidParameters(String),
+
+    /// Error resulting from hashing in linear code - based PCS.
+    HashingError,
+
+    /// This means a commitment with a certain label was matched with a
+    /// a polynomial which has a different label - which shouldn't happen
+    MismatchedLabels {
+        /// The label of the commitment
+        commitment_label: String,
+        /// The label of the polynomial
+        polynomial_label: String,
+    },
+
+    /// This means multivariate polynomial with a certain number of variables
+    /// was matched (for instance, during commitment, opening or verification)
+    /// to a point with a different number of variables.
+    MismatchedNumVars {
+        /// The number of variables of the polynomial
+        poly_nv: usize,
+        /// The number of variables of the point
+        point_nv: usize,
+    },
 }
 
 impl core::fmt::Display for Error {
@@ -180,6 +223,28 @@ impl core::fmt::Display for Error {
                 support up to degree ({:?})", label, poly_degree, supported_degree
             ),
             Error::IncorrectInputLength(err) => write!(f, "{}", err),
+            Error::InvalidCommitment => write!(f, "Failed to verify the commitment"),
+            Error::IncorrectCommitmentSize {
+                encountered,
+                expected,
+            } => write!(
+                f,
+                "the commitment has size {}, but size {} was expected",
+                encountered, expected
+            ),
+            Error::TranscriptError => write!(f, "Incorrect transcript manipulation"),
+            Error::InvalidParameters(err) => write!(f, "{}", err),
+            Error::HashingError => write!(f, "Error resulting from hashing"),
+            Error::MismatchedLabels { commitment_label, polynomial_label } =>
+                write!(f, "Mismatched labels: commitment label: {}, polynomial label: {}",
+                    commitment_label,
+                    polynomial_label
+                ),
+            Error::MismatchedNumVars { poly_nv, point_nv } =>
+                write!(f, "Mismatched number of variables: polynomial has {}, point has {}",
+                    poly_nv,
+                    point_nv,
+                ),
         }
     }
 }
