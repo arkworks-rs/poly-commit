@@ -17,7 +17,6 @@ ark-crypto-primitives = {version = "^0.4.0", default-features = false, features 
 ark-std = { version = "^0.4.0", default-features = false }
 
 blake2 = { version = "0.10", default-features = false }
-blake3 = { version = "1.5.4", default-features = false }
 derivative = { version = "2", features = [ "use_core" ] }
 digest = "0.10"
 

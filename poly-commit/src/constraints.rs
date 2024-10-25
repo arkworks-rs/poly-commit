@@ -202,7 +202,10 @@ pub struct LabeledPointVar<TargetField: PrimeField, BaseField: PrimeField> {
 /// An allocated version of `QuerySet`.
 #[derive(Clone)]
 pub struct QuerySetVar<TargetField: PrimeField, BaseField: PrimeField>(
-    pub HashSet<(String, LabeledPointVar<TargetField, BaseField>), DefaultHasher>,
+    pub  HashSet<
+        (String, LabeledPointVar<TargetField, BaseField>),
+        BuildHasherDefault<DefaultHasher>,
+    >,
 );
 
 /// An allocated version of `Evaluations`.

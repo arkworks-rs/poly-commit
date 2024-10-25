@@ -11,6 +11,9 @@ use ark_poly::MultilinearExtension;
 use ark_serialize::serialize_to_vec;
 use ark_std::{marker::PhantomData, rand::RngCore, string::ToString, vec::Vec, UniformRand};
 
+use blake2::Blake2s256;
+use digest::Digest;
+
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -144,15 +147,16 @@ where
         // generators, since the point at infinity should theoretically occur)
         let points: Vec<_> = ark_std::cfg_into_iter!(0u64..dim + 1)
             .map(|i| {
-                let hash = blake3::hash([PROTOCOL_NAME, &i.to_le_bytes()].concat().as_slice());
-                let mut p = G::from_random_bytes(hash.as_bytes());
+                let hash =
+                    Blake2s256::digest([PROTOCOL_NAME, &i.to_le_bytes()].concat().as_slice());
+                let mut p = G::from_random_bytes(&hash);
                 let mut j = 0u64;
                 while p.is_none() {
                     let mut bytes = PROTOCOL_NAME.to_vec();
                     bytes.extend(i.to_le_bytes());
                     bytes.extend(j.to_le_bytes());
-                    let hash = blake3::hash(bytes.as_slice());
-                    p = G::from_random_bytes(hash.as_bytes());
+                    let hash = Blake2s256::digest(bytes.as_slice());
+                    p = G::from_random_bytes(&hash);
                     j += 1;
                 }
                 let point = p.unwrap();
