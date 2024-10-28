@@ -9,20 +9,18 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
-ark-ff = { version = "^0.4.0", default-features = false }
-ark-ec = { version = "^0.4.0", default-features = false }
-ark-poly = {version = "^0.4.0", default-features = false }
-ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
-ark-std = { version = "^0.4.0", default-features = false }
+ark-serialize = { workspace = true, features = [ "derive" ] }
+ark-ff.workspace = true
+ark-ec.workspace = true
+ark-poly.workspace = true
+ark-crypto-primitives = { workspace = true, features = ["sponge", "merkle_tree"] }
+ark-std.workspace = true
+ark-relations = { workspace = true, optional = true }
+ark-r1cs-std = { workspace = true, optional = true }
 
 blake2 = { version = "0.10", default-features = false }
 derivative = { version = "2", features = [ "use_core" ] }
 digest = "0.10"
-
-ark-relations = { version = "^0.4.0", default-features = false, optional = true }
-ark-r1cs-std = { version = "^0.4.0", default-features = false, optional = true }
-
 hashbrown = { version = "0.15", default-features = false, features = ["inline-more", "allocator-api2"], optional = true }
 rand = { version = "0.8.0", optional = true }
 rayon = { version = "1", optional = true }
