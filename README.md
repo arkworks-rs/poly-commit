@@ -20,7 +20,7 @@ The key properties satisfied by the polynomial commitment schemes are **succinct
 
 ### Supported Polynomial Commitment Schemes
 
-The library supports four polynomial commitment schemes.
+The library supports six polynomial commitment schemes.
 
 #### Inner-product-argument PC
 
