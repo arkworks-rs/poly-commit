@@ -7,6 +7,7 @@ categories.workspace = true
 include.workspace = true
 license.workspace = true
 edition.workspace = true
+description.workspace = true
 
 [dependencies]
 ark-serialize = { workspace = true, features = [ "derive" ] }
