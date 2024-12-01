@@ -54,7 +54,7 @@ This trait defines the interface for a polynomial commitment scheme. It is recom
 (e.g. the [vanilla KZG scheme](./src/kzg10/mod.rs) does not implement this trait, but the [Marlin scheme](./src/marlin/mod.rs) which uses it under the hood, does).
 
 ```rust
-// In this example, we will commit to a single polynomial, open it first at one point, and then batched at two points, and finally verify the proofs.
+// In this example, we will commit to a single polynomial, open it first at one point, and then batch at two points, and finally verify the proofs.
 // We will use the KZG10 polynomial commitment scheme, following the approach from Marlin.
 
 use ark_poly_commit::{Polynomial, marlin_pc::MarlinKZG10, LabeledPolynomial, PolynomialCommitment, QuerySet, Evaluations};
