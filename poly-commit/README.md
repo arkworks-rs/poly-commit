@@ -102,7 +102,7 @@ SonicPC additionally computes some G2 elements for shift powers: `(1/\beta)^i H`
 
 When there is no degree bound, both are the same.
 
-When there is a degree bound, MarlinPC is more expensive: it needs an additional commitment to commit to the shifted poynomial. 
+When there is a degree bound, MarlinPC is more expensive: it needs an additional commitment to commit to the shifted polynomial. 
 
 #### Open: 
 
