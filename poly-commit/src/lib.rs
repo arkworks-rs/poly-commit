@@ -9,7 +9,7 @@
 #![deny(renamed_and_removed_lints, stable_features, unused_allocation)]
 #![deny(unused_comparisons, bare_trait_objects, unused_must_use)]
 #![forbid(unsafe_code)]
-#![doc = include_str!("../../README.md")]
+#![doc = include_str!("../README.md")]
 
 #[allow(unused)]
 #[macro_use]
