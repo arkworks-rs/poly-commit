@@ -25,7 +25,7 @@ mod utils;
 /// Note that the latter should never be used in production environments.
 pub const PROTOCOL_NAME: &'static [u8] = b"Hyrax protocol";
 
-/// Hyrax polynomial committment scheme:
+/// Hyrax polynomial commitment scheme:
 /// A polynomial commitment scheme based on the hardness of the
 /// discrete logarithm problem in prime-order groups. This is a
 /// Fiat-Shamired version of the PCS described in the Hyrax paper
