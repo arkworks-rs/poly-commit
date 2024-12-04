@@ -7,7 +7,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{rand::RngCore, vec::Vec};
 
-/// `UniversalParams` amounts to a Pederson commitment key of sufficient length
+/// `UniversalParams` amounts to a Pedersen commitment key of sufficient length
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""), Debug(bound = ""))]
 pub struct HyraxUniversalParams<G: AffineRepr> {
@@ -92,7 +92,7 @@ where
 }
 
 /// A vector of scalars, each of which multiplies the distinguished group
-/// element in the Pederson commitment key for a different commitment
+/// element in the Pedersen commitment key for a different commitment
 impl<F: PrimeField> PCCommitmentState for HyraxCommitmentState<F> {
     type Randomness = HyraxRandomness<F>;
     fn empty() -> Self {
