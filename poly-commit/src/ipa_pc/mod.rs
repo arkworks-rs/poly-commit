@@ -25,7 +25,7 @@ pub use data_structures::*;
 /// The construction is described in detail in [[BCMS20]][pcdas].
 ///
 /// Degree bound enforcement requires that (at least one of) the points at
-/// which a committed polynomial is evaluated are from a distribution that is
+/// which a committed polynomial is evaluated from a distribution that is
 /// random conditioned on the polynomial. This is because degree bound
 /// enforcement relies on checking a polynomial identity at this point.
 /// More formally, the points must be sampled from an admissible query sampler,
