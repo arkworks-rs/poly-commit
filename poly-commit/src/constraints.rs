@@ -49,7 +49,7 @@ pub enum LinearCombinationCoeffVar<TargetField: PrimeField, BaseField: PrimeFiel
     One,
     /// Coefficient -1.
     MinusOne,
-    /// Other coefficient, represented as a "emulated" field element.
+    /// Other coefficient, represented as an "emulated" field element.
     Var(EmulatedFpVar<TargetField, BaseField>),
 }
 

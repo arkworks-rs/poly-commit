@@ -156,7 +156,7 @@ impl core::fmt::Display for Error {
                 label
             ),
             Error::MissingLHS { label } => {
-                write!(f, "Equation \"{}\" does not have a LHS.", label)
+                write!(f, "Equation \"{}\" does not have an LHS.", label)
             },
             Error::MissingRng => write!(f, "hiding commitments require `Some(rng)`"),
             Error::DegreeIsZero => write!(
