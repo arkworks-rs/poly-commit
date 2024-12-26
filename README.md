@@ -153,7 +153,7 @@ Lastly, this library is instrumented with profiling infrastructure that prints d
 
 ## Usage
 
-### [`PolynomialCommitment`](https://github.com/arkworks-rs/poly-commit/blob/master/src/lib.rs#L145)
+### [`PolynomialCommitment`](https://github.com/arkworks-rs/poly-commit/blob/master/poly-commit/src/lib.rs#L145)
 
 This trait defines the interface for a polynomial commitment scheme. It is recommended to use the schemes from this crate that implement the `PolynomialCommitment` trait
 (e.g. the [vanilla KZG scheme](./src/kzg10/mod.rs) does not implement this trait, but the [Marlin scheme](./src/marlin/mod.rs) which uses it under the hood, does).
