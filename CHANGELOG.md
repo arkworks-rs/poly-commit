@@ -4,6 +4,18 @@
 
 ### Breaking changes
 
+### Features
+
+- Add `commit_sparse` method for KZG10.
+
+### Improvements
+
+### Bug fixes
+
+## v0.4.0
+
+### Breaking changes
+
 - [\#112](https://github.com/arkworks-rs/poly-commit/pull/112) Upgrade all dependencies to `0.4`.
 - [\#82](https://github.com/arkworks-rs/poly-commit/pull/82) Argument `opening_challenge: F` for `open`,
   `check`, has been changed from `F` to `opening_challenges: &mut ChallengeGenerator`.
