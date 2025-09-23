@@ -193,7 +193,6 @@ where
                 powers.powers_of_gamma_g.len(),
             )?;
             end_timer!(sample_random_poly_time);
-            // }
             let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
             let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
             let random_commitment = <E::G1 as VariableBaseMSM>::msm_bigint(
