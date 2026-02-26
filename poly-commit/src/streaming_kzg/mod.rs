@@ -74,7 +74,7 @@
 //! let alpha = Fr::from(42u64);
 //! let (evaluation, proof) = ck.open(&f, &alpha);
 //! ```
-//! To veify that an opening is correct:
+//! To verify that an opening is correct:
 //! ```ignore
 //! use gemini::kzg::VerifierKey;
 //!
