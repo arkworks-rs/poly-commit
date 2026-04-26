@@ -4,7 +4,7 @@ resolver = "2"
 
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 authors = ["arkworks contributors"]
 description = "A library for constructing polynomial commitment schemes for use in zkSNARKs"
 repository = "https://github.com/arkworks-rs/poly-commit"
@@ -16,14 +16,14 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [workspace.dependencies]
-ark-serialize = { version = "0.5.0", default-features = false }
-ark-ff = { version = "0.5.0", default-features = false }
-ark-ec = { version = "0.5.0", default-features = false }
-ark-poly = { version = "0.5.0", default-features = false }
-ark-crypto-primitives = { version = "0.5.0", default-features = false }
-ark-std = { version = "0.5.0", default-features = false }
-ark-relations = { version = "0.5.0", default-features = false }
-ark-r1cs-std = { version = "0.5.0", default-features = false }
+ark-serialize = { version = "0.6.0", default-features = false }
+ark-ff = { version = "0.6.0", default-features = false }
+ark-ec = { version = "0.6.0", default-features = false }
+ark-poly = { version = "0.6.0", default-features = false }
+ark-crypto-primitives = { version = "0.6.0", default-features = false }
+ark-std = { version = "0.6.0", default-features = false }
+ark-relations = { version = "0.6.0", default-features = false }
+ark-r1cs-std = { version = "0.6.0", default-features = false }
 rand_chacha = { version = "0.3.0", default-features = false }
 
 [profile.release]
