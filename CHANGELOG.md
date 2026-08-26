@@ -11,6 +11,10 @@
 ### Features
 
 - [\#82](https://github.com/arkworks-rs/poly-commit/pull/82) Add multivariate opening challenge strategy. Integrate with sponge API.
+- Add the pairing-based KZH-`k` multilinear polynomial commitment family with
+  balanced tensor blocks, arbitrary-point and batched openings, native
+  arkworks multilinear ordering, and auxiliary commitments for sublinear
+  generic-opening group work.
 
 ### Improvements
 - [\#152](https://github.com/arkworks-rs/poly-commit/issues/152) Expose `kzg10::open_with_witness_polynomial` and `open` downstream.
