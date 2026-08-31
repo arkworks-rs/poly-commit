@@ -70,7 +70,7 @@ pub struct CommitterKey<E: Pairing> {
 
 impl<E: Pairing> CommitterKey<E> {
     /// Obtain powers for the underlying KZG10 construction
-    pub fn powers(&self) -> kzg10::Powers<E> {
+    pub fn powers<'a>(&'a self) -> kzg10::Powers<'a, E> {
         kzg10::Powers {
             powers_of_g: self.powers_of_g.as_slice().into(),
             powers_of_gamma_g: self.powers_of_gamma_g.as_slice().into(),
@@ -78,10 +78,10 @@ impl<E: Pairing> CommitterKey<E> {
     }
 
     /// Obtain powers for committing to shifted polynomials.
-    pub fn shifted_powers(
-        &self,
+    pub fn shifted_powers<'a>(
+        &'a self,
         degree_bound: impl Into<Option<usize>>,
-    ) -> Option<kzg10::Powers<E>> {
+    ) -> Option<kzg10::Powers<'a, E>> {
         match (&self.shifted_powers_of_g, &self.shifted_powers_of_gamma_g) {
             (Some(shifted_powers_of_g), Some(shifted_powers_of_gamma_g)) => {
                 let max_bound = self

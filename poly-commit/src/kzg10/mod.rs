@@ -488,10 +488,10 @@ mod tests {
     impl<E: Pairing, P: DenseUVPolynomial<E::ScalarField>> KZG10<E, P> {
         /// Specializes the public parameters for a given maximum degree `d` for polynomials
         /// `d` should be less that `pp.max_degree()`.
-        pub(crate) fn trim(
-            pp: &UniversalParams<E>,
+        pub(crate) fn trim<'a>(
+            pp: &'a UniversalParams<E>,
             mut supported_degree: usize,
-        ) -> Result<(Powers<E>, VerifierKey<E>), Error> {
+        ) -> Result<(Powers<'a, E>, VerifierKey<E>), Error> {
             if supported_degree == 1 {
                 supported_degree += 1;
             }
