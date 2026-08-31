@@ -113,16 +113,11 @@ pub mod multilinear_pc;
 
 /// The pairing-based KZH-`k` multilinear polynomial commitment family.
 ///
-/// The type-level parameter `K` selects the tensor arity. For an MLE
-/// with `N` evaluations, this gives a constant-size commitment,
-/// `O(K * N^(1/K))` proof size and verifier work, `O(K * N)` commitment
-/// preprocessing, and `O(N^(ceil(K / 2) / K))` group work plus `O(N)` field
-/// work for a generic random opening. The group work is `O(sqrt(N))` when `K`
-/// is even and slightly higher when `K` is odd.
-/// Tensor blocks follow arkworks' native little-endian order from `x_0`
-/// upward, and partial evaluation uses ark-poly's `fix_variables` directly.
-/// This module implements the non-hiding construction from [KZH-Fold][kzh]
-/// with the random-opening preprocessing described by [IronDict][irondict].
+/// The type-level parameter `K` selects the tensor arity. This is the
+/// non-hiding construction from [KZH-Fold][kzh], with the generic-opening
+/// auxiliary tables described by [IronDict][irondict]. See the [`kzh`] module
+/// for setup assumptions and the ways this implementation differs from the
+/// papers.
 ///
 /// [kzh]: https://eprint.iacr.org/2025/144
 /// [irondict]: https://eprint.iacr.org/2025/1580

@@ -67,9 +67,8 @@ fn assert_symbolic_cost_bounds<const K: usize>(num_vars: usize) {
     // This second form records the requested fixed-K asymptotic directly.
     assert!(total_opening_terms < 4 * opening_layer_bound);
 
-    // The plan counts online group-scalar terms. Dense tensor folding is the
-    // separately documented O(N) field work and is intentionally not inferred
-    // from this group-work schedule.
+    // The plan counts online group-scalar terms, not the dense tensor folding
+    // that walks the evaluation table.
 
     // There are exactly K verifier axes, each of dimension at most 2^q.
     let verifier_msm_terms = dimensions.iter().sum::<usize>();

@@ -1,27 +1,22 @@
 //! The KZH-`k` multilinear polynomial commitment family.
 //!
 //! This module implements the non-hiding construction in Appendix C.1 of
-//! [KZH-Fold][kzh], with the generic-random-opening preprocessing described in
+//! [KZH-Fold][kzh], with the generic-opening auxiliary tables described in
 //! Appendix E of [IronDict][irondict]. The const generic `K` is the tensor
-//! arity. For `N = 2^n` evaluations, it yields `O(K * N^(1/K))` proof
-//! size and verifier work while the commitment remains one `G1` element.
+//! arity. Protocol costs are those of the papers; this documentation records
+//! only where the implementation differs from them or from the crate's default
+//! PCS APIs.
 //!
-//! The implementation uses arkworks' native little-endian MLE convention
-//! throughout. Tensor blocks are consumed from `x_0` upward, and every partial
-//! evaluation directly calls ark-poly's `MultilinearExtension::fix_variables`.
-//! Commitment state caches prefix-indexed suffix commitments. At each generic
-//! opening layer, the prover either contracts that cached table or commits the
-//! current partially evaluated field tensor, whichever contains fewer terms.
-//! Only the beneficial prefix of auxiliary layers is stored; later tables used
-//! only for free Boolean openings are deliberately omitted. With `K` balanced
-//! tensor blocks, a single random opening uses
-//! `O(N^(ceil(K / 2) / K))` group-scalar terms and `O(N)` field operations.
-//! Thus, group work is `O(sqrt(N))` for even `K` and slightly higher for odd
-//! `K`. Commitment preprocessing uses at most `K * N` group-scalar terms, and
-//! verification is `O(K * N^(1/K))`.
+//! Tensor blocks follow arkworks' little-endian MLE order from `x_0` upward,
+//! and partial evaluation uses [`MultilinearExtension::fix_variables`]. Same-
+//! point batching is native. Multi-point and linear-combination queries use the
+//! crate's default APIs, which issue one same-point opening per distinct point.
+//! Hiding commitments, strict degree bounds, a Boolean-specialized opening API,
+//! and an R1CS gadget are not implemented and are rejected where they would
+//! otherwise apply.
 //!
-//! KZH is not inherently hiding. Hiding requests and strict degree bounds are
-//! rejected.
+//! Commitment state stores only the auxiliary tables used by generic openings.
+//! Tables that exist solely for free Boolean openings in the papers are omitted.
 //!
 //! # Security and setup
 //!
@@ -611,9 +606,9 @@ where
     /// Checks a KZH opening using a verifier key whose `G2` inputs have
     /// already been prepared for pairing.
     ///
-    /// Preparation is useful when the same verifier key is reused. This is an
-    /// additive fast path: it uses the same transcript, aggregation, pairing
-    /// equations, and result as [`PolynomialCommitment::check`].
+    /// Uses the same transcript, aggregation, pairing equations, and result as
+    /// [`PolynomialCommitment::check`]. Prepare the key once when it will be
+    /// reused.
     pub fn check_prepared<'a>(
         prepared_vk: &PreparedVerifierKey<E, K>,
         commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E, K>>>,

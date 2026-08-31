@@ -276,9 +276,8 @@ fn bench_kzh(criterion: &mut Criterion) {
         );
     }
 
-    // Four-variable steps multiply N by 16, making the expected linear,
-    // square-root, and K-th-root timing ratios easy to compare. K=3 covers the
-    // odd-K opening cost, while K=2, 4, and 6 cover representative even cases.
+    // K=3 is an odd arity; K=2, 4, and 6 are even. n increases by four so that
+    // each step multiplies the evaluation table by 16.
     for num_vars in NUM_VARS
         .iter()
         .copied()

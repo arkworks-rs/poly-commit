@@ -230,7 +230,7 @@ impl<E: Pairing, const K: usize> PCPreparedVerifierKey<VerifierKey<E, K>>
     }
 }
 
-/// A constant-size KZH commitment.
+/// A KZH commitment.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Clone(bound = ""),
@@ -300,15 +300,11 @@ impl<E: Pairing, const K: usize> PCPreparedCommitment<Commitment<E, K>>
 
 /// Private state cached while committing to a polynomial.
 ///
-/// `auxiliary_tables[j]` contains higher-variable suffix commitments for all
-/// assignments to low blocks `0..=j`, stored current-block-index first and
-/// prior-prefix-index second. During a generic opening, early proof layers are
-/// obtained by contracting these tables with the already fixed low point
-/// blocks. Later layers are committed directly from the partially evaluated
-/// polynomial; only the beneficial prefix of tables is stored. Consequently,
-/// the number of tables is generally smaller than the number of proof
-/// transition vectors. Batched openings may consume an even shorter prefix
-/// when fusing many states would cost more than the direct route.
+/// `auxiliary_tables[j]` stores higher-variable suffix commitments for all
+/// assignments to low blocks `0..=j`, current-block-index first and
+/// prior-prefix-index second. Only tables used by generic openings are kept;
+/// later layers are committed from the partially evaluated polynomial.
+/// Same-point batches may use a shorter prefix of these tables.
 #[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
 #[derivative(
     Clone(bound = ""),

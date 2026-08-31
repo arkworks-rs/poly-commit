@@ -81,18 +81,12 @@ Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
 
 #### KZH-k multilinear PC
 
-KZH-k is a family of pairing-based multilinear polynomial commitment schemes
-parameterized by tensor arity `k`. Commitments contain one group element;
-for a polynomial with `N` evaluations, balanced parameters give
-`O(k * N^(1/k))`-size evaluation proofs and verifier work. Generic openings
-use cached auxiliary commitments, with `O(N^(ceil(k/2)/k))` group work and
-`O(N)` field work. The implementation follows arkworks' native multilinear
-evaluation order and supports arbitrary field points.
-
-This is the non-hiding construction. Setup creates a trusted SRS for one exact
-number of variables and does not provide an updatable-ceremony interface. See
-the [`kzh` module documentation](https://docs.rs/ark-poly-commit/latest/ark_poly_commit/kzh/)
-for the tensor layout, cost model, security assumptions, and setup guidance.
+Pairing-based multilinear polynomial commitment family parameterized by tensor
+arity `k`. This is the non-hiding construction from the papers below. Setup
+creates a trusted SRS for one exact number of variables and does not provide
+an updatable-ceremony interface. See the
+[`kzh` module documentation](https://docs.rs/ark-poly-commit/latest/ark_poly_commit/kzh/)
+for setup assumptions and the ways this implementation differs from the papers.
 
 Select the family member with the const generic `KZH<E, P, const K: usize>`;
 `KZH2`, `KZH3`, and `KZH4` are provided as convenience aliases.
