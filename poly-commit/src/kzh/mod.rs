@@ -126,7 +126,7 @@ where
     }
 
     fn compute_auxiliary_tables(
-        ck: &KZHCommitterKey<E, K>,
+        ck: &CommitterKey<E, K>,
         evaluations: &[<E::ScalarField as PrimeField>::BigInt],
     ) -> Result<Vec<Vec<E::G1Affine>>, Error> {
         let dimensions = block_dimensions(&ck.num_vars_per_block)?;
@@ -205,12 +205,12 @@ where
         Ok(auxiliary_tables)
     }
 
-    fn commitment_matches_num_vars(commitment: &KZHCommitment<E, K>, num_vars: usize) -> bool {
+    fn commitment_matches_num_vars(commitment: &Commitment<E, K>, num_vars: usize) -> bool {
         commitment.num_vars == num_vars || (commitment.num_vars == 0 && commitment.comm.is_zero())
     }
 
     fn cached_opening_layer(
-        states: &[&KZHCommitmentState<E, K>],
+        states: &[&CommitmentState<E, K>],
         challenges: &[E::ScalarField],
         prefix_weights: &[E::ScalarField],
         level: usize,
@@ -287,7 +287,7 @@ where
     }
 
     fn direct_opening_layer(
-        ck: &KZHCommitterKey<E, K>,
+        ck: &CommitterKey<E, K>,
         partially_evaluated: &DenseMultilinearExtension<E::ScalarField>,
         level: usize,
         dimension: usize,
@@ -323,12 +323,12 @@ where
     }
 
     fn open_evaluations(
-        ck: &KZHCommitterKey<E, K>,
+        ck: &CommitterKey<E, K>,
         evaluations: Vec<E::ScalarField>,
         point: &[E::ScalarField],
-        states: &[&KZHCommitmentState<E, K>],
+        states: &[&CommitmentState<E, K>],
         challenges: &[E::ScalarField],
-    ) -> Result<KZHProof<E, K>, Error> {
+    ) -> Result<Proof<E, K>, Error> {
         validate_committer_key_shape(ck)?;
         if states.is_empty() || states.len() != challenges.len() {
             return Err(Self::invalid_input_length(
@@ -405,7 +405,7 @@ where
             }
         }
 
-        let proof = KZHProof {
+        let proof = Proof {
             k: K,
             num_vars: ck.num_vars,
             layer_commitments: proof_layers,
@@ -416,13 +416,13 @@ where
     }
 
     fn verify_opening_with_g2<Q>(
-        vk: &KZHVerifierKey<E, K>,
+        vk: &VerifierKey<E, K>,
         pairing_v: &Q,
         pairing_v_tau: &[Vec<Q>],
         commitment: E::G1Affine,
         point: &[E::ScalarField],
         value: E::ScalarField,
-        proof: &KZHProof<E, K>,
+        proof: &Proof<E, K>,
     ) -> Result<bool, Error>
     where
         Q: Clone + Into<E::G2Prepared>,
@@ -493,7 +493,7 @@ where
 
     fn batch_challenges(
         sponge: &mut impl CryptographicSponge,
-        commitments: &[&LabeledCommitment<KZHCommitment<E, K>>],
+        commitments: &[&LabeledCommitment<Commitment<E, K>>],
         point: &[E::ScalarField],
         values: &[E::ScalarField],
         num_vars: usize,
@@ -529,17 +529,17 @@ where
     }
 
     fn check_with_g2<'a, Q>(
-        vk: &KZHVerifierKey<E, K>,
+        vk: &VerifierKey<E, K>,
         pairing_inputs: PairingInputs<'_, Q>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<KZHCommitment<E, K>>>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E, K>>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
-        proof: &KZHProof<E, K>,
+        proof: &Proof<E, K>,
         sponge: &mut impl CryptographicSponge,
     ) -> Result<bool, Error>
     where
         Q: Clone + Into<E::G2Prepared>,
-        KZHCommitment<E, K>: 'a,
+        Commitment<E, K>: 'a,
     {
         validate_verifier_key_shape(vk)?;
         if pairing_inputs.v_tau.len() != vk.v_tau.len()
@@ -615,16 +615,16 @@ where
     /// additive fast path: it uses the same transcript, aggregation, pairing
     /// equations, and result as [`PolynomialCommitment::check`].
     pub fn check_prepared<'a>(
-        prepared_vk: &KZHPreparedVerifierKey<E, K>,
-        commitments: impl IntoIterator<Item = &'a LabeledCommitment<KZHCommitment<E, K>>>,
+        prepared_vk: &PreparedVerifierKey<E, K>,
+        commitments: impl IntoIterator<Item = &'a LabeledCommitment<Commitment<E, K>>>,
         point: &'a P::Point,
         values: impl IntoIterator<Item = E::ScalarField>,
-        proof: &KZHProof<E, K>,
+        proof: &Proof<E, K>,
         sponge: &mut impl CryptographicSponge,
         _rng: Option<&mut dyn RngCore>,
     ) -> Result<bool, Error>
     where
-        KZHCommitment<E, K>: 'a,
+        Commitment<E, K>: 'a,
     {
         Self::check_with_g2(
             prepared_vk.verifier_key(),
@@ -647,12 +647,12 @@ where
     E::ScalarField: Absorb,
     P: MultilinearExtension<E::ScalarField>,
 {
-    type UniversalParams = KZHUniversalParams<E, K>;
-    type CommitterKey = KZHCommitterKey<E, K>;
-    type VerifierKey = KZHVerifierKey<E, K>;
-    type Commitment = KZHCommitment<E, K>;
-    type CommitmentState = KZHCommitmentState<E, K>;
-    type Proof = KZHProof<E, K>;
+    type UniversalParams = UniversalParams<E, K>;
+    type CommitterKey = CommitterKey<E, K>;
+    type VerifierKey = VerifierKey<E, K>;
+    type Commitment = Commitment<E, K>;
+    type CommitmentState = CommitmentState<E, K>;
+    type Proof = Proof<E, K>;
     type BatchProof = Vec<Self::Proof>;
     type Error = Error;
 
@@ -720,7 +720,7 @@ where
             .map(|trapdoors| v_table.batch_mul(trapdoors))
             .collect();
 
-        let params = KZHUniversalParams {
+        let params = UniversalParams {
             k: K,
             num_vars,
             num_vars_per_block,
@@ -759,13 +759,13 @@ where
             return Err(Error::UnsupportedDegreeBound(bounds[0]));
         }
 
-        let ck = KZHCommitterKey {
+        let ck = CommitterKey {
             k: pp.k,
             num_vars: pp.num_vars,
             num_vars_per_block: pp.num_vars_per_block.clone(),
             h: pp.h.clone(),
         };
-        let vk = KZHVerifierKey {
+        let vk = VerifierKey {
             k: pp.k,
             num_vars: pp.num_vars,
             num_vars_per_block: pp.num_vars_per_block.clone(),
@@ -815,12 +815,12 @@ where
             let evaluation_bigints = ark_std::cfg_into_iter!(evaluations)
                 .map(|evaluation| evaluation.into_bigint())
                 .collect::<Vec<_>>();
-            let commitment = KZHCommitment {
+            let commitment = Commitment {
                 k: K,
                 num_vars: ck.num_vars,
                 comm: Self::msm_bigint(&ck.h[0], &evaluation_bigints)?.into_affine(),
             };
-            let state = KZHCommitmentState {
+            let state = CommitmentState {
                 k: K,
                 num_vars: ck.num_vars,
                 auxiliary_tables: Self::compute_auxiliary_tables(ck, &evaluation_bigints)?,

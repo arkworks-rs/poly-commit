@@ -22,7 +22,7 @@ use ark_std::{rand::RngCore, vec::Vec};
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHUniversalParams<E: Pairing, const K: usize> {
+pub struct UniversalParams<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables supported by these parameters.
@@ -38,7 +38,7 @@ pub struct KZHUniversalParams<E: Pairing, const K: usize> {
     pub(crate) v_tau: Vec<Vec<E::G2Affine>>,
 }
 
-impl<E: Pairing, const K: usize> KZHUniversalParams<E, K> {
+impl<E: Pairing, const K: usize> UniversalParams<E, K> {
     /// Returns the exact number of variables supported by these parameters.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -52,7 +52,7 @@ impl<E: Pairing, const K: usize> KZHUniversalParams<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> PCUniversalParams for KZHUniversalParams<E, K> {
+impl<E: Pairing, const K: usize> PCUniversalParams for UniversalParams<E, K> {
     fn max_degree(&self) -> usize {
         // KZH commits to multilinear polynomials.
         1
@@ -67,7 +67,7 @@ impl<E: Pairing, const K: usize> PCUniversalParams for KZHUniversalParams<E, K> 
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHCommitterKey<E: Pairing, const K: usize> {
+pub struct CommitterKey<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables supported by this key.
@@ -79,7 +79,7 @@ pub struct KZHCommitterKey<E: Pairing, const K: usize> {
     pub(crate) h: Vec<Vec<E::G1Affine>>,
 }
 
-impl<E: Pairing, const K: usize> KZHCommitterKey<E, K> {
+impl<E: Pairing, const K: usize> CommitterKey<E, K> {
     /// Returns the exact number of variables supported by this key.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -93,7 +93,7 @@ impl<E: Pairing, const K: usize> KZHCommitterKey<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> PCCommitterKey for KZHCommitterKey<E, K> {
+impl<E: Pairing, const K: usize> PCCommitterKey for CommitterKey<E, K> {
     fn max_degree(&self) -> usize {
         // KZH commits to multilinear polynomials.
         1
@@ -113,7 +113,7 @@ impl<E: Pairing, const K: usize> PCCommitterKey for KZHCommitterKey<E, K> {
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHVerifierKey<E: Pairing, const K: usize> {
+pub struct VerifierKey<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables supported by this key.
@@ -129,7 +129,7 @@ pub struct KZHVerifierKey<E: Pairing, const K: usize> {
     pub(crate) v_tau: Vec<Vec<E::G2Affine>>,
 }
 
-impl<E: Pairing, const K: usize> KZHVerifierKey<E, K> {
+impl<E: Pairing, const K: usize> VerifierKey<E, K> {
     /// Returns the exact number of variables supported by this key.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -143,7 +143,7 @@ impl<E: Pairing, const K: usize> KZHVerifierKey<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> PCVerifierKey for KZHVerifierKey<E, K> {
+impl<E: Pairing, const K: usize> PCVerifierKey for VerifierKey<E, K> {
     fn max_degree(&self) -> usize {
         // KZH commits to multilinear polynomials.
         1
@@ -161,24 +161,24 @@ impl<E: Pairing, const K: usize> PCVerifierKey for KZHVerifierKey<E, K> {
 /// equations is converted to Arkworks' prepared representation once and then
 /// reused by [`KZH::check_prepared`](super::KZH::check_prepared). Prepared line
 /// coefficients are deliberately not canonically serializable; deserialize
-/// and validate an ordinary [`KZHVerifierKey`] and prepare it locally instead.
+/// and validate an ordinary [`VerifierKey`] and prepare it locally instead.
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug(bound = ""))]
-pub struct KZHPreparedVerifierKey<E: Pairing, const K: usize> {
-    verifier_key: KZHVerifierKey<E, K>,
+pub struct PreparedVerifierKey<E: Pairing, const K: usize> {
+    verifier_key: VerifierKey<E, K>,
     prepared_v: E::G2Prepared,
     prepared_v_tau: Vec<Vec<E::G2Prepared>>,
 }
 
-impl<E: Pairing, const K: usize> KZHPreparedVerifierKey<E, K> {
+impl<E: Pairing, const K: usize> PreparedVerifierKey<E, K> {
     /// Prepares all `G2` pairing inputs in `vk` for repeated verification.
-    pub fn prepare(vk: &KZHVerifierKey<E, K>) -> Self {
+    pub fn prepare(vk: &VerifierKey<E, K>) -> Self {
         Self::from(vk)
     }
 
     /// Returns the ordinary verifier key from which this cache was derived.
     #[inline]
-    pub fn verifier_key(&self) -> &KZHVerifierKey<E, K> {
+    pub fn verifier_key(&self) -> &VerifierKey<E, K> {
         &self.verifier_key
     }
 
@@ -205,8 +205,8 @@ impl<E: Pairing, const K: usize> KZHPreparedVerifierKey<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> From<&KZHVerifierKey<E, K>> for KZHPreparedVerifierKey<E, K> {
-    fn from(vk: &KZHVerifierKey<E, K>) -> Self {
+impl<E: Pairing, const K: usize> From<&VerifierKey<E, K>> for PreparedVerifierKey<E, K> {
+    fn from(vk: &VerifierKey<E, K>) -> Self {
         let prepared_v = E::G2Prepared::from(&vk.v);
         let prepared_v_tau = vk
             .v_tau
@@ -222,10 +222,10 @@ impl<E: Pairing, const K: usize> From<&KZHVerifierKey<E, K>> for KZHPreparedVeri
     }
 }
 
-impl<E: Pairing, const K: usize> PCPreparedVerifierKey<KZHVerifierKey<E, K>>
-    for KZHPreparedVerifierKey<E, K>
+impl<E: Pairing, const K: usize> PCPreparedVerifierKey<VerifierKey<E, K>>
+    for PreparedVerifierKey<E, K>
 {
-    fn prepare(vk: &KZHVerifierKey<E, K>) -> Self {
+    fn prepare(vk: &VerifierKey<E, K>) -> Self {
         Self::from(vk)
     }
 }
@@ -239,7 +239,7 @@ impl<E: Pairing, const K: usize> PCPreparedVerifierKey<KZHVerifierKey<E, K>>
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHCommitment<E: Pairing, const K: usize> {
+pub struct Commitment<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables in the committed polynomial.
@@ -248,7 +248,7 @@ pub struct KZHCommitment<E: Pairing, const K: usize> {
     pub(crate) comm: E::G1Affine,
 }
 
-impl<E: Pairing, const K: usize> KZHCommitment<E, K> {
+impl<E: Pairing, const K: usize> Commitment<E, K> {
     /// Returns the number of variables in the committed polynomial.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -262,7 +262,7 @@ impl<E: Pairing, const K: usize> KZHCommitment<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> Default for KZHCommitment<E, K> {
+impl<E: Pairing, const K: usize> Default for Commitment<E, K> {
     fn default() -> Self {
         Self {
             k: K,
@@ -272,7 +272,7 @@ impl<E: Pairing, const K: usize> Default for KZHCommitment<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> PCCommitment for KZHCommitment<E, K> {
+impl<E: Pairing, const K: usize> PCCommitment for Commitment<E, K> {
     #[inline]
     fn empty() -> Self {
         Self::default()
@@ -288,12 +288,12 @@ impl<E: Pairing, const K: usize> PCCommitment for KZHCommitment<E, K> {
 /// Prepared KZH commitment.
 ///
 /// KZH currently performs no additional commitment preparation.
-pub type KZHPreparedCommitment<E, const K: usize> = KZHCommitment<E, K>;
+pub type PreparedCommitment<E, const K: usize> = Commitment<E, K>;
 
-impl<E: Pairing, const K: usize> PCPreparedCommitment<KZHCommitment<E, K>>
-    for KZHPreparedCommitment<E, K>
+impl<E: Pairing, const K: usize> PCPreparedCommitment<Commitment<E, K>>
+    for PreparedCommitment<E, K>
 {
-    fn prepare(commitment: &KZHCommitment<E, K>) -> Self {
+    fn prepare(commitment: &Commitment<E, K>) -> Self {
         *commitment
     }
 }
@@ -316,7 +316,7 @@ impl<E: Pairing, const K: usize> PCPreparedCommitment<KZHCommitment<E, K>>
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHCommitmentState<E: Pairing, const K: usize> {
+pub struct CommitmentState<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables in the committed polynomial.
@@ -325,7 +325,7 @@ pub struct KZHCommitmentState<E: Pairing, const K: usize> {
     pub(crate) auxiliary_tables: Vec<Vec<E::G1Affine>>,
 }
 
-impl<E: Pairing, const K: usize> KZHCommitmentState<E, K> {
+impl<E: Pairing, const K: usize> CommitmentState<E, K> {
     /// Returns the number of variables supported by this commitment state.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -333,7 +333,7 @@ impl<E: Pairing, const K: usize> KZHCommitmentState<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> Default for KZHCommitmentState<E, K> {
+impl<E: Pairing, const K: usize> Default for CommitmentState<E, K> {
     fn default() -> Self {
         Self {
             k: K,
@@ -343,7 +343,7 @@ impl<E: Pairing, const K: usize> Default for KZHCommitmentState<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> PCCommitmentState for KZHCommitmentState<E, K> {
+impl<E: Pairing, const K: usize> PCCommitmentState for CommitmentState<E, K> {
     type Randomness = ();
 
     fn empty() -> Self {
@@ -372,7 +372,7 @@ impl<E: Pairing, const K: usize> PCCommitmentState for KZHCommitmentState<E, K> 
     PartialEq(bound = ""),
     Eq(bound = "")
 )]
-pub struct KZHProof<E: Pairing, const K: usize> {
+pub struct Proof<E: Pairing, const K: usize> {
     /// Runtime copy of the family parameter, included in the serialized form.
     pub(crate) k: usize,
     /// Number of variables in the opened polynomial.
@@ -383,7 +383,7 @@ pub struct KZHProof<E: Pairing, const K: usize> {
     pub(crate) final_evaluations: Vec<E::ScalarField>,
 }
 
-impl<E: Pairing, const K: usize> KZHProof<E, K> {
+impl<E: Pairing, const K: usize> Proof<E, K> {
     /// Returns the number of variables opened by this proof.
     #[inline]
     pub const fn num_vars(&self) -> usize {
@@ -403,7 +403,7 @@ impl<E: Pairing, const K: usize> KZHProof<E, K> {
     }
 }
 
-impl<E: Pairing, const K: usize> Default for KZHProof<E, K> {
+impl<E: Pairing, const K: usize> Default for Proof<E, K> {
     fn default() -> Self {
         Self {
             k: K,
@@ -413,27 +413,3 @@ impl<E: Pairing, const K: usize> Default for KZHProof<E, K> {
         }
     }
 }
-
-/// Conventional module-local name for KZH universal parameters.
-pub type UniversalParams<E, const K: usize> = KZHUniversalParams<E, K>;
-
-/// Conventional module-local name for a KZH committer key.
-pub type CommitterKey<E, const K: usize> = KZHCommitterKey<E, K>;
-
-/// Conventional module-local name for a KZH verifier key.
-pub type VerifierKey<E, const K: usize> = KZHVerifierKey<E, K>;
-
-/// Conventional module-local name for a prepared KZH verifier key.
-pub type PreparedVerifierKey<E, const K: usize> = KZHPreparedVerifierKey<E, K>;
-
-/// Conventional module-local name for a KZH commitment.
-pub type Commitment<E, const K: usize> = KZHCommitment<E, K>;
-
-/// Conventional module-local name for a prepared KZH commitment.
-pub type PreparedCommitment<E, const K: usize> = KZHPreparedCommitment<E, K>;
-
-/// Conventional module-local name for cached KZH commitment state.
-pub type CommitmentState<E, const K: usize> = KZHCommitmentState<E, K>;
-
-/// Conventional module-local name for a KZH opening proof.
-pub type Proof<E, const K: usize> = KZHProof<E, K>;

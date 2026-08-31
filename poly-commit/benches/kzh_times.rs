@@ -13,7 +13,7 @@ use ark_ff::{One, Zero};
 use ark_pcs_bench_templates::*;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_poly_commit::{
-    kzh::{KZHPreparedVerifierKey, KZH},
+    kzh::{PreparedVerifierKey, KZH},
     LabeledPolynomial, PolynomialCommitment,
 };
 use ark_serialize::{CanonicalSerialize, Compress};
@@ -100,7 +100,7 @@ fn bench_family<const K: usize>(criterion: &mut Criterion, num_vars: usize) {
         None,
     )
     .unwrap());
-    let prepared_verifier_key = KZHPreparedVerifierKey::prepare(&verifier_key);
+    let prepared_verifier_key = PreparedVerifierKey::prepare(&verifier_key);
     let mut prepared_checking_sponge = PoseidonSponge::new(&sponge_config);
     assert!(Kzh::<K>::check_prepared(
         &prepared_verifier_key,
@@ -201,7 +201,7 @@ fn bench_family<const K: usize>(criterion: &mut Criterion, num_vars: usize) {
     // `check_prepared` path independently from this one-time cost.
     group.bench_function("prepare_vk", |bencher| {
         bencher.iter(|| {
-            black_box(KZHPreparedVerifierKey::prepare(black_box(&verifier_key)));
+            black_box(PreparedVerifierKey::prepare(black_box(&verifier_key)));
         });
     });
 
@@ -230,7 +230,7 @@ fn bench_family<const K: usize>(criterion: &mut Criterion, num_vars: usize) {
         bencher.iter_batched(
             || PoseidonSponge::new(&sponge_config),
             |mut sponge| {
-                let one_shot_key = KZHPreparedVerifierKey::prepare(&verifier_key);
+                let one_shot_key = PreparedVerifierKey::prepare(&verifier_key);
                 assert!(black_box(
                     Kzh::<K>::check_prepared(
                         &one_shot_key,

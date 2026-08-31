@@ -1,7 +1,6 @@
 use crate::{
     kzh::data_structures::{
-        KZHCommitment, KZHCommitmentState, KZHCommitterKey, KZHProof, KZHUniversalParams,
-        KZHVerifierKey,
+        Commitment, CommitmentState, CommitterKey, Proof, UniversalParams, VerifierKey,
     },
     Error,
 };
@@ -238,7 +237,7 @@ fn validate_v_tau<G>(v_tau: &[Vec<G>], dimensions: &[usize]) -> Result<(), Error
 
 /// Validates the dimensions of KZH universal parameters.
 pub(crate) fn validate_params_shape<E: Pairing, const K: usize>(
-    params: &KZHUniversalParams<E, K>,
+    params: &UniversalParams<E, K>,
 ) -> Result<(), Error> {
     let dimensions =
         validate_family_metadata::<K>(params.k, params.num_vars, &params.num_vars_per_block)?;
@@ -251,7 +250,7 @@ pub(crate) fn validate_params_shape<E: Pairing, const K: usize>(
 
 /// Validates the dimensions of a KZH committer key.
 pub(crate) fn validate_committer_key_shape<E: Pairing, const K: usize>(
-    ck: &KZHCommitterKey<E, K>,
+    ck: &CommitterKey<E, K>,
 ) -> Result<(), Error> {
     let dimensions = validate_family_metadata::<K>(ck.k, ck.num_vars, &ck.num_vars_per_block)?;
     validate_h_layers(&ck.h, &dimensions)
@@ -259,7 +258,7 @@ pub(crate) fn validate_committer_key_shape<E: Pairing, const K: usize>(
 
 /// Validates the dimensions of a KZH verifier key.
 pub(crate) fn validate_verifier_key_shape<E: Pairing, const K: usize>(
-    vk: &KZHVerifierKey<E, K>,
+    vk: &VerifierKey<E, K>,
 ) -> Result<(), Error> {
     let dimensions = validate_family_metadata::<K>(vk.k, vk.num_vars, &vk.num_vars_per_block)?;
     let expected_last = *dimensions.last().ok_or(Error::InvalidNumberOfVariables)?;
@@ -274,7 +273,7 @@ pub(crate) fn validate_verifier_key_shape<E: Pairing, const K: usize>(
 
 /// Validates the metadata of a KZH commitment.
 pub(crate) fn validate_commitment_shape<E: Pairing, const K: usize>(
-    commitment: &KZHCommitment<E, K>,
+    commitment: &Commitment<E, K>,
 ) -> Result<(), Error> {
     // `PCCommitment::empty()` cannot know the key's number of variables. A
     // zero group element with `num_vars == 0` is therefore an explicit empty
@@ -297,7 +296,7 @@ pub(crate) fn validate_commitment_shape<E: Pairing, const K: usize>(
 
 /// Validates the dimensions of cached KZH commitment state.
 pub(crate) fn validate_state_shape<E: Pairing, const K: usize>(
-    state: &KZHCommitmentState<E, K>,
+    state: &CommitmentState<E, K>,
 ) -> Result<(), Error> {
     let dimensions = object_dimensions::<K>(state.k, state.num_vars)?;
     let expected_lengths = auxiliary_prefix_lengths(&dimensions)?;
@@ -320,7 +319,7 @@ pub(crate) fn validate_state_shape<E: Pairing, const K: usize>(
 
 /// Validates the dimensions of a KZH opening proof.
 pub(crate) fn validate_proof_shape<E: Pairing, const K: usize>(
-    proof: &KZHProof<E, K>,
+    proof: &Proof<E, K>,
 ) -> Result<(), Error> {
     let dimensions = object_dimensions::<K>(proof.k, proof.num_vars)?;
     let transition_count = dimensions.len().saturating_sub(1);
