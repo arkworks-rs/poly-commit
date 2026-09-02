@@ -11,7 +11,7 @@
 ### Features
 
 - [\#82](https://github.com/arkworks-rs/poly-commit/pull/82) Add multivariate opening challenge strategy. Integrate with sponge API.
-- [\#171](https://github.com/arkworks-rs/poly-commit/pull/171)Add the pairing-based KZH-`k` multilinear polynomial commitment family.
+- [\#171](https://github.com/arkworks-rs/poly-commit/pull/171) Add the pairing-based KZH-`k` multilinear polynomial commitment family.
 
 ### Improvements
 - [\#152](https://github.com/arkworks-rs/poly-commit/issues/152) Expose `kzg10::open_with_witness_polynomial` and `open` downstream.
