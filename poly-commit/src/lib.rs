@@ -111,6 +111,18 @@ pub mod ipa_pc;
 /// [zgkpp]: https://ieeexplore.ieee.org/document/8418645
 pub mod multilinear_pc;
 
+/// The pairing-based KZH-`k` multilinear polynomial commitment family.
+///
+/// The type-level parameter `K` selects the tensor arity. This is the
+/// non-hiding construction from [KZH-Fold][kzh], with the generic-opening
+/// auxiliary tables described by [IronDict][irondict]. See the [`kzh`] module
+/// for setup assumptions and the ways this implementation differs from the
+/// papers.
+///
+/// [kzh]: https://eprint.iacr.org/2025/144
+/// [irondict]: https://eprint.iacr.org/2025/1580
+pub mod kzh;
+
 use ark_crypto_primitives::sponge::{CryptographicSponge, FieldElementSize};
 /// Multivariate polynomial commitment based on the construction in
 /// [[PST13]][pst] with batching and (optional) hiding property inspired

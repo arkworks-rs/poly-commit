@@ -16,6 +16,7 @@ ark-ec.workspace = true
 ark-poly.workspace = true
 ark-crypto-primitives = { workspace = true, features = ["sponge", "merkle_tree"] }
 ark-std.workspace = true
+zeroize.workspace = true
 ark-relations = { workspace = true, optional = true }
 ark-r1cs-std = { workspace = true, optional = true }
 
@@ -45,6 +46,11 @@ harness = false
 [[bench]]
 name = "hyrax_times"
 path = "benches/hyrax_times.rs"
+harness = false
+
+[[bench]]
+name = "kzh_times"
+path = "benches/kzh_times.rs"
 harness = false
 
 [[bench]]

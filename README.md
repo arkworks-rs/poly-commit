@@ -13,14 +13,18 @@
 
 A polynomial commitment scheme is a cryptographic primitive that enables a party to commit to a polynomial over a given finite field, and then, later on, to reveal desired evaluations of the polynomial along with cryptographic proofs attesting to their correctness.
 
-This library provides various constructions of polynomial commitment schemes. These constructions support committing to multiple polynomials at a time with differing degree bounds, batching multiple evaluation proofs for the same evaluation point into a single one, and batch verification of proofs.
+This library provides several polynomial commitment constructions through a
+shared interface. Support for degree bounds, hiding, and specialized batching
+depends on the selected construction.
 
-The key properties satisfied by the polynomial commitment schemes are **succinctness**, **extractability**, and **hiding**. See [the Marlin paper][marlin] for definitions of these properties.
+The constructions target **succinctness** and **extractability**; some also
+provide **hiding**. See [the Marlin paper][marlin] for definitions of these
+properties.
 
 
 ### Supported Polynomial Commitment Schemes
 
-The library supports six polynomial commitment schemes.
+The library supports seven polynomial commitment schemes.
 
 #### Inner-product-argument PC
 
@@ -74,6 +78,25 @@ Multilinear polynomial commitment, introduced with Hyrax zkSNARK. Relies on Pede
 [Doubly-efficient zkSNARKs without trusted setup][hyrax]     
 Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish     
 2018 IEEE Symposium on Security and Privacy
+
+#### KZH-k multilinear PC
+
+Pairing-based multilinear polynomial commitment family parameterized by tensor
+arity `k`. This is the non-hiding construction from the papers below. Setup
+creates a trusted SRS for one exact number of variables and does not provide
+an updatable-ceremony interface. See the
+[`kzh` module documentation](https://docs.rs/ark-poly-commit/latest/ark_poly_commit/kzh/)
+for setup assumptions and the ways this implementation differs from the papers.
+
+Select the family member with the const generic `KZH<E, P, const K: usize>`;
+`KZH2`, `KZH3`, and `KZH4` are provided as convenience aliases.
+
+[KZH-Fold: Accountable Voting from Sublinear Accumulation][kzh], George
+Kadianakis, Arantxa Zapico, Hossein Hafezi, and Benedikt Bünz, CCS 2025.
+
+[IronDict: Transparent Dictionaries from Polynomial Commitments][irondict],
+Hossein Hafezi, Alireza Shirzad, Benedikt Bünz, and Joseph Bonneau,
+USENIX Security 2026.
 
 #### Ligero and Brakedown
 
@@ -292,6 +315,8 @@ Unless you explicitly state otherwise, any contribution that you submit to this 
 [brakedown]: https://ia.cr/2021/1043
 [ligero]: https://ia.cr/2022/1608
 [hyrax]: https://eprint.iacr.org/2017/1132
+[kzh]: https://ia.cr/2025/144
+[irondict]: https://eprint.iacr.org/2025/1580
 
 ## Reference papers
 
@@ -326,6 +351,13 @@ CCS 2017
 [Doubly-efficient zkSNARKs without trusted setup][hyrax]
 Riad S. Wahby, Ioanna Tzialla, abhi shelat, Justin Thaler, Michael Walfish
 2018 IEEE Symposium on Security and Privacy
+
+[KZH-Fold: Accountable Voting from Sublinear Accumulation][kzh], George
+Kadianakis, Arantxa Zapico, Hossein Hafezi, and Benedikt Bünz, CCS 2025.
+
+[IronDict: Transparent Dictionaries from Polynomial Commitments][irondict],
+Hossein Hafezi, Alireza Shirzad, Benedikt Bünz, and Joseph Bonneau,
+USENIX Security 2026.
 
 [Brakedown: Linear-time and field-agnostic SNARKs for R1CS][brakedown]    
 Alexander Golovnev, Jonathan Lee, Srinath Setty, Justin Thaler, Riad S. Wahby    
