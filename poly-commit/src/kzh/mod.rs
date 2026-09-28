@@ -16,10 +16,6 @@
 //!
 //! Commitment state stores only the auxiliary tables used by generic openings.
 //! Tables that exist solely for free Boolean openings in the papers are omitted.
-//! For odd `K` and `N = 2^num_vars`, the middle block's proof layer needs about
-//! `N^(ceil(K / 2) / K)` group-scalar terms whether it is contracted from a
-//! cached table or recommitted, so generic openings do not reach the
-//! `O(N^(1/2))` group work quoted in the papers' cost summaries.
 //!
 //! # Security and setup
 //!
