@@ -8,7 +8,7 @@
 use crate::{BTreeMap, Error, LabeledPolynomial, PCCommitmentState};
 use ark_ec::{pairing::Pairing, scalar_mul::ScalarMul, AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{One, PrimeField, UniformRand, Zero};
-use ark_poly::DenseUVPolynomial;
+use ark_poly::{univariate::SparsePolynomial, DenseUVPolynomial};
 use ark_std::{format, marker::PhantomData, ops::Div, ops::Mul, rand::RngCore};
 #[cfg(not(feature = "std"))]
 use ark_std::{string::ToString, vec::Vec};
@@ -179,6 +179,7 @@ where
         end_timer!(msm_time);
 
         let mut randomness = Randomness::<E::ScalarField, P>::empty();
+
         if let Some(hiding_degree) = hiding_bound {
             let mut rng = rng.ok_or(Error::MissingRng)?;
             let sample_random_poly_time = start_timer!(|| format!(
@@ -192,21 +193,80 @@ where
                 powers.powers_of_gamma_g.len(),
             )?;
             end_timer!(sample_random_poly_time);
+            let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
+            let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
+            let random_commitment = <E::G1 as VariableBaseMSM>::msm_bigint(
+                &powers.powers_of_gamma_g,
+                random_ints.as_slice(),
+            )
+            .into_affine();
+            end_timer!(msm_time);
+
+            commitment += &random_commitment;
         }
-
-        let random_ints = convert_to_bigints(&randomness.blinding_polynomial.coeffs());
-        let msm_time = start_timer!(|| "MSM to compute commitment to random poly");
-        let random_commitment = <E::G1 as VariableBaseMSM>::msm_bigint(
-            &powers.powers_of_gamma_g,
-            random_ints.as_slice(),
-        )
-        .into_affine();
-        end_timer!(msm_time);
-
-        commitment += &random_commitment;
 
         end_timer!(commit_time);
         Ok((Commitment(commitment.into()), randomness))
+    }
+
+    /// Outputs a commitment to `sparse_polynomial`. Calling `commit_sparse(&powers, sparse_poly, Some(hiding), Some(rng))`
+    /// is equivalent to calling `commit(&powers, sparse_poly.into(), Some(hiding), Some(rng))`.
+    /// `commit_sparse` is significantly faster than `commit` when both the polynomial is sparse
+    /// and the hiding bound is low, and significantly slower otherwise.
+    /// Foreseen use is when the verifier needs to compute a commitment to X-omega, X^k or X^n - 1 (thus with no hiding).
+    pub fn commit_sparse(
+        powers: &Powers<E>,
+        sparse_polynomial: &SparsePolynomial<E::ScalarField>,
+        hiding_bound: Option<usize>,
+        rng: Option<&mut dyn RngCore>,
+    ) -> Result<(Commitment<E>, Randomness<E::ScalarField, P>), Error> {
+        // Naively compute the MSM. Much faster than the generic implementation in the case of sparse polynomials
+        let commit_unblinded = sparse_polynomial
+            .coeffs
+            .clone()
+            .into_iter()
+            .map(|(i, coeff)| (powers.powers_of_g[i] * coeff))
+            .sum::<E::G1>();
+
+        let mut randomness = Randomness::<E::ScalarField, P>::empty();
+        let mut gamma_g_commit = E::G1::zero();
+
+        if let Some(hiding_degree) = hiding_bound {
+            let mut rng = rng.ok_or(Error::MissingRng)?;
+            let sample_random_poly_time = start_timer!(|| format!(
+                "Sampling a random polynomial of degree {}",
+                hiding_degree
+            ));
+
+            randomness = Randomness::rand(hiding_degree, false, None, &mut rng);
+            Self::check_hiding_bound(
+                randomness.blinding_polynomial.degree(),
+                powers.powers_of_gamma_g.len(),
+            )?;
+            end_timer!(sample_random_poly_time);
+
+            // Create a sparse polynomial from the blinding polynomial of type DenseUVPolynomial
+            let sparse_randomness = SparsePolynomial::from_coefficients_vec(
+                randomness
+                    .blinding_polynomial
+                    .coeffs()
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .collect(),
+            );
+
+            // MSM compute the commitment to sparse_random on the powers of gamma_g
+            gamma_g_commit = sparse_randomness
+                .coeffs
+                .into_iter()
+                .map(|(i, coeff)| (powers.powers_of_gamma_g[i] * coeff))
+                .sum::<E::G1>();
+        }
+
+        let commit = (commit_unblinded + gamma_g_commit).into();
+
+        Ok((Commitment(commit), randomness))
     }
 
     /// Compute witness polynomial.
@@ -541,6 +601,32 @@ mod tests {
         f_comm_2 += (f, &comm);
 
         assert_eq!(f_comm, f_comm_2);
+    }
+
+    #[test]
+    fn equivalence_sparse_dense_commit() {
+        let rng = &mut test_rng();
+        let degree = 10; // only test on small poly commitments
+        let pp = KZG_Bls12_381::setup(degree, false, rng).unwrap();
+        let (powers, _) = KZG_Bls12_381::trim(&pp, degree).unwrap();
+
+        for _ in 0..5 {
+            let p = UniPoly_381::rand(degree, rng);
+            // Use a fresh rng each time for reproducibility between sparse and dense commit
+            let (comm_dense, _) =
+                KZG_Bls12_381::commit(&powers, &p, Some(degree - 1), Some(&mut test_rng()))
+                    .unwrap();
+
+            let (comm_sparse, _) = KZG_Bls12_381::commit_sparse(
+                &powers,
+                &p.into(),
+                Some(degree - 1),
+                Some(&mut test_rng()),
+            )
+            .unwrap();
+
+            assert_eq!(comm_dense, comm_sparse);
+        }
     }
 
     fn end_to_end_test_template<E, P>() -> Result<(), Error>
