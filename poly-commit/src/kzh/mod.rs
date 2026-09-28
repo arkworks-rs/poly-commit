@@ -41,6 +41,7 @@
 //!
 //! [kzh]: https://eprint.iacr.org/2025/144
 //! [irondict]: https://eprint.iacr.org/2025/1580
+//! [`MultilinearExtension::fix_variables`]: ark_poly::MultilinearExtension::fix_variables
 
 use crate::{Error, LabeledCommitment, LabeledPolynomial, PolynomialCommitment, CHALLENGE_SIZE};
 use ark_crypto_primitives::sponge::{Absorb, CryptographicSponge};
