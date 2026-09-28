@@ -3,9 +3,8 @@
 //! This module implements the non-hiding construction in Appendix C.1 of
 //! [KZH-Fold][kzh], with the generic-opening auxiliary tables described in
 //! Appendix E of [IronDict][irondict]. The const generic `K` is the tensor
-//! arity. Protocol costs are those of the papers; this documentation records
-//! only where the implementation differs from them or from the crate's default
-//! PCS APIs.
+//! arity. This documentation records only where the implementation differs
+//! from the papers or from the crate's default PCS APIs.
 //!
 //! Tensor blocks follow arkworks' little-endian MLE order from `x_0` upward,
 //! and partial evaluation uses [`MultilinearExtension::fix_variables`]. Same-
@@ -17,6 +16,10 @@
 //!
 //! Commitment state stores only the auxiliary tables used by generic openings.
 //! Tables that exist solely for free Boolean openings in the papers are omitted.
+//! For odd `K` and `N = 2^num_vars`, the middle block's proof layer needs about
+//! `N^(ceil(K / 2) / K)` group-scalar terms whether it is contracted from a
+//! cached table or recommitted, so generic openings do not reach the
+//! `O(N^(1/2))` group work quoted in the papers' cost summaries.
 //!
 //! # Security and setup
 //!
@@ -158,9 +161,10 @@ where
 
             #[cfg(feature = "parallel")]
             let row_commitments = {
-                // Large MSMs already saturate Arkworks' Rayon pool internally.
-                // Parallelize only tables made of many smaller MSMs, and bound
-                // the number of scratch buffers to approximately one per worker.
+                // Arkworks' MSM already runs its bucket windows in parallel.
+                // Parallelize across rows only for tables made of many smaller
+                // MSMs, and bound the number of scratch buffers to
+                // approximately one per worker.
                 const MAX_PARALLEL_SUFFIX_LEN: usize = 1 << 12;
                 let num_threads = rayon::current_num_threads();
                 if num_threads > 1
